@@ -1,0 +1,35 @@
+const multer = require('multer')
+const fileUpload = multer({
+    storage: multer.diskStorage({
+        destination: (req, file, cb) => {
+            cb(null, 'uploads')//folder name in same diretory
+        },
+        filename: (req, file, cb) => {
+            // console.log(file.fieldname)
+            savedFileName = file.fieldname + Date.now() + '.jpg';
+            cb(null, savedFileName)
+        }
+    })
+}).single('file')//key(fieldname)
+
+router.post('/postupload', fileUpload, async (req, res) => {
+    const today = new Date();
+    const yyyy = today.getFullYear();
+    let mm = today.getMonth() + 1; // Months start at 0!
+    let dd = today.getDate();
+
+    if (dd < 10) dd = '0' + dd;
+    if (mm < 10) mm = '0' + mm;
+
+    const formattedToday = dd + '/' + mm + '/' + yyyy;
+
+    //  console.log(req.body,req.files.file)// {} undefined
+    // console.log(req.body, req.file, savedFileName)
+    const incomingpost = {
+        name: req.body.name,
+        location: req.body.location,
+        likes: parseInt(Math.random() * 100),
+        description: req.body.description,
+        postImage: savedFileName,
+        date: formattedToday
+    }
