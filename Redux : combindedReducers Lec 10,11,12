@@ -154,3 +154,11 @@ actions.restockIceCream(2)
 unsubscribe()
 
 // NOTE OUTPUT CHANGES
+
+Initial state { cake: { numOfCakes: 10 }, iceCream: { numOfIceCreams: 20 } }
+Update state { cake: { numOfCakes: 9}, iceCream: { numOfIceCreams: 20 } }
+Update state { cake: { numOfCakes: 8 }, iceCream: { numOfIceCreams: 20 }} Update state { cake: { numOfCakes: 7 }, iceCream: { numOfIceCreams: 20 } }
+Update state { cake: { numOfCakes: 10 }, iceCream: { numOfIceCreams: 20 }}
+Update state { cake: { numOfCakes: 10 }, iceCream: { numOfIceCreams: 19 } }
+Update state { cake: { numOfCakes: 10 }, iceCream: { numQfIceCreams: 18 } }
+Update state { cake: { numOfCakes: 10 }, iceCream: numOfIceCreams: 20 } }
