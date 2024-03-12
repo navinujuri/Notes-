@@ -34,6 +34,34 @@ const fetchUsersFailure = error => {
   }
 }
 
+/*IMP : store.dispatch(orderCake()) By default dispatch() takes action obj only as argument and whenever we call dispatch method it means we are sending
+action object to reducer and immediatly reducer logic gets implimented based upon type of action. 
+1.But if we use function as argument that means we are NOT calling reducer logic immediately and we want to do side effects (API/async tasks/ FS etc) then call redcuder logic.
+to make this possible we use redux-thunk.
+***2.Redux Thunk then executes this function, passing dispatch and getState as arguments.
+
+ex: const fetchData = () => {
+  return (dispatch, getState) => {
+    // Accessing the current state
+    const currentState = getState();
+
+    // Dispatching an action to indicate data fetch started
+    dispatch({ type: 'FETCH_DATA_REQUEST' });
+
+    // Making an asynchronous call (e.g., fetching data from an API)
+    axios.get('https://api.example.com/data')
+      .then(response => {
+        // Dispatching an action with the fetched data
+        dispatch({ type: 'FETCH_DATA_SUCCESS', payload: response.data });
+      })
+      .catch(error => {
+        // Dispatching an action to handle errors
+        dispatch({ type: 'FETCH_DATA_FAILURE', payload: error.message });
+      });
+  };
+};
+
+*/
 const fetchUsers = () => {
   return function (dispatch) {
     dispatch(fetchUsersRequest())
