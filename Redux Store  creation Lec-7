@@ -44,8 +44,8 @@ const unsubscribe = store.subscribe(() => {
   console.log('Updated State ', store.getState())
 })
 
-store.dispatch(orderCake())
-store.dispatch(orderCake())
+store.dispatch(orderCake()) //IMP:  By default dispatch takes action obj only as argument and whenever we call dispatch method it means we are sending
+store.dispatch(orderCake()) //action object to reducer and immediatly reducer logic gets implimented based upon type of action 
 store.dispatch(orderCake())
 
 //Removal of Listener
