@@ -99,7 +99,7 @@ const rootReducer = combineReducers({
 
 //IMP STEP : observe applyMiddleware passed to Store
 const store = createStore(rootReducer, applyMiddleware(logger))
-# const store = createStore(rootReducer)
+// # const store = createStore(rootReducer)
 
 console.log('Initial State ', store.getState())
 const unsubscribe = store.subscribe(() => {
@@ -120,25 +120,25 @@ actions.orderIceCream()
 actions.restockIceCream(2)
 unsubscribe()
 
-#IMP output You observe prevState/ Action/ NextState  
-# Initial state { cake: { numOfCakes: 10), iceCream: { numOfIceCreams: 20 } }
+// #IMP output You observe prevState/ Action/ NextState  
+// # Initial state { cake: { numOfCakes: 10), iceCream: { numOfIceCreams: 20 } }
 
 
-# action CAKE_ORDERED @ 20:55:59.792
+// # action CAKE_ORDERED @ 20:55:59.792
 
-# prev state { cake: { numOfCakes: 10 }, iceCream: { numOfIceCreams: 20 } }
+// # prev state { cake: { numOfCakes: 10 }, iceCream: { numOfIceCreams: 20 } }
 
-# action { type: 'CAKE_ORDERED', payload: 1 }
+// # action { type: 'CAKE_ORDERED', payload: 1 }
 
-# next state { cake: { numOfCakes: 9), iceCream: { numOfIceCreams: 20 } }
+// # next state { cake: { numOfCakes: 9), iceCream: { numOfIceCreams: 20 } }
 
 
-# action CAKE_ORDERED @ 20:55:59.797
+// # action CAKE_ORDERED @ 20:55:59.797
 
-# prev state { cake: { numOfCakes: 9), iceCream: { numOfIceCreams: 20 } }
+// # prev state { cake: { numOfCakes: 9), iceCream: { numOfIceCreams: 20 } }
 
-# action { type: 'CAKE_ORDERED', payload: 1 }
+// # action { type: 'CAKE_ORDERED', payload: 1 }
 
-# next state { cake: { numOfCakes: 8 ), iceCream: { numOfIceCreams: 20 } }
+// # next state { cake: { numOfCakes: 8 ), iceCream: { numOfIceCreams: 20 } }
 
-# action CAKE_ORDERED @ 20:55:59.799 prev state { cake: { numOfCakes: 8 }, iceCream: { numOfIceCreams: 20 } }
+// # action CAKE_ORDERED @ 20:55:59.799 prev state { cake: { numOfCakes: 8 }, iceCream: { numOfIceCreams: 20 } }

@@ -155,10 +155,10 @@ unsubscribe()
 
 // NOTE OUTPUT CHANGES : there is a KEYs and associated State is displayed like cake :{its State} etc apparent(perceived) as a single state with two keys inside it as cake and icecream.
 
-Initial state { cake: { numOfCakes: 10 }, iceCream: { numOfIceCreams: 20 } }
-Update state { cake: { numOfCakes: 9}, iceCream: { numOfIceCreams: 20 } }
-Update state { cake: { numOfCakes: 8 }, iceCream: { numOfIceCreams: 20 }} Update state { cake: { numOfCakes: 7 }, iceCream: { numOfIceCreams: 20 } }
-Update state { cake: { numOfCakes: 10 }, iceCream: { numOfIceCreams: 20 }}
-Update state { cake: { numOfCakes: 10 }, iceCream: { numOfIceCreams: 19 } }
-Update state { cake: { numOfCakes: 10 }, iceCream: { numQfIceCreams: 18 } }
-Update state { cake: { numOfCakes: 10 }, iceCream: numOfIceCreams: 20 } }
+// Initial state { cake: { numOfCakes: 10 }, iceCream: { numOfIceCreams: 20 } }
+// Update state { cake: { numOfCakes: 9}, iceCream: { numOfIceCreams: 20 } }
+// Update state { cake: { numOfCakes: 8 }, iceCream: { numOfIceCreams: 20 }} Update state { cake: { numOfCakes: 7 }, iceCream: { numOfIceCreams: 20 } }
+// Update state { cake: { numOfCakes: 10 }, iceCream: { numOfIceCreams: 20 }}
+// Update state { cake: { numOfCakes: 10 }, iceCream: { numOfIceCreams: 19 } }
+// Update state { cake: { numOfCakes: 10 }, iceCream: { numQfIceCreams: 18 } }
+// Update state { cake: { numOfCakes: 10 }, iceCream: numOfIceCreams: 20 } }

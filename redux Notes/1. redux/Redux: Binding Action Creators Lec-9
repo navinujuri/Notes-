@@ -1,4 +1,4 @@
-# Binding Action Creators
+// Binding Action Creators
 
 const redux = require('redux')
 
@@ -53,9 +53,9 @@ const unsubscribe = store.subscribe(() => {
 //=============================
 //New way of doing
 
-# store.dispatch(orderCake())
-# store.dispatch(orderCake())
-# store.dispatch(orderCake())
+// # store.dispatch(orderCake())
+// # store.dispatch(orderCake())
+// # store.dispatch(orderCake())
 const actions = bindActionCreators(
   { orderCake, restockCake },
   store.dispatch

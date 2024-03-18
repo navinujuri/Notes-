@@ -1,0 +1,46 @@
+npm create vite@latest projectname
+npm i 
+npm run dev
+npm i axios @reduxjs/toolkit
+
+change to ES6 syntax ie require to Import
+-------------------------------------------
+lec-26 provider (react-redux lib)
+npm i react-redux
+
+provider component uses reactcontext under the hood
+
+-----------------------------------------
+lec - 27 useSelector (react-redux lib)
+
+* useSelector((state from redux)=>{  return state.cakes.noOfCakes}) ==> takes fn as arg 
+* arg inside fn as state from the store ie global variable
+* useSelector returns whatever state/attribute/key/value we want to return 
+* under the hood it sort of uses getState()
+
+--------------------------------------------
+lec - 28 useDispatch from react-redux
+const dispath = useDispatch() --> returns a fn which takes action as the arg ie dispatch(action)
+ex : onClick={ ()=>{
+    dispatch( orderedCakes(3) )
+    }  
+}
+----------------------------------------------
+
+lec - 29 reduxDevtools chrome extension
+
+* inspect and select redux tab
+* timeline of actions dispatched in sequence
+* difference in change in global state
+* we can dispatch action from this ui itself
+
+-----------------------------------------------
+
+lec - 30 async thunk  
+lec - 31 typescript react n reducToolkit
+
+------------------------------------------------
+
+
+
+
