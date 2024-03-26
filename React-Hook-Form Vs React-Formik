@@ -1,0 +1,15 @@
+
+React Hook Form vs Formik: A Detailed Comparison
+
+Summary:  use React Hook Form (lightweight N Better Performance & minimizes unnecessary re-renders)
+
+
+When comparing React Hook Form and Formik, several factors come into play. React Hook Form offers a lightweight solution focusing on performance due to its use of uncontrolled components. This approach minimizes unnecessary re-renders, making it suitable for complex forms and applications that require high responsiveness.
+
+On the other hand, Formik's use of controlled components means that the form state is tightly integrated with the component's state, leading to more re-renders. While this can make state management of input components more straightforward, it may result in performance bottlenecks for more significant forms.
+
+React Hook Form also simplifies the form validation process by allowing developers to define validation rules directly within the form elements using the register function. Formik, while flexible, often requires more boilerplate code to set up form validation rules and manage form submissions.
+
+
+Ref:
+https://www.dhiwise.com/post/choosing-the-right-form-library-formik-vs-react-hook-form
