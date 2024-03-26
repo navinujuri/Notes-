@@ -1,4 +1,4 @@
-ref : this is end-end guide for react project
+ref : this is end-end guide for react project 2023
 https://create-react-app.dev/docs/getting-started
 
 
@@ -6,5 +6,5 @@ Absolute paths for imports :
 https://betterprogramming.pub/use-absolute-paths-with-react-51ced66f119f
 https://github.com/tleunen/babel-plugin-module-resolver/blob/master/README.md
 
-Wepack :
+Webpack :
 https://webpack.js.org/
