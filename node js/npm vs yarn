@@ -1,0 +1,115 @@
+npm vs Yarn
+https://blog.logrocket.com/javascript-package-managers-compared/
+ref :
+https://www.youtube.com/watch?v=XyPNw_3jsLY
+
+
+==============================================================
+NPM tutorial
+ref : code evolution : https://www.youtube.com/watch?v=RYeRAME4nzE&list=PLC3y8-rFHvwhgWwm5J3KqzX47n7dwWNrq&index=4
+
+
+lec - 1
+NPM :
+package : reusable code + reusable code + reusable code + package.json ==> publish in npm registry  for other developers to install and use
+module :  reusable code 
+
+
+lec-3
+npm is inbuilt when u install node
+npm -h : shows all cmd that can be used
+npm  <cmd  ex: i/install > -h : lists all cmd that <cmd> has.    ex : npm i <pkg>, npm i <folder>  etc
+npm help-search <term> : opens list of cmd for help for that term ex: npm help-search update.
+npm help <term> : opens doc regarding that "term". ex: npm help update
+
+lec-4 package.json 
+pakage.json : is used for managing packages for express & for scripts(run / build / start etc).
+npm init => initiates package.json creation where we have to specify authorName,License,version etc
+npm init --yes or npm init -y=> initiates package.json creation with default values Set authorName,License,version etc
+
+lec-5 package.json default
+we can config "init" with default values like author to be "navin" and license to be MIT always etc
+
+ex: 
+1. SET 
+npm config set init-author-name "navin"
+or npm set init-license "MIT"  ie you can ommit config keyword also while setting.  
+2. GET
+npm config get init-author-name
+or npm get init-license   
+3. DELETE
+
+npm config delete init-author-name
+or npm delete init-license 
+
+lec-6 : install pkgs locally ie installs at Project level
+npm i <pkg> : install <pkg> but doesnt list in dependecies obj in package.json
+npm i <pkg> --save/-S : install <pkg> but does list in dependecies obj in package.json
+npm i <pkg> (--save-dev / -D ) : install <pkg> but does list in dev-dependencies obj in package.json but not in dependencies obj bcz this specific pakage we want in devlopment but not in production ex: <pkg>: lodash or other testing pkgs.
+
+lec-7 : uninstalling locally
+npm uninstall <pkg> : uninstall <pkg> but doesnt uninstall in dependecies obj in package.json
+npm uninstall <pkg> --save/-S : install <pkg> but does unlist in dependecies obj in package.json
+npm uninstall <pkg> (--save-dev / -D ) : install <pkg> but does unlist in dev-dependencies obj in package.json 
+
+lec-8 : install pkgs globaly
+npm install <pkg> -g : it means install at OS level
+
+lec-9 : uninstall pkgs globaly
+npm uninstall/rm/remove/un <pkg> -g  : it means uninstall at OS level
+
+lec-10 : list installed packages locally & globally ie in Node Modules
+npm list : lists all pkgs locally/project level and also all nested level dependencies.
+npm list --depth 1 : till one level
+npm list --depth 0 : jus installed pkgs list 
+
+similarly 
+npm list --global true: lists all pkgs glocbaly/OS level and also all nested level dependencies.
+npm list --global true --depth 1 : till one level
+npm list --global true --depth 0 : jus installed pkgs list OS level
+
+lec-11 : versioning
+ex: lodash:"^4.3.2" => change and deprication of new/old methods huge changes.minor features or fucntions.bug fixes/patch version
+npm i loadash --save => default latest pkg
+npm i loadash@4.3.2 --save/-S => specific version pkg
+npm i loadash@4.3   --save/-S => means with latest patch version ie 4.3.x
+npm i loadash@4 --save => means with latest major version ie 4.x
+
+lec-12 : installing from package.json
+
+1. npm i/install
+
+ex:
+dependencies{
+    "loadash":"^4.3.2" => install latest minor and patches versions like 4.7.10 : major version will be same here
+    "loadash":"~4.3.2" => install latest patch version, leave major and minor version same : 4.3.10
+    "loadash":"4.3.2" =>  installs only that specific version 4.3.2
+    "loadash":"*"  => installs latest version avaible ie 5.2.3  
+}
+
+
+- npm install  => will install both "dependencies" and "devDependencies"
+- npm install --production or npm install --omit=dev or npm install --only=prod => will only install "dependencies"
+- npm install --dev or npm install --only=dev => will only install "devDependencies"
+
+
+lec-13 : updating package.json libs
+
+npm update --save => updates all devDepencies obj & dependencies obj to latest versions libs
+npm update <pkg> --save => updates that specific pkg to latest and saves in dependencies obj
+npm update --dev (--save-dev / -D ) => updates all devDependencies only
+npm update -g => updates all global libs
+npm update -g <pkg> => updates specific pkg in global
+npm install npm@latest -g => installs/updates npm to latest version globally
+
+
+lec-14 : npm prune => to delete installed pkgs/folder in nodeModules which are not listed in dependencies/devDependencies obj.
+
+lec-15 : Shortcuts
+ref : [httpsdocs.npmjs.com/misc/config](https://docs.npmjs.com/cli/v10/using-npm/config)
+
+lec-16 : scripts
+this is to run our project with simple cmds
+like npm <key> ex: npm start => where start is added to script as "start" : "node app.js" or "node index.js"
+
+
