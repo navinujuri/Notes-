@@ -1,0 +1,572 @@
+﻿https://www.youtube.com/watch?v=YHFzr-akOas&list=PLS1QulWo1RIb9WVQGJ_vh-RQusbZgO_As
+
+TITLE : Linux Command Line Tutorial For Beginners | Bash Terminal | Linux Terminal
+
+lec-1
+
+Shell(CLI) : 
+a program takes cmd from keyboard --> OS
+a shell is a command-line interpreter that "processes" commands
+
+
+terminal :
+a terminal is a device or program that provides a user interface, a console can refer to physical hardware or a text-based interface. a console can refer to physical hardware or a text-based interface
+
+ctrl+ALT+T ==> opens terminal
+
+
+computer folder ==> Root ie  "/"
+
+computer => 1.
+
+
+default path in terminal ==> "/home/<userprofile>"
+~$ => HOME
+/$ => Root
+
+pwd - present working directory cmd
+cd - change directory ex: cd / => change to root directory
+ls - list all files in present working directory 
+man <cmd> => gives all manual/documentation on that cmd.
+
+-----------------------------------------------------------
+lec-2 LS CMD
+ls - list all files in present working directory 
+ls [options] [files and directories]
+man ls => documentation in cmd
+
+ex: 
+curr direc – home/<user>
+ls documents/ => folders or files of documents folder
+ls / =>  folders or files of root folder
+ls or ls ~ or ls “/home/<userProfile>” 
+
+
+[options]
+-l => long format like size,time,name, userwrites like  drwxr--> directory-read-write-execute-read
+-a => show hidden files
+-al => hidden + longlist
+-lS => sort + longformat
+-d  => list directories or path ex:  ls -d */
+
+when we want specific files extensions files only from directory
+ex: ls Document/*.html
+
+write contents of ls as a file 
+ex:  ls -lS > out.txt
+
+
+
+
+
+---------------------------------------------------------------
+Lec-3 : cd cmd
+change current working directory
+cd [directory]  
+
+ex : 
+cd ~ => home/userProfile
+cd / => root
+cd .. => one folder above
+cd <folder>  or cd [absolute path] ie cd /home/userprofile
+
+
+How to get inside a folder with space ex: my books
+cd my\ books or cd “my books” or cd ‘my books’
+note : by default cd my books takes only cd my. It consider only first argument
+
+-------------------------------------------------------------------------
+lec-4 cat cmd - concatenate
+1. display txt/content file
+2. create new txt file
+3. combining copies of test files
+
+cat [options] [file1] [file2] ....
+ex : 
+1. cat
+hello => user entered
+helo  =>  echoed by terminal
+
+2. cat <filemname.ext>
+
+3. cat file1.txt file2.txt
+content of file1
+content of file2
+
+4.cat -b file1.txt => add line number to non blank line
+ie  
+1 line 1
+2 line 2
+
+
+
+3 line 3
+
+5.cat -n file1.txt => Add line number to blank line
+1 line 1
+2 line 2
+3
+4
+5
+6 line 3
+
+6.cat -s file1.txt => displays multiple blank lines to one blank line
+ex:
+ line 1
+ line 2
+
+ line 3
+
+
+
+
+
+7. cat -E file1.txt => adds $ symbol at the end of each line
+ex:
+line 1$
+line 2$
+
+
+
+line 3$
+
+
+LEC-5 : redirection in LINUX ie o/p of one file --> i/p or o/p to another file
+
+Ex:
+1. cat > test.txt (create a file test.txt) if that file exists the below content overrides existing content
+(below is the content in that file)
+line1
+line2
+line3
+ctrl+D (press this at the end when writing is done)
+
+2. cat >>test.txt (create a file test.txt) if that file exists the below 
+content Appends existing content
+(below is the content in that file)
+line1
+line2
+line3
+ctrl+D (press this at the end when writing is done)
+
+3. contents of file1 + file2 to newFile
+cat file1.txt file2.txt > out.txt
+
+4. contents of file1 + file2 to file2
+cat file1.txt >> file2.txt
+
+
+-------------------------------------------------------------------------------
+Lec – 6 : mkdir cmd
+mkdir --> create dir/ folder in linux
+
+ex: 
+mkdir image or mkdir image/pics -> cant create both image and sub dir pics at same time.
+Solution :mkdir -p image/pics 
+
+to create a list of dir inside a dir
+mkdir -p image/{folder1,folder2,folder3}
+
+-------------------------------------------------------------------------------
+lec-7 rm and rmdir
+rmdir [options] <dir> --> remove dir or dir structure
+
+ex: 
+mkdir -p a/b/c
+ls -R =>dispalys dir structure
+rmdir a/b/c => removes c only
+rmdir -p a/b => removes complete a and b also
+rmdir -pv a/b => here ‘v’ means verbose that is gives internal working of a cmd
+ie first it delte b then deletes a
+
+NOTE: if dir cantains any file it cant delete that dir/folder
+ex: a/b/c
+if b has file.txt
+rmdir -pv a/b/c => removes c only throws error bcz b has file
+
+solution : rm -pv a/b => removes directory of b and its files and its sub directories ie b,c and files init but it doesnt remove a
+
+----------------------------------------------------------------------------
+lec-8: cp --> copy files and directories
+cp [options] [ source1] [source2]...[ destiantion]
+
+ex : cp file1.txt file2.txt ==> content of file1 is copied to file2. If file2 doesnt exist it creates new file.
+
+Case :
+desktop
+  - file1
+  - file2
+  -folder1
+curr dir desktop
+Imagine file1 file2 and folder1 are in same level or dir
+Cp file1.txt file2.txt folder1 => copy file1 and file2 to folder1 or directory overrides file1 without asking
+cp -i file1.txt file2.txt folder1 => ask before overrideing i means interaction
+
+
+case:
+desktop
+  - file1
+  - file2
+  -folder1
+
+curr dir folder1
+cd ../file1.txt ../file2.txt .(ie dot here is curr directory)
+or 
+cd ../file1.txt ../file2.txt /home/userprofile/desktop/flder1  ie absolute path
+
+
+case : copy dir1/folder1 files to dir3/folder3
+desktop (curr dir)
+  -folder1
+     - file1
+     - file2
+cp -R folder1 folder3 => R means recursicvec copy.Here
+It also create folder3 if it doesnt exist and copies file1 and file2 to folder3
+ie  folder3/file1 and  folder3/file2
+
+if  folder3 already exists then it copies folder1 into folder3 and then copies file1 and file2 into folder3/folder1/file1 and  folder3/folder1/file2
+
+
+
+-----------------------------------------------------------------------------
+lec 9:  mv cmd : move or rename files and directory
+mv [options] [sources] [destination]
+
+ex:
+mv file1.txt file2.txt => rename file1 to file2 
+mv file1.txt dir1/ => moves file1 to dir1 ie cut and paste and overrides if file1 exists in dir1
+mv -i file1.txt dir1/ => moves file1 to dir1 ie cut and paste and interacts if file1 exists in dir1 and asks for yes or no
+
+mv dir1 dir2 => moves dir1 to dir2 with there content ie dir2/dir1/file.txt
+
+
+rename dir1 to dir2
+mv dir1 dir2 => rename dir1 to dir2 with there content ie dir2/file.txt
+
+
+------------------------------------------------------------------------------
+LEC – 10 less cmd
+read the files and search files for pattern or words
+
+ex : 
+less file1.txt => shows content of the file and 
+down arrow and up arrow to navigate to line by line
+space key- navigate page by page
+B – page up
+G – end of the text file
+g– top of the text file
+/<searchword> --> to search for this word and press ‘n’ for the next match top to bottom. ‘?’ for search from bottom to up
+press q --> quit from less cmd
+
+----------------------------------------------------------------------------
+lec – 11 : touch cmd --> 
+1. create new empty file
+2. change existing time of file
+
+touch [options] [file1] [file2] ......
+
+ex:
+touch file2.txt --> create empty file in curr dir
+touch file2.txt  --> updates the timestamp of the existing file2
+touch file3.txt file4.txt --> creates new files3 n 4
+----------------------------------------------------------------------------
+LEC-12 : nano cmd --. is a file editor in unix system in terminal itself. Gives shortcut for editing texts
+
+Ctrl + O: Write out (save) the current file to disk.
+Ctrl + X: Exit nano. If you've made changes, it will prompt you to save before exiting.
+Ctrl + G: Display the help menu, which provides a list of all available keyboard shortcuts.
+Ctrl + K: Cut (delete) the current line.
+Ctrl + U: Paste (uncut) the cut text.
+Ctrl + _ (underscore): Go to a specific line number.
+Ctrl + W: Search for text within the file.
+**Ctrl + **: Replace text within the file.
+
+ex. nano file1.txt --> if this file doesnt exist it will create and opens termianl nano editor
+
+
+
+----------------------------------------------------------------------------
+
+
+LEC – 13 : sudo cmd --> superuser do.
+
+command in Unix-like operating systems (including Linux) stands for "superuser do." It allows a permitted user to execute a command as the superuser or another user, as specified by the security policy configured in the sudoers file.
+1. Performing administrative tasks 
+2. Running commands as another user: ex sudo -u username some_command
+3. Granting specific permissions:
+
+ex : create dir in etc file ( system files/folder )
+curr dir : home/user
+mkdir newdir --> persmission denied
+
+solution: ie prefix with sudo
+sudo mkdir newdir --> asks pswd and runs the cmd. Ie ur super user.
+
+----------------------------------------------------------------------------------------------------------------------------
+LEC – 14 : top cmd -->
+to display dynamic real-time information about running processes, system resource usage (such as CPU, memory, and swap), and other system-related information. It provides a continuously updated view of system processes, sorted by various criteria such as CPU or memory usage.
+
+
+Change delay 
+press s --> refresh every n sec and press enter
+press i --> idle process are hidden and only active process is shown
+press k --> to kill <PID>
+
+----------------------------------------------------------------------------------------------------------------------------
+lec 15 : kill cmd
+kill -[flags] <pid>
+
+flags :
+TERM(15) : Terminates the process gracefully.
+KILL (9):Forces the process to terminate immediately. This signal cannot be caught or ignored by the process.
+HUP (1) :Hangs up the process. This signal is commonly used to instruct daemons to reload their configuration files.
+INT (2): Interrupts the process. This is similar to pressing Ctrl+C in the terminal.
+
+
+
+Pidof <processName> :
+ex :
+pidof unity-control-center--> to know pid of for setting/control center
+
+
+kill -KILL 3225
+
+
+ps -ux --> long list of all running process for finding PID
+ps -aux  --> processes by all users 
+
+ps -U <userProfileName> => gives processes by user
+ps -C <processname> => gives list of all instances
+-----------------------------------------------------------------------------------------------------------------------------
+
+lec – 16 : echo cmd
+used to display a line of text or variables in the terminal or shell script
+echo [options] [stringorvariables]
+
+-e --> for esacpe character
+
+ex : 
+echo hello world --> o/p hello world
+
+name =”navin” (this variable is valid for this session only)
+echo $name --> o/p navin
+echo “hi $name” --> o/p hi navin
+echo -e “hi \text” --> hi 	ext.      Tab b/w
+echo -e “hi \n guru” --> 
+hi
+guru
+
+
+-----------------------------------------------------------------------------------------------------------------------------
+lec – 17 : file permission,symbolic and chmod
+
+
+rw—rw--1   ie owner—group—user
+
+chmod- used to change the permissions (mode) of a file or directory. It allows you to specify who can read, write, or execute a file or directory.
+
+chmod [options] mode filename
+
+ex: 
+chmod o+x file.txt => for other to execution prmission
+chmod g+x file.txt => for group to execution prmission
+chmod g-wx file.txt => for group to remove wx permision
+chmod ug=rwx file.txt => for user & group t o execution prmission
+chmod ugo=rwx or a-rwx  file.txt => for user,other & group t o execution prmission
+
+chmod u+rw,g=rw,o+r  file.txt => for user & group t o execution different permissions
+
+--------------------------------------------------------------------------------------------------------------------------
+LEC-18 directory permission similar to above
+
+--------------------------------------------------------------------------------------------------------------------------
+lec-19 octal and numerical permissions
+  
+user      group     others
+r w x     r w x       r w x
+1 1 1    1 0 1       1 1  0  binary
+4+2+1 4+0+1   4+2+0 octal
+7            5            6
+
+ex: 
+ chmod [ugo]
+chmod 756 file.txt   ie 7 for user group-5 others-6 permission
+
+----------------------------------------------------------------------------------------------------------------------------
+lec – 20 bash scripting brief – script means sequence of cmds and logics(loops) etc
+
+nano [scriptname.sh] --> opens editor
+
+#<bashbang ie ! > <location of bash>
+we get loaction by “which bash”
+
+ex : script.sh
+#!/bin/bash
+ls -l 
+or
+ls
+STRING “hello” echo $STRING
+
+save and exit then execute but by default you will not have execute permission we need to do chmod u+x scriptname.sh then we can execute( nothing but going to that file  ie /scriptname.sh
+
+------------------------------------------------------------------------------------------------------------------------------
+
+lec 21 :  which and whatis cmd
+
+which : 
+used to locate the executable file associated with a given command. It searches the directories listed in the PATH environment variable for the specified command and prints the path to the executable file if it's found.
+
+Ex:  which ls
+/bin/ls gives path of ls
+
+whatis : used to display a brief description of a command. It provides a concise summary of the functionality of the specified command based on the system's manual pages (man pages).
+
+Ex:  whatis ls or whatis grep or whatis cat
+
+------------------------------------------------------------------------------------------------------------------------------
+lec – 22 : useradd cmd
+used to create a new user account. When you run the useradd command, it adds a new entry to the system user files (such as /etc/passwd and /etc/shadow) and sets up the initial home directory and default settings for the new user.
+
+
+
+Ex :  sudo useradd  avinash -m -s /bin/bash -g users -c “my comment”
+-m --> for creating default folders
+ s  --> allowing user to use shell ex: bash
+-g --> default user group
+-c --> to give comment
+
+check : ls  /home/ --> all users listed in user/
+you will find navin and avinash
+
+sudo passwd avinash --. to set pwd for avinash user
+
+------------------------------------------------------------------------------------------------------------------------------
+lec -23 : userdel cmd --> delete user
+
+ex : sudo userdel avinash --> it deletes the user n pswd but doesnt delete his data or his home dir
+
+solution sudo userdel -r avinash --> to delete his dir and user both
+
+sudo rm -r /home/avinash  --> deletes dir only not user
+
+------------------------------------------------------------------------------------------------------------------------------
+lec-24 : basic group management (groupadd/groupdel)
+
+all groups are listed in /etc/
+
+ex: sudo groupadd java 
+check : cat /etc/group
+
+groupdel
+ex : sudo groupdel java
+
+how to add user to any group
+ex : sudo gpasswd -a <user> <group> ie sudo gpasswd navin java
+-a --> add
+-d --> remove
+
+------------------------------------------------------------------------------------------------------------------------------
+lec – 25 : .bashrc file
+ file is a script that Bash runs whenever a new terminal  is started in interactive mode . It's commonly used to set up the environment for Bash sessions by configuring various settings and defining custom aliases, functions, and variables / Environment variables. Or path variables
+
+.bashrc file is typically located in your home directory (~/.bashrc). However, it may not exist by default, especially on some minimal installations or non-interactive shells. In such cases, you can create it manually.
+
+Ex: nano .bashrc or gedit .bashrc
+ex: alias ls=’ls –color=auto -1’ //add this in the .bashrc file
+
+------------------------------------------------------------------------------------------------------------------------------lec – 26 : viewing resources du,df,free cmd
+
+df -->to display information about the disk space usage on filesystems. It reports the amount of disk space used and available on filesystems mounted in the system, as well as the filesystem type and mount points.
+
+df -h --> -h is human readble flag
+
+du --> 
+is used to estimate file and directory space usage. It displays the sizes of directories and files, including the sizes of their subdirectories recursively.
+Note: use sudo prefix if needed
+
+Go to that dir or file ie cd file.txt then use this cmd
+du -h --> human readble
+du -sh --> summary and human readble
+
+
+free -->
+to display information about the system's total, used, and free memory (both physical and swap) and also the buffers and caches used by the kernel. It provides a snapshot of the system's memory usage at the time the command is executed.
+-h, --human: Display memory sizes in human-readable format (e.g., KB, MB, GB).
+-b, --bytes: Display memory sizes in bytes.
+-k, --kilo: Display memory sizes in kilobytes (default).
+-m, --mega: Display memory sizes in megabytes.
+-g, --giga: Display memory sizes in gigabytes.
+-t, --total: Display a summary line with the total memory statistics.
+
+Ex : free -m or free -g
+
+
+------------------------------------------------------------------------------------------------------------------------------lec – 27 : watch cmd
+used to execute a specified command repeatedly at regular intervals and display the output in the terminal. It's particularly useful for monitoring the output of commands that produce dynamic or changing results over time.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ 
+ 
+
+
+
+
+
+
