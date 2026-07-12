@@ -1,0 +1,115 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Cheat Sheet · Next Auth</title><style>:root{--bg:#fff;--fg:#1a1a1a;--muted:#6b7280;--line:#e5e7eb;--accent:#0d9488;--card:#f9fafb;--code:#f3f4f6;--codefg:#111}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1115;--fg:#e6e6e6;--muted:#9aa0aa;--line:#242833;--accent:#2dd4bf;--card:#171a21;--code:#0b0e13;--codefg:#e6e6e6}}
+*{box-sizing:border-box}body{margin:0;font:16px/1.6 system-ui,Segoe UI,sans-serif;background:var(--bg);color:var(--fg)}
+.wrap{max-width:860px;margin:0 auto;padding:1.2rem}
+a.back{color:var(--accent);text-decoration:none;font-size:.9rem}
+h1{font-size:1.5rem;margin:.6rem 0 .2rem}.sub{color:var(--muted);margin:0 0 1.4rem}
+h2{font-size:1.1rem;margin:1.6rem 0 .5rem;color:var(--accent)}
+.item{border:1px solid var(--line);border-radius:10px;background:var(--card);padding:.6rem .8rem;margin:.5rem 0}
+.item .l{font-weight:700}
+.item .n{color:var(--muted);font-size:.92rem;margin-top:.2rem}
+pre{margin:.45rem 0 0;background:var(--code);color:var(--codefg);border:1px solid var(--line);border-radius:8px;padding:.6rem .8rem;overflow-x:auto}
+code,pre{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:.86rem}
+.tips{border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:10px;background:var(--card);padding:.6rem 1rem}
+.tips li{margin:.35rem 0}
+@media print{.back{display:none}}</style></head><body><div class="wrap">
+<a class="back" href="../revision.html">← Back to revision index</a>
+<h1>Next Auth — Cheat Sheet</h1>
+<p class="sub">Cohort 2.0 · 9 lessons · quick reference</p>
+<h2>Concept: NextAuth &amp; Why Not JWT + localStorage</h2><div class="item"><div class="l">What is NextAuth (Auth.js)</div><div class="n">Full auth library for Next.js: handles OAuth (Google/GitHub/...), email, and credentials login, sessions, CSRF, and callback routing out of the box. Backend + frontend helpers in one package.</div></div><div class="item"><div class="l">Why NOT store a JWT in localStorage</div><div class="n">localStorage is readable by ANY JS on the page → XSS steals the token. No httpOnly. Can't auto-send on requests. Hard to invalidate/rotate server-side.</div></div><div class="item"><div class="l">What NextAuth does instead</div><div class="n">Session token in an httpOnly, Secure, SameSite cookie — JS can't read it, browser sends it automatically, built-in CSRF token. Session lookup happens server-side.</div></div><div class="item"><div class="l">Session strategies</div><pre><code>session: { strategy: "jwt" }   // stateless, encrypted JWT in cookie (default)
+// or
+session: { strategy: "database" } // session row in DB, needs an adapter</code></pre><div class="n">CredentialsProvider ONLY works with strategy: "jwt".</div></div><h2>Install &amp; Environment</h2><div class="item"><div class="l">Install (v4)</div><pre><code>npm install next-auth</code></pre></div><div class="item"><div class="l">Required env vars (.env.local)</div><pre><code>NEXTAUTH_URL=http://localhost:3000
+NEXTAUTH_SECRET=&lt;random-string&gt;</code></pre></div><div class="item"><div class="l">Generate a secret</div><pre><code>openssl rand -base64 32</code></pre><div class="n">Without NEXTAUTH_SECRET set, JWT sessions fail in production.</div></div><div class="item"><div class="l">Provider secrets</div><pre><code>GOOGLE_CLIENT_ID=...
+GOOGLE_CLIENT_SECRET=...
+GITHUB_ID=...
+GITHUB_SECRET=...</code></pre></div><h2>Catch-all API Route ([...nextauth])</h2><div class="item"><div class="l">Catch-all route concept</div><div class="n">[...nextauth] captures ALL sub-paths: /api/auth/signin, /signout, /callback/:provider, /session, /csrf, /providers. One handler serves every auth endpoint.</div></div><div class="item"><div class="l">Pages Router: pages/api/auth/[...nextauth].ts</div><pre><code>import NextAuth from "next-auth";
+import CredentialsProvider from "next-auth/providers/credentials";
+
+export const authOptions = {
+  providers: [ /* ... */ ],
+  secret: process.env.NEXTAUTH_SECRET,
+};
+
+export default NextAuth(authOptions);</code></pre></div><div class="item"><div class="l">App Router: app/api/auth/[...nextauth]/route.ts</div><pre><code>import NextAuth from "next-auth";
+import { authOptions } from "@/lib/auth"; // define authOptions separately
+
+const handler = NextAuth(authOptions);
+export { handler as GET, handler as POST };</code></pre><div class="n">Folder is [...nextauth], file is route.ts. Export handler as BOTH GET and POST.</div></div><div class="item"><div class="l">Give NextAuth access to the catch-all</div><div class="n">The [...nextauth] path is literal — the folder/file must be exactly named that so NextAuth's internal router can resolve /api/auth/* to its handlers. Keep authOptions in its own module to reuse with getServerSession.</div></div><h2>Providers</h2><div class="item"><div class="l">Credentials provider (email/password)</div><pre><code>import CredentialsProvider from "next-auth/providers/credentials";
+
+CredentialsProvider({
+  name: "Credentials",
+  credentials: {
+    username: { label: "Email", type: "text" },
+    password: { label: "Password", type: "password" },
+  },
+  async authorize(credentials) {
+    const user = await db.user.findUnique({ where: { email: credentials.username }});
+    if (user &amp;&amp; await bcrypt.compare(credentials.password, user.hash)) {
+      return { id: user.id, name: user.name, email: user.email };
+    }
+    return null; // null/throw =&gt; login rejected
+  },
+})</code></pre><div class="n">Return object = the user; return null to reject. Requires strategy: "jwt".</div></div><div class="item"><div class="l">Google provider</div><pre><code>import GoogleProvider from "next-auth/providers/google";
+
+GoogleProvider({
+  clientId: process.env.GOOGLE_CLIENT_ID!,
+  clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+})</code></pre><div class="n">Authorized redirect URI in Google Console: http://localhost:3000/api/auth/callback/google</div></div><div class="item"><div class="l">GitHub provider</div><pre><code>import GithubProvider from "next-auth/providers/github";
+
+GithubProvider({
+  clientId: process.env.GITHUB_ID!,
+  clientSecret: process.env.GITHUB_SECRET!,
+})</code></pre><div class="n">GitHub OAuth App callback URL: http://localhost:3000/api/auth/callback/github</div></div><h2>Callbacks &amp; Server Session</h2><div class="item"><div class="l">Add fields to token &amp; session</div><pre><code>callbacks: {
+  async jwt({ token, user }) {
+    if (user) token.uid = user.id; // runs on sign-in
+    return token;
+  },
+  async session({ session, token }) {
+    if (session.user) session.user.id = token.uid;
+    return session;
+  },
+}</code></pre><div class="n">session callback only exposes what you copy from the token. user is only present on the first jwt call.</div></div><div class="item"><div class="l">Read session on the server (App Router)</div><pre><code>import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+
+const session = await getServerSession(authOptions);
+if (!session) redirect("/signin");</code></pre></div><div class="item"><div class="l">Read session in API route (Pages Router)</div><pre><code>import { getServerSession } from "next-auth/next";
+const session = await getServerSession(req, res, authOptions);</code></pre></div><h2>Client Hooks &amp; Actions</h2><div class="item"><div class="l">Wrap app in SessionProvider</div><pre><code>// Pages: _app.tsx
+&lt;SessionProvider session={session}&gt;&lt;Component {...pageProps} /&gt;&lt;/SessionProvider&gt;
+
+// App Router: make a "use client" Providers wrapper around SessionProvider
+// then use it in app/layout.tsx</code></pre><div class="n">useSession() throws without a SessionProvider ancestor.</div></div><div class="item"><div class="l">useSession</div><pre><code>import { useSession } from "next-auth/react";
+const { data: session, status } = useSession();
+// status: "loading" | "authenticated" | "unauthenticated"</code></pre></div><div class="item"><div class="l">signIn</div><pre><code>import { signIn } from "next-auth/react";
+signIn("google");                 // OAuth redirect flow
+signIn("github");
+signIn("credentials", {
+  username, password,
+  redirect: false,                // handle result yourself
+  callbackUrl: "/dashboard",
+});</code></pre></div><div class="item"><div class="l">signOut</div><pre><code>import { signOut } from "next-auth/react";
+signOut({ callbackUrl: "/" });</code></pre></div><h2>Custom Pages &amp; Route Protection</h2><div class="item"><div class="l">Point NextAuth to custom pages</div><pre><code>// in authOptions
+pages: {
+  signIn: "/signin",
+  signOut: "/signout",
+  error: "/auth/error",   // ?error=CredentialsSignin etc.
+}</code></pre><div class="n">NextAuth redirects to these instead of its built-in UI.</div></div><div class="item"><div class="l">Custom signup / signin page</div><pre><code>"use client";
+import { signIn } from "next-auth/react";
+
+export default function SignIn() {
+  const [email, setEmail] = useState("");
+  const [pw, setPw] = useState("");
+  return (
+    &lt;form onSubmit={async (e) =&gt; {
+      e.preventDefault();
+      const res = await signIn("credentials", { email, password: pw, redirect: false });
+      if (res?.error) alert("Invalid login");
+      else router.push("/");
+    }}&gt;
+      {/* inputs + &lt;button&gt;Sign in&lt;/button&gt; */}
+    &lt;/form&gt;
+  );
+}</code></pre><div class="n">Signup (creating the user) is your own API route + db insert; then call signIn to log them in.</div></div><div class="item"><div class="l">Protect routes via middleware</div><pre><code>// middleware.ts (project root)
+export { default } from "next-auth/middleware";
+export const config = { matcher: ["/dashboard/:path*", "/admin/:path*"] };</code></pre><div class="n">Redirects unauthenticated users to the signIn page automatically.</div></div>
+<h2>Quick tips &amp; gotchas</h2><ul class="tips"><li>CredentialsProvider requires session: { strategy: "jwt" } — it does not work with the database strategy.</li><li>authorize() must return a user object on success and null on failure; a thrown error surfaces as ?error=... on your error page.</li><li>OAuth callback URLs must match EXACTLY in the provider console: /api/auth/callback/google and /api/auth/callback/github (update for prod domain).</li><li>Custom session fields must be copied through BOTH callbacks: set them on token in jwt(), then read from token in session().</li><li>Always set NEXTAUTH_SECRET in production — missing it breaks JWT encryption/verification.</li><li>useSession() needs a &lt;SessionProvider&gt; ancestor; in the App Router that means a "use client" wrapper component in layout.tsx.</li><li>In App Router, keep authOptions in its own file (e.g. lib/auth.ts) so both the [...nextauth] route and getServerSession can import it.</li><li>Use signIn(..., { redirect: false }) for credentials so you can show inline errors instead of a full-page redirect.</li></ul>
+</div></body></html>

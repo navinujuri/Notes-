@@ -1,0 +1,90 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Cheat Sheet · Basics of DOM</title><style>:root{--bg:#fff;--fg:#1a1a1a;--muted:#6b7280;--line:#e5e7eb;--accent:#0d9488;--card:#f9fafb;--code:#f3f4f6;--codefg:#111}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1115;--fg:#e6e6e6;--muted:#9aa0aa;--line:#242833;--accent:#2dd4bf;--card:#171a21;--code:#0b0e13;--codefg:#e6e6e6}}
+*{box-sizing:border-box}body{margin:0;font:16px/1.6 system-ui,Segoe UI,sans-serif;background:var(--bg);color:var(--fg)}
+.wrap{max-width:860px;margin:0 auto;padding:1.2rem}
+a.back{color:var(--accent);text-decoration:none;font-size:.9rem}
+h1{font-size:1.5rem;margin:.6rem 0 .2rem}.sub{color:var(--muted);margin:0 0 1.4rem}
+h2{font-size:1.1rem;margin:1.6rem 0 .5rem;color:var(--accent)}
+.item{border:1px solid var(--line);border-radius:10px;background:var(--card);padding:.6rem .8rem;margin:.5rem 0}
+.item .l{font-weight:700}
+.item .n{color:var(--muted);font-size:.92rem;margin-top:.2rem}
+pre{margin:.45rem 0 0;background:var(--code);color:var(--codefg);border:1px solid var(--line);border-radius:8px;padding:.6rem .8rem;overflow-x:auto}
+code,pre{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:.86rem}
+.tips{border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:10px;background:var(--card);padding:.6rem 1rem}
+.tips li{margin:.35rem 0}
+@media print{.back{display:none}}</style></head><body><div class="wrap">
+<a class="back" href="../revision.html">← Back to revision index</a>
+<h1>Basics of DOM — Cheat Sheet</h1>
+<p class="sub">Cohort 2.0 · 8 lessons · quick reference</p>
+<h2>DOM Fundamentals: static vs dynamic</h2><div class="item"><div class="l">What the DOM is</div><div class="n">Browser parses HTML into a live in-memory tree of node objects (document -&gt; html -&gt; head/body -&gt; ...). JS mutates this tree; the rendered page reflects it instantly. The DOM is NOT the HTML source file.</div></div><div class="item"><div class="l">Root entry points</div><pre><code>document            // whole page
+document.documentElement  // &lt;html&gt;
+document.head
+document.body</code></pre><div class="n">document is a global; everything hangs off it.</div></div><div class="item"><div class="l">Static HTML</div><pre><code>&lt;ul id="todos"&gt;
+  &lt;li&gt;Buy milk&lt;/li&gt;
+&lt;/ul&gt;</code></pre><div class="n">Markup shipped as-is from the server; content fixed at load, no JS mutation.</div></div><div class="item"><div class="l">Dynamic HTML</div><pre><code>const li = document.createElement('li');
+li.textContent = 'Walk dog';
+document.getElementById('todos').append(li);</code></pre><div class="n">JS creates/updates/removes nodes at runtime in response to data, events, timers, fetches.</div></div><div class="item"><div class="l">Run JS after DOM is parsed</div><pre><code>&lt;script src="app.js" defer&gt;&lt;/script&gt;
+// or
+document.addEventListener('DOMContentLoaded', init);</code></pre><div class="n">Selecting elements before they exist returns null. defer runs script after parse; inline scripts at end of &lt;body&gt; also work.</div></div><h2>Fetching / selecting elements</h2><div class="item"><div class="l">By CSS selector (modern default)</div><pre><code>document.querySelector('.card &gt; h2');   // first match or null
+document.querySelectorAll('li.done');    // static NodeList</code></pre><div class="n">querySelector takes ANY CSS selector. querySelectorAll snapshot does NOT auto-update.</div></div><div class="item"><div class="l">By id / class / tag (older, faster)</div><pre><code>document.getElementById('todos');          // Element or null
+document.getElementsByClassName('item');   // live HTMLCollection
+document.getElementsByTagName('li');       // live HTMLCollection</code></pre><div class="n">getElementById takes the id WITHOUT '#'. getElementsBy* return LIVE collections that update as the DOM changes.</div></div><div class="item"><div class="l">Scoped search (within an element)</div><pre><code>const card = document.querySelector('.card');
+card.querySelector('button');   // searches only inside card</code></pre></div><div class="item"><div class="l">Iterate matches</div><pre><code>document.querySelectorAll('li').forEach(li =&gt; {
+  console.log(li.textContent);
+});</code></pre><div class="n">NodeList has forEach. HTMLCollection does NOT — spread it: [...coll].forEach(...).</div></div><div class="item"><div class="l">Traverse from a node</div><pre><code>el.parentElement
+el.children          // element-only, HTMLCollection
+el.firstElementChild / el.lastElementChild
+el.nextElementSibling / el.previousElementSibling
+el.closest('.card')  // nearest ancestor matching selector</code></pre><div class="n">Prefer *Element* variants; childNodes/firstChild include text/whitespace nodes.</div></div><h2>Reading / updating content</h2><div class="item"><div class="l">Text vs HTML</div><pre><code>el.textContent = 'Hi &lt;b&gt;x&lt;/b&gt;';  // literal text, safe
+el.innerHTML  = '&lt;b&gt;Hi&lt;/b&gt;';      // parses HTML
+el.innerText;                      // rendered text (layout-aware, slower)</code></pre><div class="n">NEVER put untrusted input in innerHTML (XSS). Use textContent for user data.</div></div><div class="item"><div class="l">Attributes</div><pre><code>el.getAttribute('href');
+el.setAttribute('href', '/x');
+el.removeAttribute('disabled');
+el.hasAttribute('checked');</code></pre><div class="n">Many map to properties: el.id, el.href, el.value, el.disabled = true.</div></div><div class="item"><div class="l">data-* attributes</div><pre><code>// &lt;div data-user-id="42"&gt;
+el.dataset.userId;        // "42"  (camelCased)
+el.dataset.userId = '99';</code></pre><div class="n">kebab-case in HTML -&gt; camelCase in dataset.</div></div><div class="item"><div class="l">Classes</div><pre><code>el.classList.add('active');
+el.classList.remove('hidden');
+el.classList.toggle('open');       // add/remove
+el.classList.toggle('open', isOpen); // force state
+el.classList.contains('active');</code></pre><div class="n">Prefer classList over overwriting el.className (which wipes all classes).</div></div><div class="item"><div class="l">Inline styles</div><pre><code>el.style.color = 'red';
+el.style.backgroundColor = '#eee';  // camelCase props
+el.style.cssText = 'color:red;margin:4px';</code></pre><div class="n">CSS 'background-color' -&gt; JS 'backgroundColor'. Prefer toggling classes over per-property styling.</div></div><div class="item"><div class="l">Form values</div><pre><code>input.value;              // current value
+input.checked;            // checkbox/radio
+select.value;</code></pre><div class="n">value is a property, not an attribute — getAttribute('value') returns the initial default, not current input.</div></div><h2>Adding elements</h2><div class="item"><div class="l">Create + insert (safe pattern)</div><pre><code>const li = document.createElement('li');
+li.textContent = 'New item';
+li.className = 'todo';
+list.append(li);           // add as last child</code></pre><div class="n">createElement makes a detached node; nothing renders until it's inserted.</div></div><div class="item"><div class="l">Insertion methods</div><pre><code>parent.append(node, 'text');   // end (multiple, allows strings)
+parent.prepend(node);          // start
+ref.before(node);              // as previous sibling
+ref.after(node);               // as next sibling
+ref.replaceWith(node);         // swap out</code></pre><div class="n">Modern &amp; flexible. Older: appendChild(node) (single node only), insertBefore(new, ref).</div></div><div class="item"><div class="l">insertAdjacentHTML / Element</div><pre><code>el.insertAdjacentHTML('beforeend', '&lt;li&gt;x&lt;/li&gt;');
+// positions: beforebegin | afterbegin | beforeend | afterend</code></pre><div class="n">Parses HTML at a precise spot without clobbering existing children (unlike innerHTML +=). Watch XSS.</div></div><div class="item"><div class="l">Clone a node</div><pre><code>const copy = node.cloneNode(true);  // true = deep (with children)</code></pre><div class="n">cloneNode(false) copies the element only, no descendants. Clones have no event listeners.</div></div><div class="item"><div class="l">Moving vs copying</div><div class="n">Inserting an already-attached node MOVES it (a node can have only one parent). Clone first if you need it in two places.</div></div><h2>Deleting elements</h2><div class="item"><div class="l">Remove a node</div><pre><code>el.remove();                 // modern, self-removal</code></pre><div class="n">No args, removes el from its parent.</div></div><div class="item"><div class="l">Remove a child (legacy)</div><pre><code>parent.removeChild(childEl);</code></pre><div class="n">Returns the removed node; throws if not actually a child.</div></div><div class="item"><div class="l">Clear all children</div><pre><code>el.replaceChildren();        // modern, empties el
+// or
+el.innerHTML = '';           // simple but reparses</code></pre><div class="n">replaceChildren() with no args is the clean way. Loop-based while(el.firstChild) el.removeChild(el.firstChild) also works.</div></div><div class="item"><div class="l">Replace children with new set</div><pre><code>list.replaceChildren(li1, li2, li3);</code></pre><div class="n">Atomic swap of the entire child list.</div></div><h2>More complex elements &amp; patterns</h2><div class="item"><div class="l">Build nested structure</div><pre><code>const card = document.createElement('div');
+card.className = 'card';
+card.innerHTML = `
+  &lt;h2&gt;${title}&lt;/h2&gt;
+  &lt;p&gt;${body}&lt;/p&gt;`;
+container.append(card);</code></pre><div class="n">Template literals are handy but ${} of user data is an XSS hole — escape or use textContent.</div></div><div class="item"><div class="l">DocumentFragment (batch inserts)</div><pre><code>const frag = document.createDocumentFragment();
+items.forEach(t =&gt; {
+  const li = document.createElement('li');
+  li.textContent = t;
+  frag.append(li);
+});
+list.append(frag);   // single reflow</code></pre><div class="n">Fragment isn't rendered; appending it moves its children and empties it. Avoids per-item reflow in loops.</div></div><div class="item"><div class="l">&lt;template&gt; for reusable markup</div><pre><code>// &lt;template id="row"&gt;&lt;li class="row"&gt;&lt;/li&gt;&lt;/template&gt;
+const tpl = document.getElementById('row');
+const node = tpl.content.cloneNode(true);
+node.querySelector('.row').textContent = 'A';
+list.append(node);</code></pre><div class="n">template.content is inert (not rendered/queried by page) until cloned + inserted.</div></div><div class="item"><div class="l">Event delegation (dynamic lists)</div><pre><code>list.addEventListener('click', e =&gt; {
+  const li = e.target.closest('li');
+  if (li) li.remove();
+});</code></pre><div class="n">One listener on the parent handles current AND future children — no need to rebind after adding nodes.</div></div><div class="item"><div class="l">Render a data array</div><pre><code>list.replaceChildren(
+  ...data.map(d =&gt; {
+    const li = document.createElement('li');
+    li.textContent = d.name;
+    li.dataset.id = d.id;
+    return li;
+  })
+);</code></pre><div class="n">Map data -&gt; nodes, then replaceChildren once.</div></div>
+<h2>Quick tips &amp; gotchas</h2><ul class="tips"><li>querySelectorAll returns a STATIC NodeList; getElementsByClassName/TagName return LIVE HTMLCollections that mutate mid-loop — snapshot with [...coll] before iterating.</li><li>textContent for user-supplied data, innerHTML only for trusted markup. innerHTML += re-parses and destroys existing event listeners and input state.</li><li>Selecting elements before the DOM parses returns null — use defer, DOMContentLoaded, or place &lt;script&gt; at end of &lt;body&gt;.</li><li>input.value is a live property; getAttribute('value') returns only the initial HTML default, not what the user typed.</li><li>Inserting an existing node moves it (one parent max); cloneNode(true) first to duplicate. Clones do NOT carry event listeners.</li><li>Batch DOM writes with DocumentFragment or a single replaceChildren/append to avoid layout thrashing (reflow per insert).</li><li>Use event delegation on a stable parent for dynamically added children instead of rebinding listeners each time you add a node.</li><li>CSS hyphenated props become camelCase in JS: background-color -&gt; el.style.backgroundColor; and prefer toggling classes over setting many inline styles.</li></ul>
+</div></body></html>

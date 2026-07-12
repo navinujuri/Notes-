@@ -1,0 +1,112 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Cheat Sheet · Promises and async, await</title><style>:root{--bg:#fff;--fg:#1a1a1a;--muted:#6b7280;--line:#e5e7eb;--accent:#0d9488;--card:#f9fafb;--code:#f3f4f6;--codefg:#111}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1115;--fg:#e6e6e6;--muted:#9aa0aa;--line:#242833;--accent:#2dd4bf;--card:#171a21;--code:#0b0e13;--codefg:#e6e6e6}}
+*{box-sizing:border-box}body{margin:0;font:16px/1.6 system-ui,Segoe UI,sans-serif;background:var(--bg);color:var(--fg)}
+.wrap{max-width:860px;margin:0 auto;padding:1.2rem}
+a.back{color:var(--accent);text-decoration:none;font-size:.9rem}
+h1{font-size:1.5rem;margin:.6rem 0 .2rem}.sub{color:var(--muted);margin:0 0 1.4rem}
+h2{font-size:1.1rem;margin:1.6rem 0 .5rem;color:var(--accent)}
+.item{border:1px solid var(--line);border-radius:10px;background:var(--card);padding:.6rem .8rem;margin:.5rem 0}
+.item .l{font-weight:700}
+.item .n{color:var(--muted);font-size:.92rem;margin-top:.2rem}
+pre{margin:.45rem 0 0;background:var(--code);color:var(--codefg);border:1px solid var(--line);border-radius:8px;padding:.6rem .8rem;overflow-x:auto}
+code,pre{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:.86rem}
+.tips{border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:10px;background:var(--card);padding:.6rem 1rem}
+.tips li{margin:.35rem 0}
+@media print{.back{display:none}}</style></head><body><div class="wrap">
+<a class="back" href="../revision.html">← Back to revision index</a>
+<h1>Promises and async, await — Cheat Sheet</h1>
+<p class="sub">Cohort 2.0 · 10 lessons · quick reference</p>
+<h2>Classes &amp; Inheritance (JS OOP basics)</h2><div class="item"><div class="l">Define a class + constructor</div><pre><code>class Person {
+  constructor(name, age) {
+    this.name = name;   // instance fields
+    this.age = age;
+  }
+  greet() { return `Hi, I'm ${this.name}`; }  // prototype method
+}
+const p = new Person("Ada", 36);</code></pre><div class="n">Methods live on the prototype (shared); fields set in constructor are per-instance. `new` is mandatory.</div></div><div class="item"><div class="l">static members &amp; getters/setters</div><pre><code>class Circle {
+  static PI = 3.14159;
+  constructor(r) { this._r = r; }
+  get area() { return Circle.PI * this._r ** 2; }
+  set radius(v) { this._r = v; }
+  static of(r) { return new Circle(r); }  // factory
+}
+Circle.PI;            // access on class, not instance
+Circle.of(5).area;    // getter called w/o ()</code></pre><div class="n">`static` = called on the class itself. Getters/setters are accessed like properties (no parens).</div></div><div class="item"><div class="l">Inheritance: extends + super</div><pre><code>class Animal {
+  constructor(name) { this.name = name; }
+  speak() { return `${this.name} makes a noise`; }
+}
+class Dog extends Animal {
+  constructor(name, breed) {
+    super(name);          // MUST call before using `this`
+    this.breed = breed;
+  }
+  speak() { return `${super.speak()} — woof`; }  // super.method()
+}</code></pre><div class="n">In a subclass constructor, `super(...)` must run before any `this` access or it throws ReferenceError.</div></div><div class="item"><div class="l">Private fields (#)</div><pre><code>class Counter {
+  #count = 0;
+  inc() { this.#count++; }
+  get value() { return this.#count; }
+}
+// obj.#count from outside =&gt; SyntaxError</code></pre><div class="n">`#name` is truly private (enforced by engine), unlike the `_convention`.</div></div><div class="item"><div class="l">instanceof / method check</div><pre><code>p instanceof Person;   // true
+new Dog("Rex") instanceof Animal;  // true (walks prototype chain)</code></pre></div><h2>Promise class — creating &amp; consuming</h2><div class="item"><div class="l">Create a Promise (executor runs immediately)</div><pre><code>const p = new Promise((resolve, reject) =&gt; {
+  setTimeout(() =&gt; resolve(42), 1000);
+  // reject(new Error("boom"))  on failure
+});</code></pre><div class="n">3 states: pending → fulfilled (resolve) | rejected (reject). Settles once; later resolve/reject calls are ignored.</div></div><div class="item"><div class="l">Consume with .then/.catch/.finally</div><pre><code>p.then(val =&gt; console.log(val))
+ .catch(err =&gt; console.error(err))
+ .finally(() =&gt; console.log("done"));</code></pre><div class="n">`.then` returns a NEW promise → chainable. Return a value to pass down; return a promise to wait for it.</div></div><div class="item"><div class="l">Chaining (flatten async steps)</div><pre><code>fetch(url)
+  .then(res =&gt; res.json())   // returned promise is awaited
+  .then(data =&gt; data.id)
+  .then(id =&gt; console.log(id))
+  .catch(err =&gt; /* one catch handles whole chain */);</code></pre><div class="n">A single trailing .catch catches rejections from any prior step.</div></div><div class="item"><div class="l">Instant promises</div><pre><code>Promise.resolve(1);           // already-fulfilled
+Promise.reject(new Error("x")); // already-rejected</code></pre></div><h2>Promise combinators (concurrency)</h2><div class="item"><div class="l">Promise.all — wait for all, fail fast</div><pre><code>const [a, b] = await Promise.all([fetchA(), fetchB()]);</code></pre><div class="n">Rejects immediately if ANY input rejects; resolves to array of values in input order.</div></div><div class="item"><div class="l">Promise.allSettled — never rejects</div><pre><code>const results = await Promise.allSettled([p1, p2]);
+// [{status:'fulfilled',value}, {status:'rejected',reason}]</code></pre><div class="n">Use when you want every outcome regardless of individual failures.</div></div><div class="item"><div class="l">Promise.race — first to settle wins</div><pre><code>await Promise.race([fetch(url), timeout(5000)]);</code></pre><div class="n">Settles (fulfill OR reject) as soon as the first input settles. Classic for timeouts.</div></div><div class="item"><div class="l">Promise.any — first fulfilled wins</div><pre><code>await Promise.any([mirror1(), mirror2()]);</code></pre><div class="n">Ignores rejections; rejects with AggregateError only if ALL reject.</div></div><h2>async / await syntax</h2><div class="item"><div class="l">async function always returns a Promise</div><pre><code>async function getUser() {
+  return { id: 1 };   // wrapped =&gt; Promise&lt;{id:1}&gt;
+}
+getUser().then(u =&gt; ...);</code></pre><div class="n">A thrown error inside becomes a rejected promise. `return x` == `Promise.resolve(x)`.</div></div><div class="item"><div class="l">await unwraps a promise</div><pre><code>async function main() {
+  const res = await fetch(url);   // pauses until settled
+  const data = await res.json();
+  return data;
+}</code></pre><div class="n">`await` only valid inside `async` fns (or top-level in ES modules). Awaiting a non-promise just returns the value.</div></div><div class="item"><div class="l">try/catch = your .catch</div><pre><code>try {
+  const data = await getUser();
+} catch (err) {
+  console.error(err);   // catches rejections + throws
+} finally {
+  cleanup();
+}</code></pre></div><div class="item"><div class="l">Arrow &amp; method forms</div><pre><code>const f = async (x) =&gt; x * 2;
+const obj = { async load() { await ...; } };</code></pre></div><div class="item"><div class="l">Run in parallel, not serial</div><pre><code>// SLOW (sequential):
+const a = await fa(); const b = await fb();
+// FAST (concurrent):
+const [a, b] = await Promise.all([fa(), fb()]);</code></pre><div class="n">Awaiting one-by-one when calls are independent needlessly serializes them.</div></div><h2>Callback hell → Promises → async/await</h2><div class="item"><div class="l">Callback hell (the problem)</div><pre><code>getUser(id, (err, user) =&gt; {
+  if (err) return cb(err);
+  getPosts(user, (err, posts) =&gt; {
+    if (err) return cb(err);
+    getComments(posts[0], (err, c) =&gt; { /* ...deeper... */ });
+  });
+});</code></pre><div class="n">Rightward drift + repeated error checks + no composability. Hard to read &amp; maintain.</div></div><div class="item"><div class="l">Same logic with async/await (flat)</div><pre><code>const user  = await getUser(id);
+const posts = await getPosts(user);
+const c     = await getComments(posts[0]);</code></pre><div class="n">Linear, readable, single try/catch handles all errors.</div></div><div class="item"><div class="l">Promisify a callback API</div><pre><code>const readFileP = (path) =&gt; new Promise((resolve, reject) =&gt; {
+  fs.readFile(path, 'utf8', (err, data) =&gt;
+    err ? reject(err) : resolve(data));
+});
+// or: const readFileP = util.promisify(fs.readFile);</code></pre><div class="n">Node: `import { promisify } from 'util'` wraps err-first callbacks automatically.</div></div><h2>Defining your own async fn &amp; error-first callbacks vs reject</h2><div class="item"><div class="l">Write a promise-returning helper (delay)</div><pre><code>function delay(ms) {
+  return new Promise(resolve =&gt; setTimeout(resolve, ms));
+}
+await delay(1000);  // sleep</code></pre><div class="n">No built-in sleep in JS — this is the idiom.</div></div><div class="item"><div class="l">Error-first callback convention (Node classic)</div><pre><code>function loadUser(id, callback) {
+  db.find(id, (err, row) =&gt; {
+    if (err) return callback(err);       // err is 1st arg
+    callback(null, row);                 // null err on success
+  });
+}
+loadUser(1, (err, user) =&gt; { if (err) {...} });</code></pre><div class="n">Convention: callback(err, result). Success =&gt; err is null/undefined. Caller must check err every time.</div></div><div class="item"><div class="l">Promise reject equivalent</div><pre><code>function loadUser(id) {
+  return new Promise((resolve, reject) =&gt; {
+    db.find(id, (err, row) =&gt;
+      err ? reject(err) : resolve(row));
+  });
+}
+// consume: try { await loadUser(1) } catch(err){...}</code></pre><div class="n">reject(err) ≈ passing err to error-first callback; resolve(v) ≈ callback(null, v). Errors propagate up automatically instead of manual re-passing.</div></div><div class="item"><div class="l">Reject with Error objects, not strings</div><pre><code>reject(new Error("not found"));   // ✅ stack trace
+// reject("not found")            // ❌ no stack, harder to debug</code></pre></div><h2>Gotchas &amp; patterns cheatsheet</h2><div class="item"><div class="l">Forgetting await = you get the Promise, not the value</div><pre><code>const data = getUser();        // Promise { &lt;pending&gt; }
+const data = await getUser();  // actual value</code></pre></div><div class="item"><div class="l">await inside .map returns array of promises</div><pre><code>const users = await Promise.all(ids.map(id =&gt; getUser(id)));</code></pre><div class="n">`arr.map(async ...)` yields Promise[]; wrap in Promise.all. `forEach` does NOT await — avoid it.</div></div><div class="item"><div class="l">Sequential loop (when order/backpressure matters)</div><pre><code>for (const id of ids) {
+  await process(id);   // one at a time
+}</code></pre><div class="n">`for...of` with await runs serially; use when each step depends on the last.</div></div><div class="item"><div class="l">this binding in class methods passed as callbacks</div><pre><code>btn.onclick = this.handle.bind(this);
+// or arrow class field: handle = () =&gt; { this.x }</code></pre><div class="n">Passing `obj.method` loses `this`. Bind or use an arrow class field.</div></div>
+<h2>Quick tips &amp; gotchas</h2><ul class="tips"><li>async function ALWAYS returns a Promise; `throw` inside becomes a rejection, `return x` becomes a resolved value.</li><li>One trailing `.catch()` (or a single try/catch) handles rejections from the whole chain — don't wrap every step.</li><li>Independent awaits run serially and waste time; batch them with Promise.all for concurrency.</li><li>A Promise settles exactly once — extra resolve/reject calls are silently ignored.</li><li>Always reject/throw `new Error(...)`, never a raw string, so you keep a stack trace.</li><li>`await` is only legal inside `async` functions (or top-level of an ES module) — otherwise SyntaxError.</li><li>`Array.forEach(async ...)` does NOT wait; use `for...of` with await (serial) or `map` + `Promise.all` (parallel).</li><li>In a subclass, call `super(...)` before touching `this`, and remember arrow functions don't get their own `this`.</li></ul>
+</div></body></html>

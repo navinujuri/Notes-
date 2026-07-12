@@ -1,0 +1,72 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Cheat Sheet · Docker End to End</title><style>:root{--bg:#fff;--fg:#1a1a1a;--muted:#6b7280;--line:#e5e7eb;--accent:#0d9488;--card:#f9fafb;--code:#f3f4f6;--codefg:#111}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1115;--fg:#e6e6e6;--muted:#9aa0aa;--line:#242833;--accent:#2dd4bf;--card:#171a21;--code:#0b0e13;--codefg:#e6e6e6}}
+*{box-sizing:border-box}body{margin:0;font:16px/1.6 system-ui,Segoe UI,sans-serif;background:var(--bg);color:var(--fg)}
+.wrap{max-width:860px;margin:0 auto;padding:1.2rem}
+a.back{color:var(--accent);text-decoration:none;font-size:.9rem}
+h1{font-size:1.5rem;margin:.6rem 0 .2rem}.sub{color:var(--muted);margin:0 0 1.4rem}
+h2{font-size:1.1rem;margin:1.6rem 0 .5rem;color:var(--accent)}
+.item{border:1px solid var(--line);border-radius:10px;background:var(--card);padding:.6rem .8rem;margin:.5rem 0}
+.item .l{font-weight:700}
+.item .n{color:var(--muted);font-size:.92rem;margin-top:.2rem}
+pre{margin:.45rem 0 0;background:var(--code);color:var(--codefg);border:1px solid var(--line);border-radius:8px;padding:.6rem .8rem;overflow-x:auto}
+code,pre{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:.86rem}
+.tips{border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:10px;background:var(--card);padding:.6rem 1rem}
+.tips li{margin:.35rem 0}
+@media print{.back{display:none}}</style></head><body><div class="wrap">
+<a class="back" href="../revision.html">← Back to revision index</a>
+<h1>Docker End to End — Cheat Sheet</h1>
+<p class="sub">Cohort 2.0 · 22 lessons · quick reference</p>
+<h2>Concepts &amp; Setup</h2><div class="item"><div class="l">Why Docker</div><div class="n">Kills "works on my machine": ships app + deps + runtime as one portable unit; fast, reproducible onboarding &amp; deploys.</div></div><div class="item"><div class="l">Containers vs VMs</div><div class="n">Containers share the host kernel (MBs, boot in ms). VMs virtualize hardware w/ a full guest OS (GBs, slow boot).</div></div><div class="item"><div class="l">History (why it exists)</div><div class="n">dotCloud, 2013. Originally wrapped Linux LXC; now uses runc + containerd. Containers are Linux cgroups + namespaces.</div></div><div class="item"><div class="l">Install check</div><pre><code>docker --version
+docker info
+docker run hello-world</code></pre><div class="n">Docker Desktop on Win/Mac runs a Linux VM under the hood; `docker info` confirms the daemon is up.</div></div><div class="item"><div class="l">Image vs Container</div><div class="n">Image = read-only blueprint (built once, versioned by tag). Container = a running (or stopped) instance of an image. One image → many containers.</div></div><h2>Core CLI Commands</h2><div class="item"><div class="l">Run a container</div><pre><code>docker run -d --name web -p 8080:80 nginx</code></pre><div class="n">-d detached, --rm auto-delete on exit, -it interactive shell.</div></div><div class="item"><div class="l">List containers</div><pre><code>docker ps        # running
+docker ps -a     # all (incl. stopped)</code></pre></div><div class="item"><div class="l">Shell into a running container</div><pre><code>docker exec -it web sh   # or bash</code></pre><div class="n">Debug live containers here; alpine images only have `sh`.</div></div><div class="item"><div class="l">Logs</div><pre><code>docker logs -f web       # -f = follow/tail</code></pre></div><div class="item"><div class="l">Stop / start / remove</div><pre><code>docker stop web
+docker start web
+docker rm web            # -f to force-remove running</code></pre></div><div class="item"><div class="l">Images</div><pre><code>docker images
+docker pull redis:7
+docker rmi nginx</code></pre></div><div class="item"><div class="l">Reclaim space</div><pre><code>docker system prune -a --volumes</code></pre><div class="n">Removes stopped containers, unused images/networks/volumes. Irreversible.</div></div><h2>Port Mapping &amp; Env Vars</h2><div class="item"><div class="l">Publish a port</div><pre><code>docker run -p 3000:3000 myapp</code></pre><div class="n">Format is -p HOST:CONTAINER. Without -p the container port is unreachable from host.</div></div><div class="item"><div class="l">Multiple / random ports</div><pre><code>docker run -p 8080:80 -p 443:443 img
+docker run -P img        # -P = auto-map all EXPOSEd ports</code></pre></div><div class="item"><div class="l">Single env var</div><pre><code>docker run -e NODE_ENV=production -e PORT=3000 myapp</code></pre></div><div class="item"><div class="l">Env file</div><pre><code>docker run --env-file .env myapp</code></pre><div class="n">File is KEY=VALUE per line, no quotes/spaces around =.</div></div><div class="item"><div class="l">EXPOSE (Dockerfile)</div><pre><code>EXPOSE 3000</code></pre><div class="n">Documentation only — does NOT publish. You still need -p at runtime.</div></div><h2>Dockerfile</h2><div class="item"><div class="l">Typical Node app</div><pre><code>FROM node:20-alpine
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci
+COPY . .
+EXPOSE 3000
+CMD ["node", "index.js"]</code></pre></div><div class="item"><div class="l">FROM</div><pre><code>FROM node:20-alpine</code></pre><div class="n">Base image + tag. Always pin a tag; `latest` drifts. alpine/slim = smaller.</div></div><div class="item"><div class="l">WORKDIR / COPY / RUN</div><pre><code>WORKDIR /app        # cwd for later cmds
+COPY src ./src      # host -&gt; image
+RUN npm run build   # runs at build time</code></pre><div class="n">RUN executes during build (bakes into image); each RUN = a layer.</div></div><div class="item"><div class="l">CMD vs ENTRYPOINT</div><pre><code>ENTRYPOINT ["node"]
+CMD ["index.js"]</code></pre><div class="n">CMD is the default, overridable by `docker run img &lt;args&gt;`. ENTRYPOINT is fixed; combine so run-args append to it. Use exec (JSON) form.</div></div><div class="item"><div class="l">ARG vs ENV</div><pre><code>ARG VERSION=1.0     # build-time only
+ENV APP_VERSION=$VERSION  # persists in container</code></pre><div class="n">ARG values vanish after build; ENV is available at runtime.</div></div><h2>Build, Run &amp; Push to Docker Hub</h2><div class="item"><div class="l">Build &amp; tag</div><pre><code>docker build -t saichandan/myapp:v1 .</code></pre><div class="n">`.` is the build context (dir sent to daemon). -t names/tags it.</div></div><div class="item"><div class="l">Run your image</div><pre><code>docker run -d -p 3000:3000 saichandan/myapp:v1</code></pre></div><div class="item"><div class="l">Tag an existing image</div><pre><code>docker tag myapp saichandan/myapp:latest</code></pre></div><div class="item"><div class="l">Login &amp; push</div><pre><code>docker login
+docker push saichandan/myapp:v1</code></pre><div class="n">Image name MUST be prefixed with your Docker Hub username to push.</div></div><div class="item"><div class="l">Pull elsewhere</div><pre><code>docker pull saichandan/myapp:v1</code></pre></div><h2>Layers &amp; Optimization</h2><div class="item"><div class="l">Every instruction = a layer</div><div class="n">FROM/COPY/RUN each create a cached, read-only layer. Container adds a thin writable layer on top.</div></div><div class="item"><div class="l">Inspect layers</div><pre><code>docker history saichandan/myapp:v1
+docker image inspect myapp</code></pre></div><div class="item"><div class="l">Cache = build speed</div><div class="n">Docker reuses a layer if the instruction + its inputs are unchanged. First changed layer busts cache for all layers below it.</div></div><div class="item"><div class="l">Order matters (key optimization)</div><pre><code>COPY package*.json ./
+RUN npm ci
+COPY . .</code></pre><div class="n">Copy manifest &amp; install deps BEFORE copying source. Code edits then skip the slow npm install layer.</div></div><div class="item"><div class="l">.dockerignore</div><pre><code>node_modules
+.git
+*.log
+Dockerfile</code></pre><div class="n">Shrinks build context &amp; final image; keeps secrets/junk out. Like .gitignore.</div></div><div class="item"><div class="l">Multi-stage build</div><pre><code>FROM node:20 AS build
+WORKDIR /app
+COPY . .
+RUN npm ci &amp;&amp; npm run build
+
+FROM nginx:alpine
+COPY --from=build /app/dist /usr/share/nginx/html</code></pre><div class="n">Ship only artifacts, drop build toolchain → far smaller, safer images.</div></div><h2>Volumes, Networks &amp; Compose</h2><div class="item"><div class="l">Named volume (persist data)</div><pre><code>docker volume create pgdata
+docker run -v pgdata:/var/lib/postgresql/data postgres:16</code></pre><div class="n">Container FS is ephemeral — data dies with `rm`. Volumes survive, managed by Docker.</div></div><div class="item"><div class="l">Bind mount (live dev)</div><pre><code>docker run -v "$(pwd)":/app node:20</code></pre><div class="n">Maps a host dir into the container — edits reflect instantly. On Windows PS use ${PWD}.</div></div><div class="item"><div class="l">Volume commands</div><pre><code>docker volume ls
+docker volume rm pgdata</code></pre></div><div class="item"><div class="l">Custom network + DNS</div><pre><code>docker network create mynet
+docker run -d --name db --network mynet postgres
+docker run --network mynet myapp   # reach db at host "db"</code></pre><div class="n">Containers on a user-defined network resolve each other by container name. Default bridge does NOT give name DNS.</div></div><div class="item"><div class="l">Network drivers</div><pre><code>docker network ls</code></pre><div class="n">bridge (default, isolated), host (share host net, no isolation), none (no net).</div></div><div class="item"><div class="l">docker-compose.yml</div><pre><code>services:
+  app:
+    build: .
+    ports: ["3000:3000"]
+    environment:
+      - DATABASE_URL=postgres://db/app
+    depends_on: [db]
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_PASSWORD: secret
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+volumes:
+  pgdata:</code></pre><div class="n">Compose auto-creates a shared network so services reach each other by service name.</div></div><div class="item"><div class="l">Compose lifecycle</div><pre><code>docker compose up -d --build
+docker compose logs -f
+docker compose down -v</code></pre><div class="n">down -v also drops named volumes. Newer syntax is `docker compose` (space), not `docker-compose`.</div></div>
+<h2>Quick tips &amp; gotchas</h2><ul class="tips"><li>CMD is overridden by args after the image name (`docker run img echo hi`); ENTRYPOINT isn't — pair them for a fixed binary + default args.</li><li>Always COPY package.json + install deps before COPY-ing source, so code changes don't invalidate the dependency layer.</li><li>Add a .dockerignore (node_modules, .git) — it shrinks the build context and prevents leaking secrets into layers.</li><li>-p HOST:CONTAINER order trips everyone up; the container port is the right-hand side and must match what your app listens on.</li><li>Anything written inside a container is lost on `docker rm` — mount a named volume for databases and any state you must keep.</li><li>Only containers on the SAME user-defined network can resolve each other by name; the default bridge requires --link or IPs.</li><li>Prefer alpine/slim bases and multi-stage builds to cut image size (and attack surface) by an order of magnitude.</li><li>`docker exec -it &lt;id&gt; sh` is your go-to for debugging a live container; `docker logs -f` tails stdout/stderr.</li></ul>
+</div></body></html>

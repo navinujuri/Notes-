@@ -1,0 +1,103 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Cheat Sheet · Recursion</title><style>:root{--bg:#fff;--fg:#1a1a1a;--muted:#6b7280;--line:#e5e7eb;--accent:#0d9488;--card:#f9fafb;--code:#f3f4f6;--codefg:#111}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1115;--fg:#e6e6e6;--muted:#9aa0aa;--line:#242833;--accent:#2dd4bf;--card:#171a21;--code:#0b0e13;--codefg:#e6e6e6}}
+*{box-sizing:border-box}body{margin:0;font:16px/1.6 system-ui,Segoe UI,sans-serif;background:var(--bg);color:var(--fg)}
+.wrap{max-width:860px;margin:0 auto;padding:1.2rem}
+a.back{color:var(--accent);text-decoration:none;font-size:.9rem}
+h1{font-size:1.5rem;margin:.6rem 0 .2rem}.sub{color:var(--muted);margin:0 0 1.4rem}
+h2{font-size:1.1rem;margin:1.6rem 0 .5rem;color:var(--accent)}
+.item{border:1px solid var(--line);border-radius:10px;background:var(--card);padding:.6rem .8rem;margin:.5rem 0}
+.item .l{font-weight:700}
+.item .n{color:var(--muted);font-size:.92rem;margin-top:.2rem}
+pre{margin:.45rem 0 0;background:var(--code);color:var(--codefg);border:1px solid var(--line);border-radius:8px;padding:.6rem .8rem;overflow-x:auto}
+code,pre{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:.86rem}
+.tips{border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:10px;background:var(--card);padding:.6rem 1rem}
+.tips li{margin:.35rem 0}
+@media print{.back{display:none}}</style></head><body><div class="wrap">
+<a class="back" href="../revision.html">← Back to revision index</a>
+<h1>Recursion — Cheat Sheet</h1>
+<p class="sub">Cohort 2.0 · 6 lessons · quick reference</p>
+<h2>Anatomy &amp; Template</h2><div class="item"><div class="l">Every recursion = base case + recursive case</div><pre><code>function rec(n) {
+  if (n &lt;= 0) return; // base case FIRST
+  console.log(n);     // work
+  rec(n - 1);         // recurse on smaller input
+}</code></pre><div class="n">Write the base case first. Missing/wrong base case =&gt; RangeError: Maximum call stack size exceeded.</div></div><div class="item"><div class="l">Head vs tail recursion (work before vs after the call)</div><pre><code>function tail(n){ if(n===0) return; console.log(n); tail(n-1); } // prints n..1
+function head(n){ if(n===0) return; head(n-1); console.log(n); } // prints 1..n</code></pre><div class="n">Where you place the work relative to the call flips the print/build order — the stack unwinds LIFO.</div></div><div class="item"><div class="l">Factorial — classic combine(f(n-1))</div><pre><code>const fact = n =&gt; n &lt;= 1 ? 1 : n * fact(n - 1);</code></pre></div><div class="item"><div class="l">Return-value vs accumulator/void style</div><pre><code>// return value
+const sum = n =&gt; n === 0 ? 0 : n + sum(n - 1);
+// accumulator (tail-position)
+const sumAcc = (n, acc = 0) =&gt; n === 0 ? acc : sumAcc(n - 1, acc + n);</code></pre></div><h2>Nearby Squares — warm-up patterns</h2><div class="item"><div class="l">Map an iterative loop to f(n) = combine(f(n-1))</div><pre><code>// iterative
+let s = 0; for (let i = 1; i &lt;= n; i++) s += i;
+// recursive
+const s2 = n =&gt; n === 0 ? 0 : n + s2(n - 1);</code></pre><div class="n">Mechanical fluency: identify the last unit of work, delegate the rest to the smaller call.</div></div><div class="item"><div class="l">Power a^b via recursion</div><pre><code>const pow = (a, b) =&gt; b === 0 ? 1 : a * pow(a, b - 1);</code></pre></div><div class="item"><div class="l">Fast power — O(log b) (halve the exponent)</div><pre><code>function fastPow(a, b){
+  if (b === 0) return 1;
+  const half = fastPow(a, Math.floor(b / 2));
+  return b % 2 ? a * half * half : half * half;
+}</code></pre><div class="n">Compute half ONCE then square it — calling fastPow twice makes it O(b) again.</div></div><div class="item"><div class="l">Reverse a number / string recursively</div><pre><code>const rev = s =&gt; s === '' ? '' : rev(s.slice(1)) + s[0];</code></pre></div><h2>Divide &amp; Conquer</h2><div class="item"><div class="l">Pattern: split → solve subproblems → combine</div><div class="n">Subproblems are independent (unlike backtracking). Cost = split + subcalls + combine.</div></div><div class="item"><div class="l">Merge sort — T(n)=2T(n/2)+O(n)=O(n log n)</div><pre><code>function mergeSort(a){
+  if (a.length &lt;= 1) return a;
+  const m = a.length &gt;&gt; 1;
+  const L = mergeSort(a.slice(0, m)), R = mergeSort(a.slice(m));
+  const out = []; let i = 0, j = 0;
+  while (i &lt; L.length &amp;&amp; j &lt; R.length) out.push(L[i] &lt;= R[j] ? L[i++] : R[j++]);
+  return out.concat(L.slice(i), R.slice(j));
+}</code></pre><div class="n">The O(n) combine (merge) step dominates here.</div></div><div class="item"><div class="l">Binary search — T(n)=T(n/2)+O(1)=O(log n)</div><pre><code>function bsearch(a, x, lo = 0, hi = a.length - 1){
+  if (lo &gt; hi) return -1;
+  const mid = (lo + hi) &gt;&gt; 1;
+  if (a[mid] === x) return mid;
+  return a[mid] &lt; x ? bsearch(a, x, mid + 1, hi) : bsearch(a, x, lo, mid - 1);
+}</code></pre><div class="n">Only one subproblem recursed into =&gt; log depth, not a full tree.</div></div><div class="item"><div class="l">Master Theorem — T(n)=aT(n/b)+O(n^d)</div><pre><code>// compare d vs log_b(a):
+// d &gt;  log_b a  -&gt; O(n^d)
+// d == log_b a  -&gt; O(n^d log n)   (merge sort: a=2,b=2,d=1)
+// d &lt;  log_b a  -&gt; O(n^(log_b a))</code></pre><div class="n">Quick way to read off complexity from the recurrence.</div></div><h2>How to Think Recursively</h2><div class="item"><div class="l">3-step recipe</div><pre><code>// 1. Base case: smallest input, answer directly
+// 2. Assume rec(smaller) is ALREADY correct (leap of faith)
+// 3. Combine that result to solve the current input</code></pre><div class="n">Don't trace the whole call tree — trust the subcall and just write the combine step.</div></div><div class="item"><div class="l">Correctness = induction (3 checks)</div><div class="n">(a) base case correct; (b) each call strictly shrinks toward base (termination); (c) combine correct assuming subcall is.</div></div><div class="item"><div class="l">Complexity from the recursion tree</div><pre><code>// #calls x work-per-call
+// linear chain rec(n-1): O(n)
+// two branches rec(n-1)+rec(n-2): O(2^n)
+// halving one branch: O(log n)</code></pre><div class="n">Branching factor + depth =&gt; size of tree =&gt; time.</div></div><div class="item"><div class="l">Space is O(max depth), always</div><div class="n">Every un-returned frame is live at once. Balanced tree=O(log n); skewed/linked-list-shaped=O(n).</div></div><h2>Backtracking (choose · explore · un-choose)</h2><div class="item"><div class="l">Core template</div><pre><code>function backtrack(state, path, res){
+  if (isSolution(state, path)) { res.push([...path]); return; }
+  for (const choice of options(state)) {
+    if (!valid(choice)) continue;   // prune
+    path.push(choice);              // choose
+    backtrack(next(state, choice), path, res); // explore
+    path.pop();                     // un-choose (restore!)
+  }
+}</code></pre><div class="n">The pop()/undo is the signature of backtracking — forget it and later branches see dirty state.</div></div><div class="item"><div class="l">Subsets (power set) — 2^n</div><pre><code>function subsets(nums){
+  const res = [];
+  const go = (i, cur) =&gt; {
+    if (i === nums.length) { res.push([...cur]); return; }
+    go(i + 1, cur);                 // skip nums[i]
+    cur.push(nums[i]); go(i + 1, cur); cur.pop(); // take nums[i]
+  };
+  go(0, []); return res;
+}</code></pre></div><div class="item"><div class="l">Permutations — n!</div><pre><code>function permute(nums){
+  const res = [], used = Array(nums.length).fill(false), cur = [];
+  const go = () =&gt; {
+    if (cur.length === nums.length) { res.push([...cur]); return; }
+    for (let i = 0; i &lt; nums.length; i++){
+      if (used[i]) continue;
+      used[i] = true; cur.push(nums[i]);
+      go();
+      cur.pop(); used[i] = false; // undo
+    }
+  };
+  go(); return res;
+}</code></pre></div><div class="item"><div class="l">Prune early = the whole point</div><div class="n">Abandon a branch the instant it can't yield a valid solution (N-Queens, Sudoku). Pruning is what beats brute force.</div></div><h2>Staircase → Memoization → DP</h2><div class="item"><div class="l">Climb n stairs (1 or 2 steps) = Fibonacci</div><pre><code>// naive: O(2^n) — overlapping subproblems recomputed
+const climb = n =&gt; n &lt;= 2 ? n : climb(n - 1) + climb(n - 2);</code></pre><div class="n">ways(n) = ways(n-1) + ways(n-2). Slow because ways(n-3)... recomputed exponentially.</div></div><div class="item"><div class="l">Top-down memoization — O(n) time / O(n) space</div><pre><code>function climbMemo(n, memo = {}){
+  if (n &lt;= 2) return n;
+  if (memo[n] !== undefined) return memo[n];
+  return memo[n] = climbMemo(n - 1, memo) + climbMemo(n - 2, memo);
+}</code></pre><div class="n">Cache the first result for each distinct subproblem =&gt; every state solved once.</div></div><div class="item"><div class="l">Bottom-up DP + O(1) space (roll 2 vars)</div><pre><code>function climbDP(n){
+  let a = 1, b = 2;                 // ways(1), ways(2)
+  for (let i = 3; i &lt;= n; i++) [a, b] = [b, a + b];
+  return n &lt;= 2 ? n : b;
+}</code></pre></div><div class="item"><div class="l">Recognizing when to memoize</div><div class="n">Overlapping subproblems + optimal substructure =&gt; DP. This is the recursion→DP bridge.</div></div><h2>Stack, Limits &amp; Iterative Conversion</h2><div class="item"><div class="l">Check / raise the effective limit</div><pre><code>// Node: default depth ~10k-15k frames
+// node --stack-size=8000 script.js   (KB, risky)
+// Better: convert deep recursion to iteration</code></pre><div class="n">JS engines (V8) do NOT do tail-call optimization in practice — deep tail recursion still overflows.</div></div><div class="item"><div class="l">Recursion → explicit stack (iterative DFS)</div><pre><code>function dfs(root){
+  const stack = [root];
+  while (stack.length){
+    const node = stack.pop();
+    visit(node);
+    for (const c of node.children) stack.push(c);
+  }
+}</code></pre><div class="n">Same algorithm, but frames live on the heap (large) instead of the call stack (small/limited).</div></div><div class="item"><div class="l">Trampoline (simulate TCO)</div><pre><code>const trampoline = fn =&gt; (...a) =&gt; { let r = fn(...a); while (typeof r === 'function') r = r(); return r; };
+const sumT = trampoline(function s(n, acc = 0){ return n === 0 ? acc : () =&gt; s(n - 1, acc + n); });</code></pre><div class="n">Return a thunk instead of calling; loop drives it — flat stack for deep tail recursion.</div></div>
+<h2>Quick tips &amp; gotchas</h2><ul class="tips"><li>Base case FIRST, and prove the input strictly shrinks toward it — that guarantees termination.</li><li>"Maximum call stack size exceeded" almost always means a missing/unreachable base case or input not shrinking.</li><li>Space cost of recursion is O(max depth), even when the logic looks O(1) — every pending frame is live.</li><li>Two recursive calls =&gt; suspect exponential time; if subproblems overlap, memoize to collapse it to O(n).</li><li>Backtracking: always undo (pop/restore) your choice after the recursive call, or sibling branches inherit dirty state.</li><li>V8/Node does NOT optimize tail calls — rewrite deep recursion as an explicit-stack loop or use a trampoline.</li><li>When copying results out of a mutable path in backtracking, push a COPY ([...path]) — not the shared reference.</li><li>Compute-once then reuse: fastPow/divide-and-conquer must store the half result, not call the function twice.</li></ul>
+</div></body></html>

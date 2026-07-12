@@ -1,0 +1,86 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Cheat Sheet · Building an Exchange - Part 2 (Backend)</title><style>:root{--bg:#fff;--fg:#1a1a1a;--muted:#6b7280;--line:#e5e7eb;--accent:#0d9488;--card:#f9fafb;--code:#f3f4f6;--codefg:#111}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1115;--fg:#e6e6e6;--muted:#9aa0aa;--line:#242833;--accent:#2dd4bf;--card:#171a21;--code:#0b0e13;--codefg:#e6e6e6}}
+*{box-sizing:border-box}body{margin:0;font:16px/1.6 system-ui,Segoe UI,sans-serif;background:var(--bg);color:var(--fg)}
+.wrap{max-width:860px;margin:0 auto;padding:1.2rem}
+a.back{color:var(--accent);text-decoration:none;font-size:.9rem}
+h1{font-size:1.5rem;margin:.6rem 0 .2rem}.sub{color:var(--muted);margin:0 0 1.4rem}
+h2{font-size:1.1rem;margin:1.6rem 0 .5rem;color:var(--accent)}
+.item{border:1px solid var(--line);border-radius:10px;background:var(--card);padding:.6rem .8rem;margin:.5rem 0}
+.item .l{font-weight:700}
+.item .n{color:var(--muted);font-size:.92rem;margin-top:.2rem}
+pre{margin:.45rem 0 0;background:var(--code);color:var(--codefg);border:1px solid var(--line);border-radius:8px;padding:.6rem .8rem;overflow-x:auto}
+code,pre{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:.86rem}
+.tips{border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:10px;background:var(--card);padding:.6rem 1rem}
+.tips li{margin:.35rem 0}
+@media print{.back{display:none}}</style></head><body><div class="wrap">
+<a class="back" href="../revision.html">← Back to revision index</a>
+<h1>Building an Exchange - Part 2 (Backend) — Cheat Sheet</h1>
+<p class="sub">Cohort 2.0 · 5 lessons · quick reference</p>
+<h2>Recap (Part 1) → Today's Scope</h2><div class="item"><div class="l">Part 1 = client side</div><div class="n">Next.js UI, order book / depth view, klines. Fixes the REST + WS contract the backend must now satisfy.</div></div><div class="item"><div class="l">Part 2 = server side</div><div class="n">API server + in-memory matching Engine + durable queue between them + async DB persistence + real-time market-data fan-out.</div></div><div class="item"><div class="l">Monorepo services</div><pre><code>api/     # Express, accepts orders
+engine/  # single-process matching engine (in-mem book)
+ws/      # WebSocket fan-out
+db/      # DB processor (drains 'db' queue → TimescaleDB)</code></pre><div class="n">Redis sits in the middle as broker + queue. Frontend from Part 1 unchanged.</div></div><div class="item"><div class="l">Interview framing</div><div class="n">Decomposition first: name each service + its responsibility before writing code. Design against an agreed contract, not in a vacuum.</div></div><h2>Backend Architecture &amp; Data Flow</h2><div class="item"><div class="l">Order path (write)</div><pre><code>client → API (LPUSH orders) → Engine (BRPOP)
+     → match in-memory book
+     → PUBLISH result to channel `id`   (API resolves HTTP)
+     → LPUSH events to `db` queue        (async persist)
+     → PUBLISH depth@X / trade@X         (WS fan-out)</code></pre><div class="n">One hot path (deterministic matching) separated from slow/best-effort concerns (DB, client fan-out).</div></div><div class="item"><div class="l">Why single-threaded + in-memory engine</div><div class="n">Matching needs a total order (price-time priority) → single thread kills lock contention/races + is deterministically replayable. In-mem = microsecond latency vs a DB round-trip per match.</div></div><div class="item"><div class="l">Cost of that design</div><div class="n">Throughput ceiling = 1 core; durability problem. Solve with snapshots + ordered event log, NOT more threads.</div></div><div class="item"><div class="l">Crash recovery</div><div class="n">Every order is on the durable Redis list before processing; snapshot the book periodically + replay events since the snapshot's sequence number. Downstream writes must be idempotent.</div></div><div class="item"><div class="l">DB kept off hot path</div><pre><code>// engine emits, never awaits a DB write
+RedisManager.getInstance().pushMessage({ type: TRADE_ADDED, data });</code></pre><div class="n">Dedicated db/ processor drains the queue → TimescaleDB. Trade-off: eventual consistency; carry a monotonic seq for idempotent, ordered writes.</div></div><h2>Redis List = Durable Order Queue</h2><div class="item"><div class="l">Why a LIST not pub/sub for orders</div><div class="n">LPUSH/BRPOP is a durable, at-least-once work queue: messages persist until popped, gives backpressure, load-balances across consumers. Orders must never be silently dropped.</div></div><div class="item"><div class="l">API side — enqueue order</div><pre><code>await client.lPush("orders", JSON.stringify({ clientId: id, message }));</code></pre><div class="n">clientId is a unique per-request id used as the reply channel.</div></div><div class="item"><div class="l">Engine side — blocking drain loop</div><pre><code>while (true) {
+  const res = await client.brPop("orders", 0); // blocks, no busy-spin
+  if (res) engine.process(JSON.parse(res.element));
+}</code></pre><div class="n">Prefer BRPOP (blocks) over a while-true RPOP busy-loop that pegs CPU. LPUSH + BRPOP = FIFO.</div></div><div class="item"><div class="l">node-redis v4 client</div><pre><code>import { createClient } from "redis";
+const client = createClient();
+await client.connect();</code></pre></div><h2>Redis Pub/Sub: Request-Reply + Fan-out</h2><div class="item"><div class="l">Sync REST over async engine (sendAndAwait)</div><pre><code>sendAndAwait(message: MessageToEngine) {
+  return new Promise((resolve) =&gt; {
+    const id = getRandomClientId();
+    this.client.subscribe(id, (msg) =&gt; {
+      this.client.unsubscribe(id);        // avoid channel leak
+      resolve(JSON.parse(msg));
+    });
+    this.client.lPush("orders", JSON.stringify({ clientId: id, message }));
+  });
+}</code></pre><div class="n">API subscribes to channel = unique id, then enqueues. Engine PUBLISHes result to `id`; promise resolves, HTTP responds.</div></div><div class="item"><div class="l">Engine replies to the API</div><pre><code>this.publisher.publish(clientId, JSON.stringify(payload));</code></pre></div><div class="item"><div class="l">Market-data fan-out channels</div><pre><code>publish("depth@BTC_USDC", JSON.stringify(depth));
+publish("trade@BTC_USDC",  JSON.stringify(trade));</code></pre><div class="n">Fire-and-forget, no persistence. Perfect for depth/trade (many subs, best-effort, only latest matters).</div></div><div class="item"><div class="l">Pub/Sub is NOT for orders</div><div class="n">No subscriber connected = message gone forever. Unacceptable for orders (use the list); fine for ephemeral market data.</div></div><div class="item"><div class="l">Separate pub vs sub connection</div><div class="n">A node-redis client in subscribe mode can't run normal commands — use one connection to publish/enqueue and a second to subscribe.</div></div><h2>Matching Engine (in-memory Orderbook)</h2><div class="item"><div class="l">Engine.process — command dispatch</div><pre><code>process({ message, clientId }) {
+  switch (message.type) {
+    case CREATE_ORDER:  /* match, reply, emit */ break;
+    case CANCEL_ORDER:  break;
+    case GET_DEPTH:     break;
+    case ON_RAMP:       break;   // add balance
+  }
+}</code></pre></div><div class="item"><div class="l">Orderbook.addOrder</div><pre><code>addOrder(order) {
+  if (order.side === "buy") {
+    const { executedQty, fills } = this.matchBid(order);
+    order.filled = executedQty;
+    if (executedQty &lt; order.quantity) this.bids.push(order); // rest on book
+    return { executedQty, fills };
+  } /* else matchAsk + this.asks.push */
+}</code></pre><div class="n">Fully filled → don't rest. Partial → remainder joins the book.</div></div><div class="item"><div class="l">matchBid core</div><pre><code>for (const ask of this.asks) {
+  if (ask.price &lt;= order.price &amp;&amp; executedQty &lt; order.quantity) {
+    const q = Math.min(order.quantity - executedQty, ask.quantity - ask.filled);
+    executedQty += q; ask.filled += q;
+    fills.push({ price: ask.price, qty: q, tradeId: this.lastTradeId++, otherUserId: ask.userId, markerOrderId: ask.orderId });
+  }
+}</code></pre><div class="n">Price-time priority. Then drop fully-filled asks: this.asks = this.asks.filter(a =&gt; a.filled &lt; a.quantity).</div></div><div class="item"><div class="l">Balance check + lock</div><div class="n">On buy: verify quote balance ≥ price*qty, lock it; on sell: lock base asset. Update both users' available/locked after each fill. Reject if insufficient.</div></div><h2>Singletons</h2><div class="item"><div class="l">Explicit getInstance (lazy init)</div><pre><code>export class RedisManager {
+  private static instance: RedisManager;
+  private constructor() { this.client = createClient(); this.client.connect(); }
+  static getInstance() {
+    if (!this.instance) this.instance = new RedisManager();
+    return this.instance;
+  }
+}</code></pre><div class="n">Lazy = created on first use, can wait for config/env. Private constructor blocks `new`.</div></div><div class="item"><div class="l">Free module-level singleton</div><pre><code>// redis.ts
+export const redisManager = new RedisManager();  // import cache dedupes per process</code></pre><div class="n">import/require caches the module → every importer gets the same instance. Eager init at import time. Enough for most cases.</div></div><div class="item"><div class="l">What is a singleton here</div><div class="n">RedisManager (one connection, avoids exhausting/interleaving), the Engine (one source of truth for the book), SubscriptionManager (one channel→socket map).</div></div><div class="item"><div class="l">Downsides (say these in interview)</div><div class="n">Controlled global → hidden coupling, hard to mock/reset in tests, init-order/circular-dep issues. DI is often cleaner.</div></div><div class="item"><div class="l">CRITICAL: per-process only</div><div class="n">Singleton ≠ cluster-wide single instance. PM2 cluster / k8s replicas each get their OWN heap + singleton. Fine for stateless managers; CATASTROPHIC if you run two matching engines on the same market.</div></div><h2>WebSocket Fan-out Layer</h2><div class="item"><div class="l">SubscriptionManager (singleton) — maps</div><pre><code>private subscriptions: Map&lt;string, string[]&gt; = new Map();        // userId → channels
+private reverseSubscriptions: Map&lt;string, string[]&gt; = new Map(); // channel → userIds</code></pre><div class="n">reverse map lets a Redis message find every socket for that channel in O(1).</div></div><div class="item"><div class="l">Subscribe once per channel, ref-count users</div><pre><code>subscribe(userId, channel) {
+  // ...push into both maps...
+  if (this.reverse.get(channel)?.length === 1)   // first subscriber
+    this.redisClient.subscribe(channel, this.onRedisMessage);
+}</code></pre><div class="n">Add socket to an existing Redis sub instead of re-subscribing per user → no duplicate delivery.</div></div><div class="item"><div class="l">Redis → local sockets (last-hop delivery)</div><pre><code>onRedisMessage = (message, channel) =&gt; {
+  this.reverse.get(channel)?.forEach(userId =&gt;
+    UserManager.getInstance().getUser(userId)?.emit(JSON.parse(message)));
+};</code></pre><div class="n">Redis broker fans out cross-instance; the in-mem singleton is only the last hop to locally-connected sockets.</div></div><div class="item"><div class="l">Unsubscribe on disconnect</div><pre><code>// on ws 'close': remove from both maps
+if (this.reverse.get(channel)?.length === 0)  // last client gone
+  this.redisClient.unsubscribe(channel);</code></pre><div class="n">Skipping this leaks closures + dead-socket refs → heap grows until the process falls over.</div></div><div class="item"><div class="l">Scale WS horizontally</div><div class="n">Run N stateless WS servers, each subscribes to the Redis channels. Registry stays process-local; shared truth is in Redis. In-process EventEmitter instead of Redis = publish on A never reaches a client on B.</div></div><h2>Message Types &amp; Config at a Glance</h2><div class="item"><div class="l">API → Engine (MessageToEngine)</div><pre><code>CREATE_ORDER | CANCEL_ORDER | GET_DEPTH | GET_OPEN_ORDERS | ON_RAMP</code></pre></div><div class="item"><div class="l">Engine → API (MessageFromOrderbook)</div><pre><code>ORDER_PLACED | ORDER_CANCELLED | OPEN_ORDERS | DEPTH</code></pre></div><div class="item"><div class="l">Engine → db queue (DbMessage)</div><pre><code>TRADE_ADDED | ORDER_UPDATE   // LPUSH to `db` list</code></pre></div><div class="item"><div class="l">Engine → ws channels (WsMessage)</div><pre><code>depth@&lt;MARKET&gt; | trade@&lt;MARKET&gt;   // PUBLISH</code></pre></div><div class="item"><div class="l">Channel / queue names</div><pre><code>orders          # Redis list (durable work queue)
+&lt;clientId&gt;      # pub/sub reply channel per request
+db              # Redis list (persistence)
+depth@BTC_USDC  # pub/sub market data
+trade@BTC_USDC</code></pre></div><div class="item"><div class="l">Persistence store</div><div class="n">TimescaleDB (Postgres + time-series) for klines/trades; the db/ processor writes it, materialized views build candles.</div></div>
+<h2>Quick tips &amp; gotchas</h2><ul class="tips"><li>Orders travel via the durable LIST (LPUSH/BRPOP); market data via PUB/SUB. Never send an order over pub/sub — no subscriber = message lost forever.</li><li>Always add a timeout to sendAndAwait: a crashed engine mid-order leaves the HTTP request hanging. Surface it as a 5xx, and unsubscribe to avoid channel leaks.</li><li>Keep exactly ONE matching engine per market. A singleton is per-process, so two engine instances on the same market = double-spend / corrupted book.</li><li>Engine writes DB events fire-and-forget to a queue — it must never await disk I/O on the matching path. Carry a monotonic sequence number so replays/retries are idempotent (no duplicate rows on restart).</li><li>Prefer BRPOP over a while(true){ RPOP } busy-loop — the latter pegs a CPU core spinning on an empty queue.</li><li>In node-redis, a connection in subscribe mode can't issue normal commands — keep separate publisher and subscriber clients.</li><li>Unsubscribe from Redis + prune the maps on socket 'close'. Missing unsubscribe-on-disconnect leaks dead sockets and grows the heap until the process dies.</li><li>Wrap each pub/sub subscriber callback in try/catch so one throwing subscriber doesn't abort the whole fan-out; ref-count so you subscribe once per channel, not per user.</li></ul>
+</div></body></html>

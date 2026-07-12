@@ -1,0 +1,92 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Cheat Sheet · installing-node-assignments</title><style>:root{--bg:#fff;--fg:#1a1a1a;--muted:#6b7280;--line:#e5e7eb;--accent:#0d9488;--card:#f9fafb;--code:#f3f4f6;--codefg:#111}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1115;--fg:#e6e6e6;--muted:#9aa0aa;--line:#242833;--accent:#2dd4bf;--card:#171a21;--code:#0b0e13;--codefg:#e6e6e6}}
+*{box-sizing:border-box}body{margin:0;font:16px/1.6 system-ui,Segoe UI,sans-serif;background:var(--bg);color:var(--fg)}
+.wrap{max-width:860px;margin:0 auto;padding:1.2rem}
+a.back{color:var(--accent);text-decoration:none;font-size:.9rem}
+h1{font-size:1.5rem;margin:.6rem 0 .2rem}.sub{color:var(--muted);margin:0 0 1.4rem}
+h2{font-size:1.1rem;margin:1.6rem 0 .5rem;color:var(--accent)}
+.item{border:1px solid var(--line);border-radius:10px;background:var(--card);padding:.6rem .8rem;margin:.5rem 0}
+.item .l{font-weight:700}
+.item .n{color:var(--muted);font-size:.92rem;margin-top:.2rem}
+pre{margin:.45rem 0 0;background:var(--code);color:var(--codefg);border:1px solid var(--line);border-radius:8px;padding:.6rem .8rem;overflow-x:auto}
+code,pre{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:.86rem}
+.tips{border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:10px;background:var(--card);padding:.6rem 1rem}
+.tips li{margin:.35rem 0}
+@media print{.back{display:none}}</style></head><body><div class="wrap">
+<a class="back" href="../revision.html">← Back to revision index</a>
+<h1>installing-node-assignments — Cheat Sheet</h1>
+<p class="sub">Cohort 2.0 · 7 lessons · quick reference</p>
+<h2>Install Node.js</h2><div class="item"><div class="l">Recommended: install via nvm (manage multiple versions)</div><pre><code># macOS/Linux
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash
+nvm install --lts
+nvm use --lts
+
+# Windows -&gt; use nvm-windows (installer .exe) or the node .msi</code></pre><div class="n">Prefer the LTS build for assignments; avoid mixing global installs across versions.</div></div><div class="item"><div class="l">Verify install</div><pre><code>node -v   # e.g. v22.x
+npm -v    # npm ships with node</code></pre><div class="n">If not found, restart the terminal / re-source shell profile so PATH updates.</div></div><div class="item"><div class="l">List / switch versions (nvm)</div><pre><code>nvm ls
+nvm install 20
+nvm use 20</code></pre></div><div class="item"><div class="l">Bun as an alternative runtime (covered later in course)</div><pre><code>curl -fsSL https://bun.sh/install | bash
+bun run index.js</code></pre><div class="n">Not required for week 2; Node is the default for these assignments.</div></div><h2>Run JS with Node &amp; project setup</h2><div class="item"><div class="l">Run a single file</div><pre><code>node index.js
+node ./easy/palindrome.js</code></pre></div><div class="item"><div class="l">REPL (interactive scratchpad)</div><pre><code>node
+&gt; [1,2,3].map(x =&gt; x*2)
+&gt; .exit   # or Ctrl+D</code></pre><div class="n">Great for testing one-liners without a file.</div></div><div class="item"><div class="l">Init a project + package.json</div><pre><code>npm init -y</code></pre><div class="n">Creates package.json so you can add deps and scripts.</div></div><div class="item"><div class="l">Install deps (assignments often use jest to self-test)</div><pre><code>npm install            # install from package.json
+npm install --save-dev jest</code></pre><div class="n">node_modules is generated locally — never commit it; use .gitignore.</div></div><div class="item"><div class="l">npm scripts</div><pre><code>// package.json
+"scripts": { "test": "jest", "start": "node index.js" }
+
+// run
+npm test
+npm start</code></pre></div><div class="item"><div class="l">Auto-restart on save (dev loop)</div><pre><code>npx nodemon index.js</code></pre><div class="n">Node 18+ also has built-in watch: node --watch index.js</div></div><h2>Modules: export / import your solutions</h2><div class="item"><div class="l">CommonJS (Node default, what most week-2 assignments use)</div><pre><code>// solution.js
+function isPalindrome(str) { /* ... */ }
+module.exports = isPalindrome;
+
+// test file
+const isPalindrome = require('./solution');</code></pre></div><div class="item"><div class="l">Multiple exports</div><pre><code>module.exports = { add, sub };
+const { add, sub } = require('./math');</code></pre></div><div class="item"><div class="l">ES Modules (opt in)</div><pre><code>// package.json -&gt; "type": "module"  (or use .mjs)
+export function add(a, b) { return a + b; }
+import { add } from './math.js';</code></pre><div class="n">With ESM you must include the .js extension in relative imports.</div></div><h2>Easy JS assignments — core patterns</h2><div class="item"><div class="l">Sum / reduce an array</div><pre><code>const total = arr.reduce((acc, n) =&gt; acc + n, 0);</code></pre></div><div class="item"><div class="l">Count vowels</div><pre><code>const count = (str.match(/[aeiou]/gi) || []).length;</code></pre><div class="n">|| [] guards against null when there are no matches.</div></div><div class="item"><div class="l">Palindrome check (normalize first)</div><pre><code>const clean = str.toLowerCase().replace(/[^a-z0-9]/g, '');
+const ok = clean === [...clean].reverse().join('');</code></pre></div><div class="item"><div class="l">Expenditure analysis (group/sum by key)</div><pre><code>const byCategory = transactions.reduce((acc, t) =&gt; {
+  acc[t.category] = (acc[t.category] || 0) + t.price;
+  return acc;
+}, {});</code></pre></div><div class="item"><div class="l">Find largest element</div><pre><code>const max = Math.max(...arr);   // arr must be non-empty</code></pre></div><h2>Medium JS — strings, timing, classes</h2><div class="item"><div class="l">Anagram check (sorted-chars key)</div><pre><code>const norm = s =&gt; [...s.toLowerCase()].sort().join('');
+const isAnagram = (a, b) =&gt; norm(a) === norm(b);</code></pre></div><div class="item"><div class="l">Time a synchronous function</div><pre><code>const start = Date.now();
+calculateSum();
+const ms = Date.now() - start;</code></pre><div class="n">For sub-ms precision use performance.now() (ms as float).</div></div><div class="item"><div class="l">Class with state (e.g. Todo / Counter assignment)</div><pre><code>class Todo {
+  constructor() { this.todos = []; }
+  add(t) { this.todos.push(t); }
+  remove(i) { this.todos.splice(i, 1); }
+  getAll() { return this.todos; }
+}
+module.exports = Todo;</code></pre></div><div class="item"><div class="l">Frequency map</div><pre><code>const freq = {};
+for (const ch of str) freq[ch] = (freq[ch] || 0) + 1;</code></pre></div><h2>Hard JS — filesystem &amp; JSON</h2><div class="item"><div class="l">Read a file (sync, simplest for a one-off script)</div><pre><code>const fs = require('fs');
+const text = fs.readFileSync('./a.txt', 'utf-8');</code></pre><div class="n">Pass 'utf-8' or you get a raw Buffer instead of a string.</div></div><div class="item"><div class="l">Count words in a file</div><pre><code>const words = text.trim().split(/\s+/).filter(Boolean);
+const count = words.length;</code></pre></div><div class="item"><div class="l">Clean a file: strip extra spaces, write back</div><pre><code>const cleaned = text.replace(/\s+/g, ' ').trim();
+fs.writeFileSync('./a.txt', cleaned);</code></pre></div><div class="item"><div class="l">Parse / stringify JSON</div><pre><code>const data = JSON.parse(fs.readFileSync('./todos.json', 'utf-8'));
+fs.writeFileSync('./todos.json', JSON.stringify(data, null, 2));</code></pre><div class="n">null, 2 pretty-prints with 2-space indent.</div></div><h2>Easy async — callbacks &amp; setTimeout</h2><div class="item"><div class="l">Defer work with setTimeout</div><pre><code>setTimeout(() =&gt; console.log('ran after ~1s'), 1000);</code></pre><div class="n">Delay is a minimum, not a guarantee — it queues after current sync code finishes.</div></div><div class="item"><div class="l">Callback-style function</div><pre><code>function later(cb) {
+  setTimeout(() =&gt; cb('done'), 500);
+}
+later(msg =&gt; console.log(msg));</code></pre></div><div class="item"><div class="l">Read file asynchronously (callback API)</div><pre><code>const fs = require('fs');
+fs.readFile('./a.txt', 'utf-8', (err, data) =&gt; {
+  if (err) return console.error(err);
+  console.log(data);
+});</code></pre><div class="n">Error-first callback: always handle err before using data.</div></div><div class="item"><div class="l">Print without blocking the event loop</div><pre><code>console.log('1');
+setTimeout(() =&gt; console.log('2'), 0);
+console.log('3');
+// -&gt; 1, 3, 2</code></pre><div class="n">Even 0ms defers to after the synchronous stack drains.</div></div><h2>Medium async — promises &amp; async/await</h2><div class="item"><div class="l">Promisify a delay</div><pre><code>const wait = ms =&gt; new Promise(res =&gt; setTimeout(res, ms));
+await wait(1000);</code></pre></div><div class="item"><div class="l">fs Promises API + async/await</div><pre><code>const fs = require('fs/promises');
+async function main() {
+  const data = await fs.readFile('./a.txt', 'utf-8');
+  await fs.writeFile('./out.txt', data.toUpperCase());
+}
+main();</code></pre><div class="n">await only works inside an async function (or top-level in ESM).</div></div><div class="item"><div class="l">Sequential vs parallel</div><pre><code>// sequential (slow): each awaits the previous
+const a = await f1();
+const b = await f2();
+
+// parallel (fast): start both, then wait
+const [x, y] = await Promise.all([f1(), f2()]);</code></pre></div><div class="item"><div class="l">Error handling</div><pre><code>try {
+  const data = await fs.readFile('./missing.txt', 'utf-8');
+} catch (err) {
+  console.error('failed:', err.message);
+}</code></pre><div class="n">Promise chains use .catch(); async/await uses try/catch.</div></div><div class="item"><div class="l">Convert callback API to promise</div><pre><code>const { promisify } = require('util');
+const readFile = promisify(require('fs').readFile);
+await readFile('./a.txt', 'utf-8');</code></pre></div>
+<h2>Quick tips &amp; gotchas</h2><ul class="tips"><li>node -v / npm -v is your first sanity check — if the shell can't find node, reopen the terminal so PATH refreshes.</li><li>Assignments usually export a function via module.exports and are graded by jest — run npm test, don't add console.logs that break the return contract.</li><li>Return the value, don't console.log it. Test runners check what your function returns, not what it prints.</li><li>fs sync methods (readFileSync) block the event loop — fine for tiny CLI scripts, never for servers.</li><li>Always pass 'utf-8' to fs read calls or you'll get a Buffer instead of a string.</li><li>setTimeout delay is a floor, not exact; async code runs after the current synchronous stack finishes.</li><li>await must live inside an async function; forgetting await gives you a pending Promise, not the value.</li><li>Use Promise.all for independent async tasks to run them in parallel instead of awaiting one-by-one.</li></ul>
+</div></body></html>

@@ -1,0 +1,88 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Cheat Sheet · SQL databases</title><style>:root{--bg:#fff;--fg:#1a1a1a;--muted:#6b7280;--line:#e5e7eb;--accent:#0d9488;--card:#f9fafb;--code:#f3f4f6;--codefg:#111}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1115;--fg:#e6e6e6;--muted:#9aa0aa;--line:#242833;--accent:#2dd4bf;--card:#171a21;--code:#0b0e13;--codefg:#e6e6e6}}
+*{box-sizing:border-box}body{margin:0;font:16px/1.6 system-ui,Segoe UI,sans-serif;background:var(--bg);color:var(--fg)}
+.wrap{max-width:860px;margin:0 auto;padding:1.2rem}
+a.back{color:var(--accent);text-decoration:none;font-size:.9rem}
+h1{font-size:1.5rem;margin:.6rem 0 .2rem}.sub{color:var(--muted);margin:0 0 1.4rem}
+h2{font-size:1.1rem;margin:1.6rem 0 .5rem;color:var(--accent)}
+.item{border:1px solid var(--line);border-radius:10px;background:var(--card);padding:.6rem .8rem;margin:.5rem 0}
+.item .l{font-weight:700}
+.item .n{color:var(--muted);font-size:.92rem;margin-top:.2rem}
+pre{margin:.45rem 0 0;background:var(--code);color:var(--codefg);border:1px solid var(--line);border-radius:8px;padding:.6rem .8rem;overflow-x:auto}
+code,pre{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:.86rem}
+.tips{border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:10px;background:var(--card);padding:.6rem 1rem}
+.tips li{margin:.35rem 0}
+@media print{.back{display:none}}</style></head><body><div class="wrap">
+<a class="back" href="../revision.html">← Back to revision index</a>
+<h1>SQL databases — Cheat Sheet</h1>
+<p class="sub">Cohort 2.0 · 11 lessons · quick reference</p>
+<h2>SQL vs NoSQL — pick &amp; justify</h2><div class="item"><div class="l">Relational (SQL): Postgres, MySQL, SQLite</div><div class="n">Structured tables + fixed schema, ACID transactions, strong consistency. Default choice for most CRUD apps.</div></div><div class="item"><div class="l">NoSQL: MongoDB (document), Redis (KV), Cassandra (wide-col), Neo4j (graph)</div><div class="n">Flexible/denormalized schema, horizontal scale. Good for caching, huge write volume, unstructured data.</div></div><div class="item"><div class="l">Why SQL over NoSQL</div><div class="n">Enforced schema catches bad data at insert; JOINs avoid duplicating data; transactions give all-or-nothing correctness (money, inventory). Relationships are first-class.</div></div><div class="item"><div class="l">When NoSQL wins</div><div class="n">Rapidly changing/unknown schema, extreme horizontal scale, or key-value/cache workloads. Trade consistency for availability/speed.</div></div><div class="item"><div class="l">ACID (why relational is safe)</div><div class="n">Atomicity, Consistency, Isolation, Durability — the guarantee that a transaction fully commits or fully rolls back.</div></div><h2>Setup — Postgres CLI</h2><div class="item"><div class="l">Run Postgres fast (Docker)</div><pre><code>docker run -d --name pg -e POSTGRES_PASSWORD=mypass -p 5432:5432 postgres</code></pre></div><div class="item"><div class="l">Connect with psql</div><pre><code>psql "postgresql://postgres:mypass@localhost:5432/postgres"</code></pre><div class="n">Full connection string format: postgresql://USER:PASS@HOST:PORT/DBNAME</div></div><div class="item"><div class="l">Create / drop a database</div><pre><code>CREATE DATABASE myapp;
+DROP DATABASE myapp;</code></pre><div class="n">Or from shell: createdb myapp / dropdb myapp</div></div><div class="item"><div class="l">psql meta-commands</div><pre><code>\l          -- list databases
+\c myapp    -- connect to db
+\dt         -- list tables
+\d users    -- describe table
+\q          -- quit</code></pre><div class="n">Backslash commands are psql-only, not SQL.</div></div><h2>DDL — tables &amp; schema</h2><div class="item"><div class="l">CREATE TABLE with common types + constraints</div><pre><code>CREATE TABLE users (
+  id       SERIAL PRIMARY KEY,
+  username VARCHAR(50) UNIQUE NOT NULL,
+  email    VARCHAR(255) NOT NULL,
+  age      INT CHECK (age &gt;= 0),
+  active   BOOLEAN DEFAULT true,
+  created  TIMESTAMP DEFAULT NOW()
+);</code></pre><div class="n">SERIAL = auto-increment int. Prefer GENERATED ALWAYS AS IDENTITY on PG10+. Use BIGSERIAL for large tables.</div></div><div class="item"><div class="l">Core types</div><div class="n">INT/BIGINT, SERIAL, VARCHAR(n)/TEXT, BOOLEAN, TIMESTAMP/TIMESTAMPTZ, NUMERIC(10,2) for money, DATE, JSONB, UUID.</div></div><div class="item"><div class="l">Constraints</div><div class="n">PRIMARY KEY, UNIQUE, NOT NULL, DEFAULT, CHECK(...), REFERENCES (FK). Constraints reject bad rows at write time.</div></div><div class="item"><div class="l">Alter schema</div><pre><code>ALTER TABLE users ADD COLUMN bio TEXT;
+ALTER TABLE users DROP COLUMN bio;
+ALTER TABLE users RENAME COLUMN username TO handle;</code></pre></div><div class="item"><div class="l">Index for fast lookups</div><pre><code>CREATE INDEX idx_users_email ON users(email);</code></pre><div class="n">PK/UNIQUE are auto-indexed. Index columns you filter/JOIN on; each index slows writes.</div></div><h2>DML — CRUD queries</h2><div class="item"><div class="l">INSERT (return the new row)</div><pre><code>INSERT INTO users (username, email, age)
+VALUES ('alice', 'a@x.com', 30)
+RETURNING id;</code></pre><div class="n">RETURNING avoids a second SELECT to get the generated id.</div></div><div class="item"><div class="l">SELECT with filter, sort, limit</div><pre><code>SELECT id, username FROM users
+WHERE active = true AND age &gt; 18
+ORDER BY created DESC
+LIMIT 10 OFFSET 0;</code></pre></div><div class="item"><div class="l">UPDATE (always scope with WHERE)</div><pre><code>UPDATE users SET active = false WHERE id = 5;</code></pre><div class="n">No WHERE = updates EVERY row. Same trap on DELETE.</div></div><div class="item"><div class="l">DELETE</div><pre><code>DELETE FROM users WHERE id = 5;</code></pre></div><div class="item"><div class="l">Aggregates + GROUP BY</div><pre><code>SELECT age, COUNT(*) FROM users
+GROUP BY age
+HAVING COUNT(*) &gt; 1;</code></pre><div class="n">WHERE filters rows before grouping; HAVING filters after aggregation.</div></div><div class="item"><div class="l">Upsert</div><pre><code>INSERT INTO users (username, email) VALUES ('alice','a@x.com')
+ON CONFLICT (username) DO UPDATE SET email = EXCLUDED.email;</code></pre></div><h2>Node.js with the pg library</h2><div class="item"><div class="l">Install</div><pre><code>npm install pg</code></pre></div><div class="item"><div class="l">Connect with a Pool (preferred)</div><pre><code>const { Pool } = require('pg');
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL
+});</code></pre><div class="n">Pool reuses connections across requests. A single Client is fine for scripts, not for a server.</div></div><div class="item"><div class="l">Parameterized query (async/await)</div><pre><code>const res = await pool.query(
+  'SELECT * FROM users WHERE email = $1',
+  ['a@x.com']
+);
+console.log(res.rows);</code></pre><div class="n">res.rows is an array of objects; res.rowCount is the count.</div></div><div class="item"><div class="l">NEVER string-concat user input (SQL injection)</div><pre><code>// BAD: `SELECT * FROM users WHERE email='${email}'`
+// GOOD: pool.query('... WHERE email = $1', [email])</code></pre><div class="n">$1, $2 placeholders are the fix — the driver escapes safely.</div></div><div class="item"><div class="l">Minimal Express endpoint</div><pre><code>app.post('/users', async (req, res) =&gt; {
+  const { username, email } = req.body;
+  const q = `INSERT INTO users (username, email)
+             VALUES ($1, $2) RETURNING id`;
+  const { rows } = await pool.query(q, [username, email]);
+  res.json({ id: rows[0].id });
+});</code></pre></div><div class="item"><div class="l">Transaction (all-or-nothing)</div><pre><code>const client = await pool.connect();
+try {
+  await client.query('BEGIN');
+  await client.query('UPDATE acct SET bal=bal-100 WHERE id=1');
+  await client.query('UPDATE acct SET bal=bal+100 WHERE id=2');
+  await client.query('COMMIT');
+} catch (e) {
+  await client.query('ROLLBACK'); throw e;
+} finally {
+  client.release();
+}</code></pre><div class="n">Must use a single checked-out client for a transaction, not pool.query.</div></div><h2>Relationships</h2><div class="item"><div class="l">One-to-Many (user has many posts)</div><pre><code>CREATE TABLE posts (
+  id      SERIAL PRIMARY KEY,
+  title   TEXT NOT NULL,
+  user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE
+);</code></pre><div class="n">FK lives on the 'many' side. ON DELETE CASCADE removes child rows with the parent.</div></div><div class="item"><div class="l">One-to-One</div><pre><code>CREATE TABLE profiles (
+  user_id INT PRIMARY KEY REFERENCES users(id),
+  bio     TEXT
+);</code></pre><div class="n">FK is also the PK (or UNIQUE) → at most one row per user.</div></div><div class="item"><div class="l">Many-to-Many (join/junction table)</div><pre><code>CREATE TABLE student_courses (
+  student_id INT REFERENCES students(id),
+  course_id  INT REFERENCES courses(id),
+  PRIMARY KEY (student_id, course_id)
+);</code></pre><div class="n">Composite PK prevents duplicate enrollments.</div></div><div class="item"><div class="l">FK referential integrity</div><div class="n">You can't insert a post with a user_id that doesn't exist, and can't delete a referenced user unless CASCADE/SET NULL is set.</div></div><h2>Joins</h2><div class="item"><div class="l">INNER JOIN — only matching rows</div><pre><code>SELECT u.username, p.title
+FROM users u
+JOIN posts p ON p.user_id = u.id;</code></pre><div class="n">Rows with no match on either side are dropped.</div></div><div class="item"><div class="l">LEFT JOIN — keep all left rows</div><pre><code>SELECT u.username, p.title
+FROM users u
+LEFT JOIN posts p ON p.user_id = u.id;</code></pre><div class="n">Users with zero posts still appear; p.title is NULL for them.</div></div><div class="item"><div class="l">Many-to-many via junction</div><pre><code>SELECT s.name, c.title
+FROM students s
+JOIN student_courses sc ON sc.student_id = s.id
+JOIN courses c        ON c.id = sc.course_id;</code></pre></div><div class="item"><div class="l">JOIN types cheat</div><div class="n">INNER = intersection. LEFT/RIGHT = keep all of one side. FULL = keep both. CROSS = every combination (cartesian).</div></div><div class="item"><div class="l">Aggregate across a join</div><pre><code>SELECT u.username, COUNT(p.id) AS post_count
+FROM users u
+LEFT JOIN posts p ON p.user_id = u.id
+GROUP BY u.id, u.username;</code></pre><div class="n">LEFT JOIN + COUNT(child.id) correctly yields 0 for empty parents (COUNT(*) would give 1).</div></div>
+<h2>Quick tips &amp; gotchas</h2><ul class="tips"><li>Always parameterize ($1, $2) — never interpolate user input into SQL. This is the #1 way to prevent SQL injection.</li><li>UPDATE/DELETE without a WHERE clause hits every row. Test the WHERE with a SELECT first.</li><li>Use a connection Pool in servers, not a single Client — and always client.release() in a finally block.</li><li>Index columns you filter or JOIN on frequently, but not everything: each index adds write cost and storage.</li><li>Use TIMESTAMPTZ (not TIMESTAMP) and NUMERIC (not FLOAT) for money to avoid timezone bugs and rounding errors.</li><li>Transactions require one checked-out client with BEGIN/COMMIT/ROLLBACK — pool.query() runs each statement on a possibly different connection.</li><li>Prefer LEFT JOIN when you must keep parent rows with no children; INNER JOIN silently drops them.</li><li>Store DATABASE_URL in env vars, never hardcode credentials; load with dotenv in dev.</li></ul>
+</div></body></html>

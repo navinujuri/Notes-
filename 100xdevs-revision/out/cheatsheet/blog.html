@@ -1,0 +1,124 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Cheat Sheet · Blogging website</title><style>:root{--bg:#fff;--fg:#1a1a1a;--muted:#6b7280;--line:#e5e7eb;--accent:#0d9488;--card:#f9fafb;--code:#f3f4f6;--codefg:#111}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1115;--fg:#e6e6e6;--muted:#9aa0aa;--line:#242833;--accent:#2dd4bf;--card:#171a21;--code:#0b0e13;--codefg:#e6e6e6}}
+*{box-sizing:border-box}body{margin:0;font:16px/1.6 system-ui,Segoe UI,sans-serif;background:var(--bg);color:var(--fg)}
+.wrap{max-width:860px;margin:0 auto;padding:1.2rem}
+a.back{color:var(--accent);text-decoration:none;font-size:.9rem}
+h1{font-size:1.5rem;margin:.6rem 0 .2rem}.sub{color:var(--muted);margin:0 0 1.4rem}
+h2{font-size:1.1rem;margin:1.6rem 0 .5rem;color:var(--accent)}
+.item{border:1px solid var(--line);border-radius:10px;background:var(--card);padding:.6rem .8rem;margin:.5rem 0}
+.item .l{font-weight:700}
+.item .n{color:var(--muted);font-size:.92rem;margin-top:.2rem}
+pre{margin:.45rem 0 0;background:var(--code);color:var(--codefg);border:1px solid var(--line);border-radius:8px;padding:.6rem .8rem;overflow-x:auto}
+code,pre{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:.86rem}
+.tips{border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:10px;background:var(--card);padding:.6rem 1rem}
+.tips li{margin:.35rem 0}
+@media print{.back{display:none}}</style></head><body><div class="wrap">
+<a class="back" href="../revision.html">← Back to revision index</a>
+<h1>Blogging website — Cheat Sheet</h1>
+<p class="sub">Cohort 2.0 · 15 lessons · quick reference</p>
+<h2>The Stack &amp; Backend Init (Steps 1-2)</h2><div class="item"><div class="l">Stack: serverless edge backend + shared types + React FE</div><div class="n">Cloudflare Workers + Hono (backend), PostgreSQL + Prisma (DB), Zod (validation, shared via npm), JWT (auth), React + Vite + react-router-dom + Tailwind (FE), TypeScript everywhere.</div></div><div class="item"><div class="l">Scaffold the Hono backend on Cloudflare Workers</div><pre><code>npm create hono@latest backend
+# template: cloudflare-workers
+cd backend &amp;&amp; npm i
+npm run dev   # local at http://localhost:8787</code></pre></div><div class="item"><div class="l">Minimal Hono app entry (src/index.ts)</div><pre><code>import { Hono } from 'hono'
+const app = new Hono()
+app.get('/', (c) =&gt; c.text('Hello Hono!'))
+export default app</code></pre><div class="n">Export default the app — Workers runtime calls its fetch handler. No app.listen().</div></div><div class="item"><div class="l">Type Bindings (env) + Variables (context state) generics</div><pre><code>const app = new Hono&lt;{
+  Bindings: { DATABASE_URL: string; JWT_SECRET: string };
+  Variables: { userId: string };
+}&gt;()</code></pre><div class="n">Bindings type c.env.*; Variables type c.get()/c.set(). Without them TS errors on env/context access.</div></div><h2>Prisma + DB (Step 4)</h2><div class="item"><div class="l">Install Prisma + Accelerate (connection pooling for edge)</div><pre><code>npm i prisma --save-dev
+npm i @prisma/client @prisma/extension-accelerate
+npx prisma init</code></pre></div><div class="item"><div class="l">schema.prisma — User + Post models</div><pre><code>model User {
+  id       String @id @default(uuid())
+  email    String @unique
+  name     String?
+  password String
+  posts    Post[]
+}
+model Post {
+  id        String  @id @default(uuid())
+  title     String
+  content   String
+  published Boolean @default(false)
+  author    User    @relation(fields: [authorId], references: [id])
+  authorId  String
+}</code></pre></div><div class="item"><div class="l">Migrate (uses DIRECT url in .env) then generate edge client</div><pre><code>npx prisma migrate dev --name init
+npx prisma generate --no-engine</code></pre><div class="n">--no-engine drops the query-engine binary (Workers can't run it); queries go through Accelerate. Re-run generate after every schema change.</div></div><div class="item"><div class="l">Instantiate PrismaClient INSIDE each handler (edge client)</div><pre><code>import { PrismaClient } from '@prisma/client/edge'
+import { withAccelerate } from '@prisma/extension-accelerate'
+
+const prisma = new PrismaClient({
+  datasourceUrl: c.env.DATABASE_URL,
+}).$extends(withAccelerate())</code></pre><div class="n">Import from '@prisma/client/edge'. Create per-request — Workers are stateless and have no long-lived global connection.</div></div><div class="item"><div class="l">Two DB URLs</div><div class="n">Runtime (wrangler.toml): pooled Accelerate string prisma://accelerate.prisma-data.net/?api_key=... . Migrations (.env): direct postgresql://... connection.</div></div><h2>Handlers, Routing &amp; Middleware (Steps 3, 5, 6)</h2><div class="item"><div class="l">Split routers per resource (src/routes/user.ts)</div><pre><code>import { Hono } from 'hono'
+export const userRouter = new Hono&lt;{ Bindings: {...} }&gt;()
+userRouter.post('/signup', async (c) =&gt; { /* ... */ })
+userRouter.post('/signin', async (c) =&gt; { /* ... */ })</code></pre></div><div class="item"><div class="l">Mount sub-routers with app.route (src/index.ts)</div><pre><code>import { userRouter } from './routes/user'
+import { blogRouter } from './routes/blog'
+app.route('/api/v1/user', userRouter)
+app.route('/api/v1/blog', blogRouter)</code></pre><div class="n">Paths inside a router are relative to the mount prefix.</div></div><div class="item"><div class="l">JWT auth middleware guarding /blog/*</div><pre><code>import { verify } from 'hono/jwt'
+blogRouter.use('/*', async (c, next) =&gt; {
+  const jwt = c.req.header('authorization') || ''
+  const user = await verify(jwt, c.env.JWT_SECRET)
+  if (!user) { c.status(403); return c.json({ message: 'unauthorized' }) }
+  c.set('userId', String(user.id))
+  await next()
+})</code></pre><div class="n">Course sends the raw token (no 'Bearer ' prefix). If you prefix, strip it before verify.</div></div><div class="item"><div class="l">Enable CORS (needed once FE calls the API)</div><pre><code>import { cors } from 'hono/cors'
+app.use('/*', cors())</code></pre></div><h2>Auth &amp; Blog Routes (Step 7)</h2><div class="item"><div class="l">Signup — create user, return signed JWT</div><pre><code>import { sign } from 'hono/jwt'
+const body = await c.req.json()
+const user = await prisma.user.create({
+  data: { email: body.email, password: body.password, name: body.name }
+})
+const jwt = await sign({ id: user.id }, c.env.JWT_SECRET)
+return c.json({ jwt })</code></pre><div class="n">Demo hashes nothing — in real apps hash passwords (bcrypt/argon).</div></div><div class="item"><div class="l">Signin — verify creds, return JWT</div><pre><code>const user = await prisma.user.findFirst({
+  where: { email: body.email, password: body.password }
+})
+if (!user) { c.status(403); return c.json({ message: 'invalid' }) }
+return c.json({ jwt: await sign({ id: user.id }, c.env.JWT_SECRET) })</code></pre></div><div class="item"><div class="l">Create blog (author = c.get('userId'))</div><pre><code>const authorId = c.get('userId')
+const blog = await prisma.post.create({
+  data: { title: body.title, content: body.content, authorId }
+})
+return c.json({ id: blog.id })</code></pre></div><div class="item"><div class="l">Update / get one / list all (bulk)</div><pre><code>await prisma.post.update({ where: { id: body.id }, data: {...} })
+await prisma.post.findFirst({ where: { id: c.req.param('id') } })
+await prisma.post.findMany({
+  select: { id:true, title:true, content:true, author:{ select:{ name:true } } }
+})</code></pre><div class="n">Use c.req.param('id') for /:id routes. Prefer select to control payload shape.</div></div><h2>Zod + Common Package (Steps 10-12)</h2><div class="item"><div class="l">Init the shared common package</div><pre><code>mkdir common &amp;&amp; cd common &amp;&amp; npm init -y
+npm i zod
+npx tsc --init   # set "declaration": true, "rootDir":"./src", "outDir":"./dist"</code></pre></div><div class="item"><div class="l">Define schemas + inferred types (common/src/index.ts)</div><pre><code>import { z } from 'zod'
+export const signupInput = z.object({
+  email: z.string().email(),
+  password: z.string().min(6),
+  name: z.string().optional()
+})
+export type SignupInput = z.infer&lt;typeof signupInput&gt;</code></pre><div class="n">Export both the schema (runtime validation) and z.infer type (compile-time). Single source of truth for FE + BE.</div></div><div class="item"><div class="l">Build + publish to npm (scoped, public)</div><pre><code>tsc -b
+npm login
+npm publish --access public   # name e.g. @yourname/medium-common</code></pre><div class="n">After each schema change: npm version patch, tsc -b, npm publish; then npm update the package in FE &amp; BE.</div></div><div class="item"><div class="l">Consume in backend with safeParse (never trust input)</div><pre><code>import { signupInput } from '@yourname/medium-common'
+const { success } = signupInput.safeParse(body)
+if (!success) { c.status(411); return c.json({ message: 'Inputs incorrect' }) }</code></pre><div class="n">safeParse returns { success } instead of throwing like parse().</div></div><h2>Deploy — Cloudflare Workers (Steps 8-9)</h2><div class="item"><div class="l">wrangler.toml — env vars for runtime</div><pre><code>name = "backend"
+main = "src/index.ts"
+compatibility_date = "2024-01-01"
+
+[vars]
+DATABASE_URL = "prisma://accelerate.prisma-data.net/?api_key=..."
+JWT_SECRET = "super-secret"</code></pre><div class="n">For real secrets prefer: npx wrangler secret put JWT_SECRET (keeps them out of the repo).</div></div><div class="item"><div class="l">Login + deploy</div><pre><code>npx wrangler login
+npm run deploy   # wrangler deploy</code></pre><div class="n">Gives a *.workers.dev URL. Use that as the FE's BACKEND_URL.</div></div><div class="item"><div class="l">Test with Postman before FE (Step 8)</div><pre><code>POST {{url}}/api/v1/user/signup   body: raw JSON
+POST {{url}}/api/v1/blog          header: Authorization: &lt;jwt&gt;</code></pre><div class="n">Copy jwt from signup/signin response into the Authorization header for /blog/* calls.</div></div><h2>Frontend — Vite + React Router (Steps 13-15)</h2><div class="item"><div class="l">Scaffold FE + Tailwind + router + common</div><pre><code>npm create vite@latest frontend -- --template react-ts
+cd frontend &amp;&amp; npm i
+npm i -D tailwindcss postcss autoprefixer &amp;&amp; npx tailwindcss init -p
+npm i react-router-dom axios @yourname/medium-common</code></pre></div><div class="item"><div class="l">Routes in App.tsx</div><pre><code>import { BrowserRouter, Routes, Route } from 'react-router-dom'
+&lt;BrowserRouter&gt;
+  &lt;Routes&gt;
+    &lt;Route path="/signup" element={&lt;Signup /&gt;} /&gt;
+    &lt;Route path="/signin" element={&lt;Signin /&gt;} /&gt;
+    &lt;Route path="/blogs" element={&lt;Blogs /&gt;} /&gt;
+    &lt;Route path="/blog/:id" element={&lt;Blog /&gt;} /&gt;
+  &lt;/Routes&gt;
+&lt;/BrowserRouter&gt;</code></pre></div><div class="item"><div class="l">Auth call — store JWT, navigate</div><pre><code>import axios from 'axios'
+import { useNavigate } from 'react-router-dom'
+const navigate = useNavigate()
+const res = await axios.post(`${BACKEND_URL}/api/v1/user/signup`, inputs)
+localStorage.setItem('token', res.data.jwt)
+navigate('/blogs')</code></pre></div><div class="item"><div class="l">Authenticated fetch — read :id param + send token</div><pre><code>import { useParams } from 'react-router-dom'
+const { id } = useParams()
+const res = await axios.get(`${BACKEND_URL}/api/v1/blog/${id}`, {
+  headers: { Authorization: localStorage.getItem('token') }
+})</code></pre><div class="n">Match the header format the backend middleware expects (raw token vs 'Bearer ').</div></div><div class="item"><div class="l">Reusable components</div><div class="n">Auth (shared signup/signin form), LabelledInput, Quote (split-screen), Appbar, BlogCard, BlogSkeleton, Avatar. Extract data-fetching into custom hooks (useBlog, useBlogs).</div></div>
+<h2>Quick tips &amp; gotchas</h2><ul class="tips"><li>Create PrismaClient inside each handler, not globally — Cloudflare Workers are stateless per request and share no connection; use the '@prisma/client/edge' import + withAccelerate for pooling.</li><li>Access secrets via c.env.X on Workers (not process.env), and type them in the Hono&lt;{ Bindings }&gt; generic or TS will error.</li><li>Keep two DB URLs: the pooled Accelerate prisma:// URL for runtime (wrangler.toml) and a direct postgresql:// URL in .env for prisma migrate/generate.</li><li>Re-run `npx prisma generate --no-engine` after every schema change, or the client types/queries go stale.</li><li>Common package is the single source of truth: after editing schemas, npm version patch + publish, then npm update it in BOTH frontend and backend.</li><li>Use zod safeParse (returns { success }) over parse (throws); return 411 on invalid input.</li><li>Middleware sends the raw JWT in Authorization (no 'Bearer ' prefix in the course) — keep FE and verify() consistent or auth silently 403s.</li><li>Enable CORS on the backend (hono/cors) before the React app can call it, and set BACKEND_URL to the deployed *.workers.dev origin.</li></ul>
+</div></body></html>

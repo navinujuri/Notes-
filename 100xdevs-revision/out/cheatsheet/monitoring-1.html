@@ -1,0 +1,73 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Cheat Sheet · Monitoring, Logging and Newrelic</title><style>:root{--bg:#fff;--fg:#1a1a1a;--muted:#6b7280;--line:#e5e7eb;--accent:#0d9488;--card:#f9fafb;--code:#f3f4f6;--codefg:#111}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1115;--fg:#e6e6e6;--muted:#9aa0aa;--line:#242833;--accent:#2dd4bf;--card:#171a21;--code:#0b0e13;--codefg:#e6e6e6}}
+*{box-sizing:border-box}body{margin:0;font:16px/1.6 system-ui,Segoe UI,sans-serif;background:var(--bg);color:var(--fg)}
+.wrap{max-width:860px;margin:0 auto;padding:1.2rem}
+a.back{color:var(--accent);text-decoration:none;font-size:.9rem}
+h1{font-size:1.5rem;margin:.6rem 0 .2rem}.sub{color:var(--muted);margin:0 0 1.4rem}
+h2{font-size:1.1rem;margin:1.6rem 0 .5rem;color:var(--accent)}
+.item{border:1px solid var(--line);border-radius:10px;background:var(--card);padding:.6rem .8rem;margin:.5rem 0}
+.item .l{font-weight:700}
+.item .n{color:var(--muted);font-size:.92rem;margin-top:.2rem}
+pre{margin:.45rem 0 0;background:var(--code);color:var(--codefg);border:1px solid var(--line);border-radius:8px;padding:.6rem .8rem;overflow-x:auto}
+code,pre{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:.86rem}
+.tips{border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:10px;background:var(--card);padding:.6rem 1rem}
+.tips li{margin:.35rem 0}
+@media print{.back{display:none}}</style></head><body><div class="wrap">
+<a class="back" href="../revision.html">← Back to revision index</a>
+<h1>Monitoring, Logging and Newrelic — Cheat Sheet</h1>
+<p class="sub">Cohort 2.0 · 14 lessons · quick reference</p>
+<h2>Observability Foundations</h2><div class="item"><div class="l">Three pillars</div><div class="n">Logs = discrete events (what happened). Metrics = numeric aggregates over time (how much/how fast). Traces = request path across services. NewRelic ingests all three.</div></div><div class="item"><div class="l">Monitoring vs Alerting vs Status page</div><div class="n">Monitoring = collect+visualize. Alerting = notify a human when a threshold breaks. Status page = public/internal uptime dashboard for stakeholders (e.g. statuspage.io, Better Uptime).</div></div><div class="item"><div class="l">SLI / SLO / SLA</div><div class="n">SLI = measured signal (latency, error rate). SLO = internal target (99.9% &lt; 300ms). SLA = contractual promise with penalties. Alert on SLO burn, not raw spikes.</div></div><div class="item"><div class="l">Golden signals to watch</div><div class="n">Latency, Traffic (throughput), Errors, Saturation (CPU/mem/disk). Everything else is usually derivable from these.</div></div><div class="item"><div class="l">Structured logs &gt; plain strings</div><pre><code>// bad
+console.log("user " + id + " failed login");
+// good — queryable JSON
+logger.warn("login_failed", { userId: id, ip });</code></pre><div class="n">JSON logs let you filter/aggregate in NRQL (metrics on logs). Never log secrets/PII/tokens.</div></div><h2>Winston Logger (Node.js)</h2><div class="item"><div class="l">Install &amp; create logger</div><pre><code>npm i winston
+
+const winston = require('winston');
+const logger = winston.createLogger({
+  level: process.env.LOG_LEVEL || 'info',
+  defaultMeta: { service: 'auth-api' },
+  format: winston.format.combine(
+    winston.format.timestamp(),
+    winston.format.errors({ stack: true }),
+    winston.format.json()
+  ),
+  transports: [
+    new winston.transports.Console(),
+    new winston.transports.File({ filename: 'error.log', level: 'error' }),
+    new winston.transports.File({ filename: 'combined.log' })
+  ]
+});</code></pre></div><div class="item"><div class="l">Log levels (npm scale)</div><pre><code>error:0  warn:1  info:2  http:3  verbose:4  debug:5  silly:6</code></pre><div class="n">Logger emits messages at its level and BELOW the number (i.e. more severe). level:'info' drops debug/silly.</div></div><div class="item"><div class="l">Log with structured metadata</div><pre><code>logger.info('order_created', { orderId, amount, userId });
+logger.error('db_write_failed', { err });  // errors() format captures .stack</code></pre><div class="n">2nd arg merges into JSON output — this is what makes 'metrics on logs' possible.</div></div><div class="item"><div class="l">Pretty console in dev, JSON in prod</div><pre><code>format: process.env.NODE_ENV === 'production'
+  ? winston.format.json()
+  : winston.format.combine(winston.format.colorize(), winston.format.simple())</code></pre></div><div class="item"><div class="l">HTTP request logging (Express)</div><pre><code>const morgan = require('morgan');
+app.use(morgan('combined', { stream: { write: m =&gt; logger.http(m.trim()) } }));</code></pre></div><div class="item"><div class="l">Ship logs to NewRelic w/ trace context</div><pre><code>npm i @newrelic/winston-enricher
+
+const nrFormatter = require('@newrelic/winston-enricher');
+format: winston.format.combine(winston.format.timestamp(), nrFormatter(winston))</code></pre><div class="n">Enricher injects trace.id/span.id so 'Logs in context' links a log line to its APM transaction.</div></div><h2>NewRelic APM Setup (Node.js)</h2><div class="item"><div class="l">Install agent</div><pre><code>npm i newrelic
+# copy config template to project root
+cp node_modules/newrelic/newrelic.js ./newrelic.js</code></pre></div><div class="item"><div class="l">Require FIRST — before anything else</div><pre><code>require('newrelic');           // must be line 1 of entrypoint
+const express = require('express');</code></pre><div class="n">Or use node --require newrelic app.js. Loading it late means the agent can't patch libraries → no data.</div></div><div class="item"><div class="l">Config via env (12-factor, no file)</div><pre><code>NEW_RELIC_LICENSE_KEY=xxxxx
+NEW_RELIC_APP_NAME=auth-api
+NEW_RELIC_NO_CONFIG_FILE=true
+NEW_RELIC_LOG_LEVEL=info
+NEW_RELIC_DISTRIBUTED_TRACING_ENABLED=true</code></pre><div class="n">app_name groups instances into ONE APM entity. Same name across pods = aggregated.</div></div><div class="item"><div class="l">What APM auto-captures</div><div class="n">Throughput (rpm), response time, error rate, Apdex, transaction traces, DB/external call breakdown, slow queries — zero manual instrumentation.</div></div><div class="item"><div class="l">Custom instrumentation</div><pre><code>const newrelic = require('newrelic');
+newrelic.recordMetric('Custom/CacheHit', 1);
+newrelic.addCustomAttribute('userId', id);
+newrelic.noticeError(err, { orderId });</code></pre></div><h2>Entities &amp; Infrastructure</h2><div class="item"><div class="l">Entity = anything NewRelic monitors</div><div class="n">APM service, host, container, browser app, lambda, K8s cluster. Each has a GUID. Everything in the platform is scoped to an entity.</div></div><div class="item"><div class="l">Tag entities for filtering</div><pre><code>NEW_RELIC_LABELS="env:prod;team:payments;region:ap-south-1"</code></pre><div class="n">Tags power entity search, dashboard FACETs, and alert scoping. Tag consistently (env/team/service).</div></div><div class="item"><div class="l">Infrastructure agent (host metrics)</div><pre><code>curl -Ls https://download.newrelic.com/install/newrelic-cli/scripts/install.sh | bash
+NEW_RELIC_API_KEY=xxx NEW_RELIC_ACCOUNT_ID=123 /usr/local/bin/newrelic install</code></pre><div class="n">Infra tab = CPU, memory, disk, network, processes per host. Separate agent from APM.</div></div><div class="item"><div class="l">Infra data in NRQL</div><pre><code>SELECT average(cpuPercent) FROM SystemSample FACET hostname TIMESERIES
+SELECT latest(memoryUsedBytes/memoryTotalBytes)*100 FROM SystemSample FACET hostname</code></pre></div><h2>NRQL (NewRelic Query Language)</h2><div class="item"><div class="l">Shape</div><pre><code>SELECT &lt;func&gt; FROM &lt;EventType&gt; WHERE &lt;cond&gt; FACET &lt;attr&gt; SINCE &lt;time&gt; TIMESERIES</code></pre><div class="n">SQL-like but time-series first. Common event types: Transaction, TransactionError, Log, SystemSample, PageView, Metric.</div></div><div class="item"><div class="l">Throughput &amp; error rate</div><pre><code>SELECT rate(count(*), 1 minute) FROM Transaction WHERE appName='auth-api' TIMESERIES
+SELECT percentage(count(*), WHERE error IS true) FROM Transaction SINCE 30 minutes ago</code></pre></div><div class="item"><div class="l">Percentiles (p95 / p99)</div><pre><code>SELECT percentile(duration, 50, 95, 99) FROM Transaction
+FACET name SINCE 1 hour ago TIMESERIES</code></pre><div class="n">duration is in seconds. FACET name = break down per endpoint/transaction.</div></div><div class="item"><div class="l">Metrics on logs</div><pre><code>SELECT count(*) FROM Log WHERE level='error' FACET service, message SINCE 1 day ago
+SELECT count(*) FROM Log WHERE message LIKE '%timeout%' TIMESERIES 5 minutes</code></pre><div class="n">Once logs are JSON, any field becomes a filterable/aggregatable dimension.</div></div><div class="item"><div class="l">Time &amp; bucketing helpers</div><pre><code>SINCE 1 hour ago UNTIL 30 minutes ago
+TIMESERIES AUTO        -- auto bucket width
+COMPARE WITH 1 week ago  -- overlay prior period
+LIMIT 100</code></pre></div><div class="item"><div class="l">Aggregations</div><pre><code>count(*)  average(x)  sum(x)  max(x)  min(x)
+uniqueCount(userId)  latest(x)  histogram(duration, 50, 20)  apdex(duration, t:0.5)</code></pre></div><h2>p95 / p99 — Tail Latency</h2><div class="item"><div class="l">What a percentile means</div><div class="n">p95 = 95% of requests were faster than this value; only 5% (the tail) were slower. p99 exposes worst-case UX that averages hide.</div></div><div class="item"><div class="l">Why not average</div><div class="n">avg is skewed by outliers and hides bimodal behavior. A 50ms avg can still mean p99=4s → 1% of users suffer. SLOs target p95/p99, never mean.</div></div><div class="item"><div class="l">Percentiles don't add / average</div><div class="n">You cannot average p99s across hosts or time buckets to get an overall p99. Query the raw distribution over the full window instead.</div></div><h2>Dashboards, Alerts &amp; Status Pages</h2><div class="item"><div class="l">Dashboard = saved NRQL widgets</div><div class="n">Build charts by pasting NRQL; each widget is one query. Use FACET for breakdowns, TIMESERIES for trends, billboard for single-number KPIs. Add variables (template) to make dashboards reusable across services/env.</div></div><div class="item"><div class="l">NRQL alert condition</div><pre><code>-- signal query (must return one value / thin FACET)
+SELECT percentile(duration, 95) FROM Transaction WHERE appName='auth-api'
+-- threshold: static, &gt; 0.5 for at least 5 minutes</code></pre><div class="n">Static (fixed number), Baseline (deviation from learned normal), or Anomaly. Set 'for at least N min' to avoid flapping.</div></div><div class="item"><div class="l">Policy vs Condition vs Incident</div><div class="n">Condition = one rule. Policy = group of conditions + how they roll up into incidents. Breach opens an Incident/Issue ('Problem'); notifiers fire; auto-closes on recovery.</div></div><div class="item"><div class="l">Notifiers / channels</div><div class="n">Route issues to Slack, email, PagerDuty, Opsgenie, or generic Webhook via a Workflow (filter issues → destination). Set severity + de-dup to avoid alert fatigue.</div></div><div class="item"><div class="l">Webhook notifier payload</div><pre><code>{
+  "issueUrl": "{{issuePageUrl}}",
+  "title": "{{annotations.title.[0]}}",
+  "priority": "{{priority}}",
+  "state": "{{state}}"
+}</code></pre></div><div class="item"><div class="l">Status page</div><div class="n">Public-facing uptime + incident history for users (statuspage.io / Better Stack / instatus). Feed it synthetic checks or alert webhooks. Separate concern from internal dashboards.</div></div>
+<h2>Quick tips &amp; gotchas</h2><ul class="tips"><li>require('newrelic') MUST be the very first line loaded — load it late and the agent can't monkey-patch http/express/pg, so you get zero data.</li><li>Give every instance the SAME NEW_RELIC_APP_NAME so replicas aggregate into one APM entity; a typo silently creates a second ghost service.</li><li>Alert and set SLOs on p95/p99, never on average — the mean hides the slow tail that actually hurts users.</li><li>Percentiles can't be averaged or summed across hosts/buckets; recompute over the full window or you'll report a wrong p99.</li><li>Log JSON, not string concatenation — unstructured logs can't be FACETed or aggregated into metrics in NRQL.</li><li>Winston level filters by severity: level:'info' emits error/warn/info but DROPS debug — bump LOG_LEVEL=debug to see them.</li><li>Add 'for at least N minutes' + recovery threshold on alert conditions to stop flapping and alert-fatigue.</li><li>Never log secrets, tokens, or PII — logs are queryable, retained, and widely readable; scrub before shipping to NewRelic.</li></ul>
+</div></body></html>

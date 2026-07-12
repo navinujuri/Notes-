@@ -1,0 +1,107 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Cheat Sheet · Prisma</title><style>:root{--bg:#fff;--fg:#1a1a1a;--muted:#6b7280;--line:#e5e7eb;--accent:#0d9488;--card:#f9fafb;--code:#f3f4f6;--codefg:#111}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1115;--fg:#e6e6e6;--muted:#9aa0aa;--line:#242833;--accent:#2dd4bf;--card:#171a21;--code:#0b0e13;--codefg:#e6e6e6}}
+*{box-sizing:border-box}body{margin:0;font:16px/1.6 system-ui,Segoe UI,sans-serif;background:var(--bg);color:var(--fg)}
+.wrap{max-width:860px;margin:0 auto;padding:1.2rem}
+a.back{color:var(--accent);text-decoration:none;font-size:.9rem}
+h1{font-size:1.5rem;margin:.6rem 0 .2rem}.sub{color:var(--muted);margin:0 0 1.4rem}
+h2{font-size:1.1rem;margin:1.6rem 0 .5rem;color:var(--accent)}
+.item{border:1px solid var(--line);border-radius:10px;background:var(--card);padding:.6rem .8rem;margin:.5rem 0}
+.item .l{font-weight:700}
+.item .n{color:var(--muted);font-size:.92rem;margin-top:.2rem}
+pre{margin:.45rem 0 0;background:var(--code);color:var(--codefg);border:1px solid var(--line);border-radius:8px;padding:.6rem .8rem;overflow-x:auto}
+code,pre{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:.86rem}
+.tips{border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:10px;background:var(--card);padding:.6rem 1rem}
+.tips li{margin:.35rem 0}
+@media print{.back{display:none}}</style></head><body><div class="wrap">
+<a class="back" href="../revision.html">← Back to revision index</a>
+<h1>Prisma — Cheat Sheet</h1>
+<p class="sub">Cohort 2.0 · 12 lessons · quick reference</p>
+<h2>Concepts: ORMs &amp; Prisma</h2><div class="item"><div class="l">What is an ORM</div><div class="n">Object-Relational Mapper: maps DB tables &lt;-&gt; code objects/models. Write type-safe queries in JS/TS instead of raw SQL.</div></div><div class="item"><div class="l">Why use one</div><div class="n">Type safety, autocomplete, migrations, no hand-written SQL, DB-agnostic queries, guards against injection &amp; schema drift.</div></div><div class="item"><div class="l">What Prisma is</div><div class="n">Next-gen Node/TS ORM = 3 parts: Prisma Schema (declarative model), Prisma Migrate (SQL migrations), Prisma Client (generated, type-safe query builder).</div></div><div class="item"><div class="l">Two ORM styles</div><div class="n">Prisma is schema-first (define models in schema.prisma). Contrast: code-first / Active-Record (TypeORM, Sequelize).</div></div><h2>Install &amp; Init (fresh app)</h2><div class="item"><div class="l">New project</div><pre><code>mkdir app &amp;&amp; cd app
+npm init -y
+npm i -D prisma typescript ts-node @types/node
+npx tsc --init</code></pre></div><div class="item"><div class="l">Prisma CLI + init</div><pre><code>npx prisma init</code></pre><div class="n">Creates prisma/schema.prisma and .env with DATABASE_URL. Default datasource is postgresql.</div></div><div class="item"><div class="l">Pick DB at init</div><pre><code>npx prisma init --datasource-provider postgresql
+# or: sqlite | mysql | sqlserver | mongodb</code></pre><div class="n">SQLite is the zero-setup choice for learning.</div></div><div class="item"><div class="l">Install client runtime</div><pre><code>npm i @prisma/client</code></pre><div class="n">Runtime dep; prisma CLI stays a dev dep.</div></div><h2>Config: datasource, generator, .env</h2><div class="item"><div class="l">Datasource block</div><pre><code>datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}</code></pre></div><div class="item"><div class="l">Generator block</div><pre><code>generator client {
+  provider = "prisma-client-js"
+}</code></pre></div><div class="item"><div class="l">Postgres URL</div><pre><code>DATABASE_URL="postgresql://user:pass@localhost:5432/mydb?schema=public"</code></pre></div><div class="item"><div class="l">SQLite URL</div><pre><code>datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}</code></pre><div class="n">Relative to the schema file location.</div></div><div class="item"><div class="l">.env is git-ignored</div><div class="n">prisma init auto-adds .env to .gitignore. Never commit real credentials.</div></div><h2>Data model (schema.prisma)</h2><div class="item"><div class="l">Basic model</div><pre><code>model User {
+  id       Int    @id @default(autoincrement())
+  email    String @unique
+  name     String?
+  age      Int    @default(0)
+  createdAt DateTime @default(now())
+}</code></pre><div class="n">? = nullable/optional. No ? = required (NOT NULL).</div></div><div class="item"><div class="l">Field attributes</div><pre><code>@id  @unique  @default(...)  @updatedAt
+@map("col_name")  @db.VarChar(255)</code></pre><div class="n">@map renames the DB column; @@map renames the table.</div></div><div class="item"><div class="l">Default helpers</div><pre><code>@default(autoincrement())
+@default(now())
+@default(uuid())    // or cuid()
+@default(false)</code></pre></div><div class="item"><div class="l">Enums</div><pre><code>enum Role { USER ADMIN }
+model User { role Role @default(USER) }</code></pre></div><div class="item"><div class="l">Composite / block attrs</div><pre><code>@@unique([firstName, lastName])
+@@index([email])
+@@id([a, b])   // composite PK</code></pre></div><h2>Relationships</h2><div class="item"><div class="l">1-to-many</div><pre><code>model User {
+  id    Int    @id @default(autoincrement())
+  todos Todo[]
+}
+model Todo {
+  id       Int  @id @default(autoincrement())
+  title    String
+  user     User @relation(fields: [userId], references: [id])
+  userId   Int
+}</code></pre><div class="n">FK field (userId) lives on the 'many' side; the scalar + relation field both required.</div></div><div class="item"><div class="l">1-to-1</div><pre><code>model User    { id Int @id @default(autoincrement()) profile Profile? }
+model Profile { id Int @id @default(autoincrement()) user User @relation(fields:[userId], references:[id]) userId Int @unique }</code></pre><div class="n">@unique on the FK enforces one-to-one.</div></div><div class="item"><div class="l">Many-to-many (implicit)</div><pre><code>model Post { id Int @id @default(autoincrement()) tags Tag[] }
+model Tag  { id Int @id @default(autoincrement()) posts Post[] }</code></pre><div class="n">Prisma manages the hidden join table automatically.</div></div><div class="item"><div class="l">Referential actions</div><pre><code>user User @relation(fields:[userId], references:[id], onDelete: Cascade, onUpdate: Cascade)</code></pre></div><div class="item"><div class="l">Self-relation</div><pre><code>model User {
+  id       Int    @id @default(autoincrement())
+  invitedBy   User?  @relation("invites", fields:[inviterId], references:[id])
+  inviterId   Int?
+  invited     User[] @relation("invites")
+}</code></pre></div><h2>Migrate, generate, explore</h2><div class="item"><div class="l">Create + apply migration (dev)</div><pre><code>npx prisma migrate dev --name init</code></pre><div class="n">Generates SQL in prisma/migrations, applies it, and regenerates the client.</div></div><div class="item"><div class="l">Prototype without migration files</div><pre><code>npx prisma db push</code></pre><div class="n">Pushes schema straight to DB (no migration history). Great for early iteration/SQLite.</div></div><div class="item"><div class="l">(Re)generate client</div><pre><code>npx prisma generate</code></pre><div class="n">Run after every schema change if you didn't use migrate dev. Outputs to node_modules/@prisma/client.</div></div><div class="item"><div class="l">Prisma Studio (GUI)</div><pre><code>npx prisma studio</code></pre><div class="n">Visual DB browser at localhost:5555 to explore/edit rows.</div></div><div class="item"><div class="l">Introspect existing DB</div><pre><code>npx prisma db pull</code></pre><div class="n">Reverse-engineers schema.prisma from an existing database.</div></div><div class="item"><div class="l">Deploy migrations (prod)</div><pre><code>npx prisma migrate deploy</code></pre><div class="n">Applies pending migrations non-interactively; no schema changes generated.</div></div><div class="item"><div class="l">Reset DB (dev only)</div><pre><code>npx prisma migrate reset</code></pre><div class="n">Drops + recreates + re-seeds. Destroys all data.</div></div><h2>Prisma Client — CRUD &amp; Todo functions</h2><div class="item"><div class="l">Instantiate</div><pre><code>import { PrismaClient } from "@prisma/client";
+const prisma = new PrismaClient();</code></pre><div class="n">Create ONE instance and reuse it — never new PrismaClient() per request.</div></div><div class="item"><div class="l">Create</div><pre><code>const todo = await prisma.todo.create({
+  data: { title: "Learn Prisma", userId: 1 }
+});</code></pre></div><div class="item"><div class="l">Read many + filter</div><pre><code>await prisma.todo.findMany({
+  where: { done: false, userId: 1 },
+  orderBy: { createdAt: "desc" },
+  take: 10, skip: 0
+});</code></pre></div><div class="item"><div class="l">Read one</div><pre><code>await prisma.user.findUnique({ where: { id: 1 } });
+await prisma.user.findFirst({ where: { name: "Alice" } });</code></pre></div><div class="item"><div class="l">select vs include</div><pre><code>// select: pick specific fields
+{ select: { id: true, title: true } }
+// include: pull relations
+{ include: { user: true, todos: true } }</code></pre><div class="n">Can't use select and include at the same top level.</div></div><div class="item"><div class="l">Update</div><pre><code>await prisma.todo.update({
+  where: { id: 1 },
+  data: { done: true }
+});</code></pre></div><div class="item"><div class="l">Delete</div><pre><code>await prisma.todo.delete({ where: { id: 1 } });
+await prisma.todo.deleteMany({ where: { userId: 1 } });</code></pre></div><div class="item"><div class="l">Upsert</div><pre><code>await prisma.user.upsert({
+  where: { email: "a@b.com" },
+  update: { name: "Alice" },
+  create: { email: "a@b.com", name: "Alice" }
+});</code></pre></div><div class="item"><div class="l">Nested write (create w/ relation)</div><pre><code>await prisma.user.create({
+  data: {
+    email: "a@b.com",
+    todos: { create: [{ title: "first" }] }
+  }
+});</code></pre></div><div class="item"><div class="l">Transaction</div><pre><code>await prisma.$transaction([
+  prisma.todo.create({ data: { title: "a", userId: 1 } }),
+  prisma.user.update({ where:{id:1}, data:{ name:"b" } })
+]);</code></pre></div><h2>Expressify it (REST API)</h2><div class="item"><div class="l">Setup</div><pre><code>npm i express
+import express from "express";
+import { PrismaClient } from "@prisma/client";
+const app = express();
+const prisma = new PrismaClient();
+app.use(express.json());</code></pre></div><div class="item"><div class="l">GET todos</div><pre><code>app.get("/todos", async (req, res) =&gt; {
+  const todos = await prisma.todo.findMany();
+  res.json(todos);
+});</code></pre></div><div class="item"><div class="l">POST todo</div><pre><code>app.post("/todos", async (req, res) =&gt; {
+  const { title, userId } = req.body;
+  const todo = await prisma.todo.create({ data: { title, userId } });
+  res.json(todo);
+});</code></pre></div><div class="item"><div class="l">PUT mark done</div><pre><code>app.put("/todos/:id", async (req, res) =&gt; {
+  const todo = await prisma.todo.update({
+    where: { id: Number(req.params.id) },
+    data: { done: true }
+  });
+  res.json(todo);
+});</code></pre></div><div class="item"><div class="l">Listen</div><pre><code>app.listen(3000, () =&gt; console.log("http://localhost:3000"));</code></pre></div><div class="item"><div class="l">Params are strings</div><div class="n">req.params/query are strings — Number(req.params.id) before passing to an Int where clause or Prisma throws a type error.</div></div>
+<h2>Quick tips &amp; gotchas</h2><ul class="tips"><li>Regenerate the client after EVERY schema change: `prisma migrate dev` does it automatically, but `db push` / manual edits need `npx prisma generate`.</li><li>Use `db push` for fast prototyping (no history); switch to `migrate dev` once the schema stabilizes so you get versioned SQL migrations.</li><li>Instantiate PrismaClient once and reuse. In dev with hot-reload (Next.js/nodemon), cache it on globalThis to avoid connection-pool exhaustion.</li><li>`findUnique` only accepts fields that are @id or @unique; use `findFirst` for arbitrary where filters.</li><li>Optional (`?`) fields map to nullable columns; adding a required field to a table with existing rows needs a @default or the migration fails.</li><li>The FK scalar (e.g. userId) AND the relation field both live on the 'many' side — forgetting the scalar is the #1 relation error.</li><li>Never build queries via string concatenation; Prisma parameterizes everything, so pass values through `where`/`data` to stay injection-safe.</li><li>Keep DATABASE_URL in .env (git-ignored) and use `env("DATABASE_URL")` in the datasource — hardcoding the URL leaks credentials.</li></ul>
+</div></body></html>

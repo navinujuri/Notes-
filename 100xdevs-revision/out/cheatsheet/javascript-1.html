@@ -1,0 +1,83 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Cheat Sheet · Javascript 101</title><style>:root{--bg:#fff;--fg:#1a1a1a;--muted:#6b7280;--line:#e5e7eb;--accent:#0d9488;--card:#f9fafb;--code:#f3f4f6;--codefg:#111}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1115;--fg:#e6e6e6;--muted:#9aa0aa;--line:#242833;--accent:#2dd4bf;--card:#171a21;--code:#0b0e13;--codefg:#e6e6e6}}
+*{box-sizing:border-box}body{margin:0;font:16px/1.6 system-ui,Segoe UI,sans-serif;background:var(--bg);color:var(--fg)}
+.wrap{max-width:860px;margin:0 auto;padding:1.2rem}
+a.back{color:var(--accent);text-decoration:none;font-size:.9rem}
+h1{font-size:1.5rem;margin:.6rem 0 .2rem}.sub{color:var(--muted);margin:0 0 1.4rem}
+h2{font-size:1.1rem;margin:1.6rem 0 .5rem;color:var(--accent)}
+.item{border:1px solid var(--line);border-radius:10px;background:var(--card);padding:.6rem .8rem;margin:.5rem 0}
+.item .l{font-weight:700}
+.item .n{color:var(--muted);font-size:.92rem;margin-top:.2rem}
+pre{margin:.45rem 0 0;background:var(--code);color:var(--codefg);border:1px solid var(--line);border-radius:8px;padding:.6rem .8rem;overflow-x:auto}
+code,pre{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:.86rem}
+.tips{border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:10px;background:var(--card);padding:.6rem 1rem}
+.tips li{margin:.35rem 0}
+@media print{.back{display:none}}</style></head><body><div class="wrap">
+<a class="back" href="../revision.html">← Back to revision index</a>
+<h1>Javascript 101 — Cheat Sheet</h1>
+<p class="sub">Cohort 2.0 · 5 lessons · quick reference</p>
+<h2>Setup &amp; Running JS</h2><div class="item"><div class="l">Check Node install</div><pre><code>node -v
+npm -v</code></pre><div class="n">JS runs in the browser and in Node.js.</div></div><div class="item"><div class="l">Run a script file</div><pre><code>node app.js</code></pre></div><div class="item"><div class="l">Interactive REPL</div><pre><code>node</code></pre><div class="n">Type expressions, get instant results. Ctrl+C twice to exit.</div></div><div class="item"><div class="l">Browser console</div><pre><code>// F12 -&gt; Console tab
+console.log('hello');</code></pre><div class="n">Fastest playground; no setup.</div></div><div class="item"><div class="l">Init a project</div><pre><code>npm init -y</code></pre><div class="n">Creates package.json.</div></div><div class="item"><div class="l">Log output</div><pre><code>console.log('x =', x);
+console.error('boom');
+console.table([{a:1},{a:2}]);</code></pre></div><h2>Variables &amp; Primitives</h2><div class="item"><div class="l">Declare (prefer const, then let)</div><pre><code>const PI = 3.14;   // cannot reassign
+let count = 0;     // reassignable
+var old = 1;       // avoid: function-scoped</code></pre><div class="n">const/let are block-scoped; var is function-scoped + hoisted.</div></div><div class="item"><div class="l">7 primitive types</div><pre><code>"str"        // string
+42, 3.14     // number (one type for int+float)
+true/false   // boolean
+undefined    // declared, no value
+null         // intentional empty
+10n          // bigint
+Symbol('id') // symbol</code></pre><div class="n">typeof null === 'object' (historic bug).</div></div><div class="item"><div class="l">Check type at runtime</div><pre><code>typeof "hi"     // 'string'
+typeof 42       // 'number'
+typeof undefined// 'undefined'
+typeof [] // 'object' — use Array.isArray([])</code></pre></div><div class="item"><div class="l">Template literals</div><pre><code>const name = 'Sam';
+`Hi ${name}, 1+1=${1+1}`;</code></pre><div class="n">Backticks; supports interpolation + multi-line.</div></div><div class="item"><div class="l">String basics</div><pre><code>'abc'.length        // 3
+'abc'.toUpperCase() // 'ABC'
+'a,b'.split(',')    // ['a','b']
+'  x '.trim()       // 'x'</code></pre></div><h2>Properties of JS (how it behaves)</h2><div class="item"><div class="l">Single-threaded</div><pre><code>// one call stack, one thing at a time</code></pre><div class="n">Async work is offloaded, results queued via the event loop.</div></div><div class="item"><div class="l">Synchronous by default</div><div class="n">Code runs top-to-bottom, line-by-line unless you use callbacks/promises/async.</div></div><div class="item"><div class="l">Dynamically typed</div><pre><code>let x = 5;   // number
+x = 'five';  // now string — legal</code></pre><div class="n">Types attach to values, not variables. No compile-time type checks.</div></div><div class="item"><div class="l">Interpreted + JIT compiled</div><div class="n">No separate build step; engines (V8) JIT-compile hot paths for speed.</div></div><div class="item"><div class="l">Loosely typed / coercion</div><pre><code>'5' + 1   // '51'  (number -&gt; string)
+'5' - 1   // 4     (string -&gt; number)
+true + 1  // 2</code></pre><div class="n">+ favors string concat; other math operators coerce to number.</div></div><div class="item"><div class="l">Falsy values (memorize)</div><pre><code>false, 0, '', null, undefined, NaN</code></pre><div class="n">Everything else is truthy — including '0', [], {}.</div></div><h2>Operators &amp; Syntax</h2><div class="item"><div class="l">Strict vs loose equality</div><pre><code>0 == '0'   // true  (coerces)
+0 === '0'  // false (type + value)</code></pre><div class="n">Always use === / !== to avoid surprises.</div></div><div class="item"><div class="l">Arithmetic</div><pre><code>7 / 2     // 3.5
+7 % 2     // 1  (remainder)
+2 ** 10   // 1024 (power)
+let n=1; n++; // 2</code></pre></div><div class="item"><div class="l">Logical + short-circuit</div><pre><code>a &amp;&amp; b    // b if a truthy, else a
+a || b    // a if truthy, else b
+!a        // negate</code></pre></div><div class="item"><div class="l">Nullish coalescing / optional chaining</div><pre><code>user?.name          // undefined if user null
+port ?? 3000        // 3000 only if port null/undefined</code></pre><div class="n">?? differs from || : keeps 0 and ''.</div></div><div class="item"><div class="l">Ternary</div><pre><code>const label = age &gt;= 18 ? 'adult' : 'minor';</code></pre></div><div class="item"><div class="l">Statements end with ;</div><div class="n">ASI auto-inserts semicolons, but be explicit to avoid edge-case bugs.</div></div><h2>Control Flow &amp; Loops</h2><div class="item"><div class="l">if / else if / else</div><pre><code>if (x &gt; 0) { }
+else if (x &lt; 0) { }
+else { }</code></pre></div><div class="item"><div class="l">switch</div><pre><code>switch (day) {
+  case 'sat':
+  case 'sun': return 'weekend';
+  default: return 'weekday';
+}</code></pre><div class="n">break each case or it falls through (used above intentionally).</div></div><div class="item"><div class="l">Classic for</div><pre><code>for (let i = 0; i &lt; 5; i++) {
+  console.log(i);
+}</code></pre></div><div class="item"><div class="l">while / do-while</div><pre><code>while (cond) { }
+do { } while (cond);</code></pre></div><div class="item"><div class="l">for...of (values)</div><pre><code>for (const item of [10,20,30]) { }</code></pre><div class="n">Use for arrays/strings/iterables.</div></div><div class="item"><div class="l">for...in (keys)</div><pre><code>for (const key in {a:1,b:2}) { }</code></pre><div class="n">Iterates object keys — avoid on arrays.</div></div><h2>Functions</h2><div class="item"><div class="l">Declaration (hoisted)</div><pre><code>function add(a, b) {
+  return a + b;
+}</code></pre></div><div class="item"><div class="l">Expression</div><pre><code>const add = function(a, b) { return a + b; };</code></pre></div><div class="item"><div class="l">Arrow function</div><pre><code>const add = (a, b) =&gt; a + b;
+const sq = x =&gt; x * x;   // 1 arg, implicit return</code></pre><div class="n">No own `this` — inherits from enclosing scope.</div></div><div class="item"><div class="l">Default parameters</div><pre><code>function greet(name = 'guest') { }</code></pre></div><div class="item"><div class="l">Rest params + spread</div><pre><code>function sum(...nums) { return nums.length; }
+Math.max(...[1,2,3]);   // spread into args</code></pre></div><div class="item"><div class="l">Callbacks</div><pre><code>[1,2,3].forEach(n =&gt; console.log(n));</code></pre><div class="n">A function passed as an argument to be called later.</div></div><h2>Complex Types — Arrays</h2><div class="item"><div class="l">Create &amp; access</div><pre><code>const a = [1, 2, 3];
+a[0]        // 1
+a.length    // 3
+a.at(-1)    // 3 (last)</code></pre></div><div class="item"><div class="l">Add / remove (mutating)</div><pre><code>a.push(4);    // add end
+a.pop();      // remove end
+a.unshift(0); // add front
+a.shift();    // remove front
+a.splice(1,2);// remove 2 from idx 1</code></pre></div><div class="item"><div class="l">map — transform</div><pre><code>[1,2,3].map(x =&gt; x * 2);   // [2,4,6]</code></pre><div class="n">Returns a NEW array; same length.</div></div><div class="item"><div class="l">filter — keep some</div><pre><code>[1,2,3,4].filter(x =&gt; x % 2 === 0); // [2,4]</code></pre></div><div class="item"><div class="l">reduce — fold to one value</div><pre><code>[1,2,3].reduce((sum, x) =&gt; sum + x, 0); // 6</code></pre></div><div class="item"><div class="l">find / includes / indexOf</div><pre><code>[1,2,3].find(x =&gt; x &gt; 1);  // 2
+[1,2,3].includes(2);       // true</code></pre></div><div class="item"><div class="l">Copy / merge with spread</div><pre><code>const copy = [...a];
+const all  = [...a, ...b];</code></pre><div class="n">Arrays are reference types — assignment copies the reference, not the data.</div></div><h2>Complex Types — Objects &amp; JSON</h2><div class="item"><div class="l">Create &amp; access</div><pre><code>const user = { name: 'Sam', age: 30 };
+user.name       // dot
+user['age']     // bracket (dynamic key)</code></pre></div><div class="item"><div class="l">Add / update / delete</div><pre><code>user.email = 'a@b.com';
+user.age = 31;
+delete user.age;</code></pre></div><div class="item"><div class="l">Destructuring</div><pre><code>const { name, age = 0 } = user;
+const [first, ...rest] = [1,2,3];</code></pre><div class="n">Rename: const { name: n } = user;</div></div><div class="item"><div class="l">Spread / merge objects</div><pre><code>const patched = { ...user, age: 40 };</code></pre><div class="n">Shallow copy; later keys win.</div></div><div class="item"><div class="l">Iterate object</div><pre><code>Object.keys(user)    // ['name','age']
+Object.values(user)  // ['Sam', 30]
+Object.entries(user) // [['name','Sam'],...]</code></pre></div><div class="item"><div class="l">Nested / methods</div><pre><code>const obj = {
+  x: 1,
+  greet() { return 'hi ' + this.x; }
+};</code></pre><div class="n">Method shorthand; `this` = the object when called as obj.greet().</div></div><div class="item"><div class="l">JSON convert</div><pre><code>JSON.stringify(user)      // obj -&gt; string
+JSON.parse('{"a":1}')     // string -&gt; obj</code></pre><div class="n">stringify drops undefined/functions.</div></div>
+<h2>Quick tips &amp; gotchas</h2><ul class="tips"><li>Use === / !== always; == coerces types and hides bugs (0 == '' is false but 0 == '0' is true).</li><li>Objects and arrays are reference types: `const b = a` copies the pointer, so mutating b changes a. Copy with {...a} / [...a].</li><li>const prevents reassignment, NOT mutation — you can still push to a const array or edit a const object's fields.</li><li>Prefer const by default; reach for let only when you must reassign; avoid var (function-scoped + hoisted).</li><li>Memorize the 6 falsy values: false, 0, '', null, undefined, NaN — everything else is truthy (even [] and {}).</li><li>map/filter/reduce return new arrays and don't mutate; push/pop/splice/sort mutate in place.</li><li>Arrow functions have no own `this`/`arguments` — don't use them as object methods that need `this`.</li><li>typeof null is 'object' and typeof [] is 'object' — use Array.isArray() to detect arrays.</li></ul>
+</div></body></html>

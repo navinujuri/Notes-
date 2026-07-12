@@ -1,0 +1,98 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Cheat Sheet · ETH on the frontend.</title><style>:root{--bg:#fff;--fg:#1a1a1a;--muted:#6b7280;--line:#e5e7eb;--accent:#0d9488;--card:#f9fafb;--code:#f3f4f6;--codefg:#111}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1115;--fg:#e6e6e6;--muted:#9aa0aa;--line:#242833;--accent:#2dd4bf;--card:#171a21;--code:#0b0e13;--codefg:#e6e6e6}}
+*{box-sizing:border-box}body{margin:0;font:16px/1.6 system-ui,Segoe UI,sans-serif;background:var(--bg);color:var(--fg)}
+.wrap{max-width:860px;margin:0 auto;padding:1.2rem}
+a.back{color:var(--accent);text-decoration:none;font-size:.9rem}
+h1{font-size:1.5rem;margin:.6rem 0 .2rem}.sub{color:var(--muted);margin:0 0 1.4rem}
+h2{font-size:1.1rem;margin:1.6rem 0 .5rem;color:var(--accent)}
+.item{border:1px solid var(--line);border-radius:10px;background:var(--card);padding:.6rem .8rem;margin:.5rem 0}
+.item .l{font-weight:700}
+.item .n{color:var(--muted);font-size:.92rem;margin-top:.2rem}
+pre{margin:.45rem 0 0;background:var(--code);color:var(--codefg);border:1px solid var(--line);border-radius:8px;padding:.6rem .8rem;overflow-x:auto}
+code,pre{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:.86rem}
+.tips{border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:10px;background:var(--card);padding:.6rem 1rem}
+.tips li{margin:.35rem 0}
+@media print{.back{display:none}}</style></head><body><div class="wrap">
+<a class="back" href="../revision.html">← Back to revision index</a>
+<h1>ETH on the frontend. — Cheat Sheet</h1>
+<p class="sub">Cohort 3.0 · 10 lessons · quick reference</p>
+<h2>Setup &amp; Mental Model</h2><div class="item"><div class="l">Install the stack (Wagmi v2 needs Viem + TanStack Query as peers)</div><pre><code>npm i wagmi viem @tanstack/react-query</code></pre></div><div class="item"><div class="l">The three layers, top to bottom</div><div class="n">Viem = low-level TS Ethereum client (RPC, encoding, types). Wagmi = React hooks over Viem. TanStack Query = caching/dedup/refetch layer Wagmi reads/writes are built on.</div></div><div class="item"><div class="l">"Hookifying Viem" = what Wagmi is</div><div class="n">Every Wagmi read hook wraps a Viem publicClient action in a useQuery; every write wraps a walletClient action in a useMutation. That's why you get data/isLoading/error/refetch for free.</div></div><div class="item"><div class="l">Wallet = an injected EIP-1193 provider</div><pre><code>window.ethereum.request({ method: 'eth_requestAccounts' })</code></pre><div class="n">MetaMask/Rabby inject window.ethereum. Wagmi connectors abstract this; only reach for window.ethereum raw when debugging.</div></div><h2>Config (chains + transports + connectors)</h2><div class="item"><div class="l">createConfig — the single source of truth</div><pre><code>import { http, createConfig } from 'wagmi'
+import { mainnet, sepolia } from 'wagmi/chains'
+import { injected, metaMask, walletConnect } from 'wagmi/connectors'
+
+export const config = createConfig({
+  chains: [mainnet, sepolia],
+  connectors: [
+    injected(),
+    walletConnect({ projectId: process.env.NEXT_PUBLIC_WC_ID! }),
+  ],
+  transports: {
+    [mainnet.id]: http(), // public RPC
+    [sepolia.id]: http('https://sepolia.infura.io/v3/KEY'),
+  },
+})</code></pre></div><div class="item"><div class="l">TS: register config globally for typed hooks</div><pre><code>declare module 'wagmi' {
+  interface Register { config: typeof config }
+}</code></pre></div><div class="item"><div class="l">A chain must be in config.chains</div><div class="n">Reads/writes against a chain not listed here throw. Add every network you target, incl. testnets.</div></div><h2>Context / Provider wiring</h2><div class="item"><div class="l">Wagmi is React Context — wrap the app once</div><pre><code>import { WagmiProvider } from 'wagmi'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { config } from './wagmi'
+
+const queryClient = new QueryClient()
+
+export function Providers({ children }) {
+  return (
+    &lt;WagmiProvider config={config}&gt;
+      &lt;QueryClientProvider client={queryClient}&gt;
+        {children}
+      &lt;/QueryClientProvider&gt;
+    &lt;/WagmiProvider&gt;
+  )
+}</code></pre></div><div class="item"><div class="l">Order matters: WagmiProvider OUTSIDE QueryClientProvider</div><div class="n">Wagmi hooks call useQuery internally — they need the QueryClient in scope. Reverse the nesting and every hook throws "No QueryClient set".</div></div><div class="item"><div class="l">Next.js App Router</div><div class="n">Provider file needs 'use client' at top; render &lt;Providers&gt; in root layout.</div></div><h2>Connecting to the wallet</h2><div class="item"><div class="l">Connect / disconnect / read account</div><pre><code>import { useAccount, useConnect, useDisconnect } from 'wagmi'
+
+const { address, isConnected, chainId, status } = useAccount()
+const { connectors, connect } = useConnect()
+const { disconnect } = useDisconnect()
+
+if (isConnected) return &lt;button onClick={() =&gt; disconnect()}&gt;{address}&lt;/button&gt;
+return connectors.map((c) =&gt; (
+  &lt;button key={c.uid} onClick={() =&gt; connect({ connector: c })}&gt;{c.name}&lt;/button&gt;
+))</code></pre></div><div class="item"><div class="l">Use connector.uid as the React key</div><div class="n">Not c.id — uids are unique per instance; ids can collide across injected wallets.</div></div><div class="item"><div class="l">status values</div><div class="n">'connecting' | 'reconnecting' | 'connected' | 'disconnected'. Prefer status/isConnected over checking address for undefined.</div></div><div class="item"><div class="l">Switch network</div><pre><code>import { useSwitchChain } from 'wagmi'
+const { chains, switchChain } = useSwitchChain()
+switchChain({ chainId: sepolia.id })</code></pre></div><h2>Reading state (balance + contracts)</h2><div class="item"><div class="l">Native ETH balance</div><pre><code>import { useBalance } from 'wagmi'
+const { data, isLoading } = useBalance({ address })
+// data =&gt; { value: bigint, decimals: 18, symbol: 'ETH', formatted: '1.5' }</code></pre></div><div class="item"><div class="l">Format bigint for display</div><pre><code>import { formatEther, formatUnits } from 'viem'
+formatEther(data.value)            // '1.5'
+formatUnits(raw, 6)                 // USDC (6 decimals)</code></pre></div><div class="item"><div class="l">ERC-20 balance via useReadContract</div><pre><code>import { useReadContract } from 'wagmi'
+import { erc20Abi } from 'viem'
+
+const { data: bal } = useReadContract({
+  address: TOKEN,
+  abi: erc20Abi,
+  functionName: 'balanceOf',
+  args: [address!],
+  query: { enabled: !!address },
+})</code></pre></div><div class="item"><div class="l">Gate a query on inputs</div><pre><code>useBalance({ address, query: { enabled: !!address, refetchInterval: 5000 } })</code></pre><div class="n">If address is undefined the query auto-disables. Use query.enabled for explicit control; query.refetchInterval replaces v1's watch: true.</div></div><h2>Initiating a transaction</h2><div class="item"><div class="l">Send ETH</div><pre><code>import { useSendTransaction } from 'wagmi'
+import { parseEther } from 'viem'
+
+const { sendTransaction, data: hash, isPending } = useSendTransaction()
+sendTransaction({ to: '0xRecipient', value: parseEther('0.01') })</code></pre></div><div class="item"><div class="l">Call a contract (state-changing)</div><pre><code>import { useWriteContract } from 'wagmi'
+
+const { writeContract, data: hash } = useWriteContract()
+writeContract({
+  address: TOKEN,
+  abi: erc20Abi,
+  functionName: 'transfer',
+  args: [to, parseEther('1')],
+})</code></pre></div><div class="item"><div class="l">Wait for confirmation</div><pre><code>import { useWaitForTransactionReceipt } from 'wagmi'
+const { isLoading: confirming, isSuccess } = useWaitForTransactionReceipt({ hash })</code></pre><div class="n">hash is available immediately after submit (user signed); isSuccess flips once mined. Show a pending spinner between the two.</div></div><div class="item"><div class="l">parseEther / parseUnits for inputs</div><pre><code>parseEther('0.05')      // 50000000000000000n
+parseUnits('100', 6)     // USDC amount as bigint</code></pre><div class="n">Never build value from a float. All amounts on-chain are bigint wei.</div></div><h2>Dropping to Viem directly</h2><div class="item"><div class="l">Grab Wagmi's clients inside components</div><pre><code>import { usePublicClient, useWalletClient } from 'wagmi'
+const publicClient = usePublicClient()          // reads
+const { data: walletClient } = useWalletClient() // signing</code></pre></div><div class="item"><div class="l">Standalone read client (no React)</div><pre><code>import { createPublicClient, http } from 'viem'
+import { mainnet } from 'viem/chains'
+
+const client = createPublicClient({ chain: mainnet, transport: http() })
+const bal = await client.getBalance({ address: '0x...' })</code></pre></div><div class="item"><div class="l">Standalone wallet client from the browser</div><pre><code>import { createWalletClient, custom } from 'viem'
+const wallet = createWalletClient({ chain: mainnet, transport: custom(window.ethereum) })
+const [account] = await wallet.requestAddresses()
+await wallet.sendTransaction({ account, to, value })</code></pre></div><div class="item"><div class="l">When to use raw Viem vs hooks</div><div class="n">Hooks for anything rendered (they cache + re-render). Raw clients for scripts, event handlers, or one-off imperative calls outside the React tree.</div></div>
+<h2>Quick tips &amp; gotchas</h2><ul class="tips"><li>Everything on-chain is bigint (wei). Convert at the edges only: parseEther/parseUnits going in, formatEther/formatUnits coming out. Never do float math on balances.</li><li>WagmiProvider must wrap QueryClientProvider, not the other way around — Wagmi hooks depend on the TanStack QueryClient being in context.</li><li>Wagmi v2 dropped the `watch: true` prop. For live data use `query: { refetchInterval }` or watch blocks; and pass `query: { enabled }` to defer a read until inputs exist.</li><li>A submitted tx gives you a hash the moment the user signs — that is NOT confirmation. Pipe the hash into useWaitForTransactionReceipt and only treat isSuccess as done.</li><li>walletConnect() requires a projectId from cloud.walletconnect.com; injected()/metaMask() do not. Missing projectId silently breaks WC connections.</li><li>Key connector lists by connector.uid, not id — multiple injected wallets can share an id and cause React key collisions.</li><li>Reads/writes only work for chains listed in config.chains and with a matching entry in transports; forget the testnet there and hooks throw at runtime.</li><li>Prefer useAccount().status / isConnected over `if (address)` — during reconnect the address can be briefly undefined while the wallet is still connected.</li></ul>
+</div></body></html>

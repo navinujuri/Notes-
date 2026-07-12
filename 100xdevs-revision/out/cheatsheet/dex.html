@@ -1,0 +1,56 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Cheat Sheet · DEXs, funding</title><style>:root{--bg:#fff;--fg:#1a1a1a;--muted:#6b7280;--line:#e5e7eb;--accent:#0d9488;--card:#f9fafb;--code:#f3f4f6;--codefg:#111}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1115;--fg:#e6e6e6;--muted:#9aa0aa;--line:#242833;--accent:#2dd4bf;--card:#171a21;--code:#0b0e13;--codefg:#e6e6e6}}
+*{box-sizing:border-box}body{margin:0;font:16px/1.6 system-ui,Segoe UI,sans-serif;background:var(--bg);color:var(--fg)}
+.wrap{max-width:860px;margin:0 auto;padding:1.2rem}
+a.back{color:var(--accent);text-decoration:none;font-size:.9rem}
+h1{font-size:1.5rem;margin:.6rem 0 .2rem}.sub{color:var(--muted);margin:0 0 1.4rem}
+h2{font-size:1.1rem;margin:1.6rem 0 .5rem;color:var(--accent)}
+.item{border:1px solid var(--line);border-radius:10px;background:var(--card);padding:.6rem .8rem;margin:.5rem 0}
+.item .l{font-weight:700}
+.item .n{color:var(--muted);font-size:.92rem;margin-top:.2rem}
+pre{margin:.45rem 0 0;background:var(--code);color:var(--codefg);border:1px solid var(--line);border-radius:8px;padding:.6rem .8rem;overflow-x:auto}
+code,pre{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:.86rem}
+.tips{border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:10px;background:var(--card);padding:.6rem 1rem}
+.tips li{margin:.35rem 0}
+@media print{.back{display:none}}</style></head><body><div class="wrap">
+<a class="back" href="../revision.html">← Back to revision index</a>
+<h1>DEXs, funding — Cheat Sheet</h1>
+<p class="sub">Cohort 3.0 · 6 lessons · quick reference</p>
+<h2>Setup &amp; Wallet Funding (devnet)</h2><div class="item"><div class="l">Install Solana CLI + spl-token</div><pre><code>sh -c "$(curl -sSfL https://release.solana.com/stable/install)"
+cargo install spl-token-cli   # or comes with solana tools</code></pre><div class="n">Anchor for programs: `cargo install --git https://github.com/coral-xyz/anchor anchor-cli`</div></div><div class="item"><div class="l">Point to devnet &amp; create keypair</div><pre><code>solana config set --url devnet
+solana-keygen new              # writes ~/.config/solana/id.json
+solana address</code></pre><div class="n">Never fund a devnet keypair from mainnet — separate wallets per cluster.</div></div><div class="item"><div class="l">Fund wallet (airdrop SOL)</div><pre><code>solana airdrop 2
+solana balance</code></pre><div class="n">Devnet only; mainnet has no faucet. Rate-limited — use faucet.solana.com if throttled.</div></div><div class="item"><div class="l">Airdrop in code (@solana/web3.js)</div><pre><code>const sig = await connection.requestAirdrop(pk, 2 * LAMPORTS_PER_SOL);
+await connection.confirmTransaction(sig, "confirmed");</code></pre><div class="n">LAMPORTS_PER_SOL = 1e9. Confirm before assuming balance is spendable.</div></div><div class="item"><div class="l">ETH tooling (Foundry / Hardhat)</div><pre><code>curl -L https://foundry.paradigm.xyz | bash &amp;&amp; foundryup
+forge init myproj      # or: npx hardhat init</code></pre><div class="n">Fund testnets (Sepolia) via a faucet; mainnet costs real ETH for gas.</div></div><h2>Solana vs Ethereum (mental model)</h2><div class="item"><div class="l">State model</div><pre><code>ETH:    contract owns its storage (mapping balances)
+Solana: programs are stateless; data lives in separate Accounts</code></pre><div class="n">On Solana you pass every account a tx touches explicitly — no implicit storage reads.</div></div><div class="item"><div class="l">Native token &amp; fees</div><pre><code>ETH: ETH, gas priced in gwei, variable
+SOL: SOL, fixed ~5000 lamports/sig, sub-cent</code></pre><div class="n">Solana fees are near-constant; ETH gas spikes with congestion.</div></div><div class="item"><div class="l">Execution &amp; speed</div><pre><code>ETH: EVM, Solidity/Vyper, ~12s blocks
+SOL: SVM, Rust (Anchor), ~400ms slots, parallel (Sealevel)</code></pre><div class="n">Solana parallelizes txs that don't touch the same accounts.</div></div><div class="item"><div class="l">Token standard</div><pre><code>ETH: ERC-20 = one contract per token
+SOL: SPL Token = one shared program, tokens are Mint accounts</code></pre><div class="n">On Solana every holder needs an Associated Token Account (ATA) per mint.</div></div><div class="item"><div class="l">Rent</div><pre><code>Solana accounts must hold min SOL to be rent-exempt</code></pre><div class="n">No ETH equivalent — creating accounts (ATAs, mints) costs a refundable rent deposit.</div></div><h2>AMM Recap (x·y = k)</h2><div class="item"><div class="l">Constant product invariant</div><pre><code>x * y = k          // x = reserveIn, y = reserveOut
+price = y / x      // spot price of X in terms of Y</code></pre><div class="n">Pool can never be fully drained — output asymptotes as input grows.</div></div><div class="item"><div class="l">Swap output with 0.3% fee (Uniswap V2)</div><pre><code>amountInWithFee = amountIn * 997
+amountOut = (amountInWithFee * reserveOut) /
+            (reserveIn * 1000 + amountInWithFee)</code></pre><div class="n">Fee (3/1000) stays in the pool, accruing to LPs. Larger trade = worse price (slippage).</div></div><div class="item"><div class="l">Add liquidity (must match ratio)</div><pre><code>amountB = amountA * reserveB / reserveA
+LP_minted = min(dx/x, dy/y) * totalLP</code></pre><div class="n">Deposit off-ratio and the router refunds the excess of one side.</div></div><div class="item"><div class="l">Price impact / slippage</div><pre><code>impact = 1 - (amountOut / amountIn) / (reserveOut / reserveIn)</code></pre><div class="n">Set amountOutMin = quotedOut * (1 - slippageTolerance) to protect the trade.</div></div><h2>Impermanent Loss</h2><div class="item"><div class="l">IL formula (vs just holding)</div><pre><code>r = P_new / P_old              // price ratio of the volatile asset
+valueRatio = 2 * sqrt(r) / (1 + r)
+IL = valueRatio - 1            // always &lt;= 0</code></pre><div class="n">'Impermanent' because it vanishes if price returns to entry; realized only on withdrawal.</div></div><div class="item"><div class="l">Reference values</div><pre><code>1.25x -&gt; -0.6%    2x -&gt; -5.7%
+3x   -&gt; -13.4%    4x -&gt; -20.0%
+5x   -&gt; -25.5%    (same for equivalent drops)</code></pre><div class="n">Symmetric: a 4x pump and a 4x dump cause identical IL.</div></div><div class="item"><div class="l">Net LP return</div><pre><code>netReturn = feesEarned - IL</code></pre><div class="n">LPing is profitable only when accrued swap fees outweigh IL — favor correlated/stable pairs.</div></div><h2>Create a Token — SPL (Solana CLI)</h2><div class="item"><div class="l">Mint a new token</div><pre><code>spl-token create-token --decimals 6
+# =&gt; Creating token &lt;MINT_ADDRESS&gt;</code></pre><div class="n">Decimals are fixed at creation. USDC uses 6; SOL/wrapped uses 9.</div></div><div class="item"><div class="l">Create your ATA + mint supply</div><pre><code>spl-token create-account &lt;MINT&gt;
+spl-token mint &lt;MINT&gt; 1000000</code></pre><div class="n">Amount is in whole tokens; CLI scales by decimals. You must be the mint authority.</div></div><div class="item"><div class="l">Transfer (auto-create recipient ATA)</div><pre><code>spl-token transfer &lt;MINT&gt; 100 &lt;RECIPIENT&gt; --fund-recipient</code></pre><div class="n">Without --fund-recipient the tx fails if the recipient has no ATA for that mint.</div></div><div class="item"><div class="l">Lock supply / revoke authority</div><pre><code>spl-token authorize &lt;MINT&gt; mint --disable</code></pre><div class="n">Revoking mint authority makes supply fixed forever — common trust signal for launches.</div></div><h2>Create a Token — Code (SPL &amp; ERC-20)</h2><div class="item"><div class="l">@solana/spl-token</div><pre><code>import { createMint, getOrCreateAssociatedTokenAccount, mintTo } from "@solana/spl-token";
+const mint = await createMint(conn, payer, payer.publicKey, null, 6);
+const ata  = await getOrCreateAssociatedTokenAccount(conn, payer, mint, payer.publicKey);
+await mintTo(conn, payer, mint, ata.address, payer, 1_000_000 * 1e6);</code></pre><div class="n">4th arg (freezeAuthority)=null to disable freezing. Amount is in base units — multiply by 10**decimals.</div></div><div class="item"><div class="l">ERC-20 via OpenZeppelin</div><pre><code>// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.20;
+import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+contract MyToken is ERC20 {
+  constructor() ERC20("MyToken", "MTK") {
+    _mint(msg.sender, 1_000_000 * 10 ** decimals());
+  }
+}</code></pre><div class="n">decimals() defaults to 18. Deploy with `forge create` / Hardhat; verify on Etherscan.</div></div><h2>Swap on a DEX</h2><div class="item"><div class="l">Uniswap V2 router (Solidity)</div><pre><code>IERC20(tokenIn).approve(router, amountIn);
+IUniswapV2Router(router).swapExactTokensForTokens(
+  amountIn, amountOutMin, [tokenIn, tokenOut], msg.sender, block.timestamp + 300
+);</code></pre><div class="n">ERC-20 swaps need approve() first (allowance). deadline guards against stuck txs.</div></div><div class="item"><div class="l">Get a quote off-chain (V2)</div><pre><code>const [ , out ] = await router.getAmountsOut(amountIn, [tokenIn, tokenOut]);
+const amountOutMin = out.mul(995).div(1000);  // 0.5% slippage</code></pre><div class="n">Never pass amountOutMin=0 in prod — invites sandwich/MEV attacks.</div></div><div class="item"><div class="l">Jupiter aggregator (Solana)</div><pre><code>GET https://quote-api.jup.ag/v6/quote?inputMint=&lt;A&gt;&amp;outputMint=&lt;B&gt;&amp;amount=&lt;n&gt;&amp;slippageBps=50
+POST /v6/swap  { quoteResponse, userPublicKey }  -&gt; signed &amp; sent</code></pre><div class="n">Aggregates Raydium/Orca/etc for best route; slippageBps=50 means 0.5%.</div></div>
+<h2>Quick tips &amp; gotchas</h2><ul class="tips"><li>Devnet airdrops are rate-limited and flaky — retry or use a web faucet; never rely on them in tests without a fallback.</li><li>Impermanent loss is only realized when you withdraw. If price returns to entry, IL is zero — but fees earned are kept regardless.</li><li>On Solana every wallet needs an Associated Token Account (ATA) per mint before it can receive that token; use --fund-recipient / getOrCreateAssociatedTokenAccount.</li><li>SPL decimals and ERC-20 decimals are fixed at creation and differ (SPL often 6/9, ERC-20 usually 18) — always convert to base units before mint/transfer/swap math.</li><li>ERC-20 swaps require an approve() allowance to the router before swapExactTokensForTokens; SPL uses delegate/authority instead.</li><li>Always set amountOutMin (ETH) or slippageBps (Solana) — a zero/loose slippage bound gets sandwiched by MEV bots.</li><li>x·y=k means the pool never empties and price impact grows with trade size relative to reserves — split large orders or route through an aggregator.</li><li>Revoke mint authority (spl-token authorize --disable / no _mint path) once supply is final to prove the supply can't be inflated.</li></ul>
+</div></body></html>

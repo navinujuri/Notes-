@@ -1,0 +1,102 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Cheat Sheet · 5 tools for senior engineers (Code without your mouse)</title><style>:root{--bg:#fff;--fg:#1a1a1a;--muted:#6b7280;--line:#e5e7eb;--accent:#0d9488;--card:#f9fafb;--code:#f3f4f6;--codefg:#111}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1115;--fg:#e6e6e6;--muted:#9aa0aa;--line:#242833;--accent:#2dd4bf;--card:#171a21;--code:#0b0e13;--codefg:#e6e6e6}}
+*{box-sizing:border-box}body{margin:0;font:16px/1.6 system-ui,Segoe UI,sans-serif;background:var(--bg);color:var(--fg)}
+.wrap{max-width:860px;margin:0 auto;padding:1.2rem}
+a.back{color:var(--accent);text-decoration:none;font-size:.9rem}
+h1{font-size:1.5rem;margin:.6rem 0 .2rem}.sub{color:var(--muted);margin:0 0 1.4rem}
+h2{font-size:1.1rem;margin:1.6rem 0 .5rem;color:var(--accent)}
+.item{border:1px solid var(--line);border-radius:10px;background:var(--card);padding:.6rem .8rem;margin:.5rem 0}
+.item .l{font-weight:700}
+.item .n{color:var(--muted);font-size:.92rem;margin-top:.2rem}
+pre{margin:.45rem 0 0;background:var(--code);color:var(--codefg);border:1px solid var(--line);border-radius:8px;padding:.6rem .8rem;overflow-x:auto}
+code,pre{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:.86rem}
+.tips{border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:10px;background:var(--card);padding:.6rem 1rem}
+.tips li{margin:.35rem 0}
+@media print{.back{display:none}}</style></head><body><div class="wrap">
+<a class="back" href="../revision.html">← Back to revision index</a>
+<h1>5 tools for senior engineers (Code without your mouse) — Cheat Sheet</h1>
+<p class="sub">Cohort 2.0 · 8 lessons · quick reference</p>
+<h2>Vim/vi — modes &amp; motions (works on any server)</h2><div class="item"><div class="l">Modes: Normal (nav), Insert (type), Visual (select), Cmdline (:)</div><pre><code>Esc            # back to Normal from anywhere</code></pre><div class="n">vi is POSIX — present on virtually every *nix box.</div></div><div class="item"><div class="l">Enter Insert mode</div><pre><code>i  a       # before / after cursor
+I  A       # start / end of line
+o  O       # new line below / above</code></pre></div><div class="item"><div class="l">Move by character / word / line</div><pre><code>h j k l    # left down up right
+w b e      # word fwd / back / end
+0 ^ $      # col0 / first non-blank / EOL</code></pre></div><div class="item"><div class="l">Jump around the file</div><pre><code>gg  G      # top / bottom
+42G / :42  # go to line 42
+Ctrl-d Ctrl-u  # half-page down / up
+{  }       # prev / next paragraph</code></pre></div><div class="item"><div class="l">Find char on line, then repeat</div><pre><code>f( t,      # jump to / before char
+;  ,       # repeat forward / backward</code></pre></div><div class="item"><div class="l">Counts multiply any motion/operator</div><pre><code>3w   5j   2dd   d3w</code></pre><div class="n">count + operator + motion is the whole grammar.</div></div><h2>Vim — editing grammar (operator + text object)</h2><div class="item"><div class="l">Operator + motion</div><pre><code>dw  d$  c$  y}  &gt;i{</code></pre><div class="n">d=delete c=change y=yank &gt;=indent.</div></div><div class="item"><div class="l">Text objects (edit by structure, not position)</div><pre><code>ciw   # change inner word
+di(   # delete inside parens
+ci"   # change inside quotes
+dap   # delete a paragraph
+cit   # change inside HTML/XML tag</code></pre><div class="n">i=inner, a=around (includes delimiters/space).</div></div><div class="item"><div class="l">Whole-line ops</div><pre><code>dd yy cc   # delete / yank / change line
+&gt;&gt; &lt;&lt;      # indent / dedent</code></pre></div><div class="item"><div class="l">Paste, undo, repeat</div><pre><code>p  P       # paste after / before
+u  Ctrl-r  # undo / redo
+.          # repeat last change</code></pre></div><div class="item"><div class="l">Visual select</div><pre><code>v   V   Ctrl-v   # char / line / block
+gv               # reselect last selection</code></pre></div><div class="item"><div class="l">Search &amp; jump</div><pre><code>/foo   n N   # search, next / prev
+*            # search word under cursor
+%            # jump to matching bracket</code></pre></div><div class="item"><div class="l">Substitute (find/replace)</div><pre><code>:%s/old/new/g     # whole file
+:%s/old/new/gc    # with confirm
+:'&lt;,'&gt;s/x/y/g     # in visual range</code></pre></div><div class="item"><div class="l">Registers &amp; marks</div><pre><code>"ayy  "ap    # yank to / paste from reg a
+ma  `a       # set mark a / jump to it
+:reg  :marks # inspect</code></pre></div><div class="item"><div class="l">Save / quit</div><pre><code>:w  :wq  :x  ZZ   # write / write+quit
+:q!  ZQ           # quit discard</code></pre></div><h2>Neovim — config &amp; IDE features</h2><div class="item"><div class="l">Config entry point (Lua)</div><pre><code>~/.config/nvim/init.lua</code></pre><div class="n">$XDG_CONFIG_HOME/nvim; init.vim still works but Lua is idiomatic.</div></div><div class="item"><div class="l">Options &amp; leader</div><pre><code>vim.g.mapleader = ' '
+vim.opt.number = true
+vim.opt.relativenumber = true
+vim.opt.expandtab = true
+vim.opt.shiftwidth = 2</code></pre></div><div class="item"><div class="l">Keymaps in Lua</div><pre><code>vim.keymap.set('n', '&lt;leader&gt;w', ':w&lt;CR&gt;')
+vim.keymap.set('i', 'jk', '&lt;Esc&gt;')</code></pre><div class="n">opts = { desc=..., silent=true, noremap=true }.</div></div><div class="item"><div class="l">Plugin manager — lazy.nvim</div><pre><code>require('lazy').setup({
+  { 'neovim/nvim-lspconfig' },
+  { 'nvim-treesitter/nvim-treesitter', build=':TSUpdate' },
+})</code></pre><div class="n">:Lazy to manage; lockfile pins versions.</div></div><div class="item"><div class="l">LSP (go-to-def, hover, rename)</div><pre><code>vim.lsp.enable('lua_ls')  -- nvim 0.11+
+-- or require('lspconfig').ts_ls.setup{}</code></pre><div class="n">Use :Mason to install servers; K=hover, gd=def, &lt;leader&gt;rn=rename.</div></div><div class="item"><div class="l">Diagnostics &amp; health</div><pre><code>:checkhealth
+:LspInfo  :Lazy  :Mason
+:TSUpdate</code></pre></div><h2>Vimium — Vim motions in the browser</h2><div class="item"><div class="l">Install</div><pre><code>Vimium (Chrome/Edge) · Vimium-FF (Firefox)</code></pre><div class="n">Type 'i' for native insert mode; Esc leaves it. Excluded on some pages (e.g. new-tab).</div></div><div class="item"><div class="l">Scroll</div><pre><code>j k        # down / up
+d u        # half-page
+gg  G      # top / bottom</code></pre></div><div class="item"><div class="l">Follow links via hints</div><pre><code>f          # open link in current tab
+F          # open link in new tab</code></pre><div class="n">Type the highlighted hint letters to activate.</div></div><div class="item"><div class="l">Tabs</div><pre><code>J K / gT gt  # prev / next tab
+t            # new tab
+x  X         # close / restore closed
+^ (caret)    # last-visited tab</code></pre></div><div class="item"><div class="l">Navigate &amp; open</div><pre><code>o  O       # open URL/bookmark (curr / new tab)
+b  B       # open bookmark
+H  L       # history back / forward</code></pre></div><div class="item"><div class="l">Utility</div><pre><code>gi         # focus first text input
+yy         # copy current URL
+/  n N     # find in page
+?          # show all bindings</code></pre></div><h2>Vim in VSCode</h2><div class="item"><div class="l">Pick an extension</div><pre><code>vscodevim.vim         # emulation, easy
+asvetliakov.vscode-neovim  # real embedded nvim</code></pre><div class="n">vscode-neovim = full plugin/LSP parity; VSCodeVim = simpler, uses VSCode features.</div></div><div class="item"><div class="l">Core settings (settings.json)</div><pre><code>"vim.leader": "&lt;space&gt;",
+"vim.useSystemClipboard": true,
+"vim.hlsearch": true,
+"editor.lineNumbers": "relative"</code></pre></div><div class="item"><div class="l">Escape without reaching for Esc</div><pre><code>"vim.insertModeKeyBindings": [
+  { "before": ["j","k"], "after": ["&lt;Esc&gt;"] }
+]</code></pre></div><div class="item"><div class="l">Normal-mode custom binds</div><pre><code>"vim.normalModeKeyBindingsNonRecursive": [
+  { "before": ["&lt;leader&gt;","w"],
+    "commands": ["workbench.action.files.save"] }
+]</code></pre><div class="n">Non-recursive avoids remap loops; 'commands' calls VSCode actions.</div></div><div class="item"><div class="l">Let VSCode keep some Ctrl keys</div><pre><code>"vim.handleKeys": { "&lt;C-d&gt;": true, "&lt;C-a&gt;": false }</code></pre><div class="n">false = pass through to VSCode (e.g. Ctrl-a select-all).</div></div><h2>tmux — persistent terminal sessions</h2><div class="item"><div class="l">Sessions</div><pre><code>tmux new -s dev     # create named
+tmux ls             # list
+tmux a -t dev       # attach
+tmux kill-session -t dev</code></pre><div class="n">Sessions survive SSH disconnects — attach again later.</div></div><div class="item"><div class="l">Prefix key (default)</div><pre><code>Ctrl-b   # then a command key</code></pre><div class="n">All bindings below are 'prefix, then key'.</div></div><div class="item"><div class="l">Windows (tabs)</div><pre><code>c        # new window
+n p      # next / prev
+0-9      # jump to window N
+,        # rename
+&amp;        # kill window</code></pre></div><div class="item"><div class="l">Panes (splits)</div><pre><code>%        # split vertical
+"        # split horizontal
+o / arrows  # move focus
+z        # zoom/unzoom pane
+x        # kill pane</code></pre></div><div class="item"><div class="l">Detach &amp; copy mode</div><pre><code>d        # detach (session keeps running)
+[        # enter copy/scroll mode (q to exit)</code></pre></div><div class="item"><div class="l">Config ~/.tmux.conf</div><pre><code>set -g prefix C-a        # rebind prefix
+unbind C-b
+set -g mouse on
+set -g base-index 1</code></pre><div class="n">Reload live: prefix + : then `source-file ~/.tmux.conf`.</div></div><h2>Window managers (tiling) &amp; shell config</h2><div class="item"><div class="l">Tiling WM by OS</div><pre><code>macOS : yabai + skhd  ·  AeroSpace
+Linux : i3 / sway / Hyprland
+Windows: komorebi  ·  FancyZones</code></pre><div class="n">Auto-arranges windows in a grid; drive focus/move/resize from the keyboard.</div></div><div class="item"><div class="l">i3 config (~/.config/i3/config)</div><pre><code>bindsym $mod+Return exec alacritty
+bindsym $mod+j focus left
+bindsym $mod+1 workspace 1
+bindsym $mod+Shift+q kill</code></pre><div class="n">$mod is usually Super/Alt; reload with $mod+Shift+r.</div></div><div class="item"><div class="l">Which shell rc file loads when</div><pre><code>bash login   : ~/.bash_profile -&gt; ~/.bashrc
+bash non-login: ~/.bashrc
+zsh (default): ~/.zshrc
+login (both) : ~/.profile / ~/.zprofile</code></pre><div class="n">Interactive-but-non-login (new terminal tab) reads .bashrc/.zshrc — put aliases there.</div></div><div class="item"><div class="l">Aliases, exports, functions</div><pre><code>alias gs='git status'
+export PATH="$HOME/.local/bin:$PATH"
+export EDITOR=nvim
+mkcd(){ mkdir -p "$1" &amp;&amp; cd "$1"; }</code></pre></div><div class="item"><div class="l">Reload without new shell</div><pre><code>source ~/.zshrc   # or: . ~/.zshrc</code></pre><div class="n">exec $SHELL -l for a clean login re-init.</div></div><div class="item"><div class="l">Prompt &amp; framework add-ons</div><pre><code>oh-my-zsh · zinit · starship
+eval "$(starship init zsh)"</code></pre><div class="n">starship is shell-agnostic (bash/zsh/fish/pwsh).</div></div>
+<h2>Quick tips &amp; gotchas</h2><ul class="tips"><li>vi/vim is guaranteed on almost every server (POSIX) — learn the motions once and you can edit anywhere over SSH.</li><li>Think grammar, not shortcuts: count + operator + text-object (e.g. 2ci") composes infinitely; text objects (ciw, di() beat raw motions.</li><li>The dot command '.' repeats your last change — pair it with n (search) for fast repetitive edits, and stay out of Visual mode when '.' would do.</li><li>Remap Caps Lock to Esc (or Ctrl) at the OS level — the single biggest ergonomic win for Vim and tmux.</li><li>Rebind the tmux prefix off Ctrl-b (Ctrl-a or Ctrl-Space) and enable mouse on while you learn — reload with source-file.</li><li>Know your rc file: aliases/exports go in ~/.bashrc or ~/.zshrc (interactive), PATH/env for login shells in ~/.profile/~/.zprofile.</li><li>Keep dotfiles in a git repo and symlink them (GNU stow or a bootstrap script) so every machine is one clone away.</li><li>In VSCode prefer vscode-neovim for real plugin/LSP parity; use vim.handleKeys to hand specific Ctrl-combos back to VSCode.</li></ul>
+</div></body></html>

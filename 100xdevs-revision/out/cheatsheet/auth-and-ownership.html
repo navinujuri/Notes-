@@ -1,0 +1,108 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Cheat Sheet · Ownership And Authorities and PDAs</title><style>:root{--bg:#fff;--fg:#1a1a1a;--muted:#6b7280;--line:#e5e7eb;--accent:#0d9488;--card:#f9fafb;--code:#f3f4f6;--codefg:#111}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1115;--fg:#e6e6e6;--muted:#9aa0aa;--line:#242833;--accent:#2dd4bf;--card:#171a21;--code:#0b0e13;--codefg:#e6e6e6}}
+*{box-sizing:border-box}body{margin:0;font:16px/1.6 system-ui,Segoe UI,sans-serif;background:var(--bg);color:var(--fg)}
+.wrap{max-width:860px;margin:0 auto;padding:1.2rem}
+a.back{color:var(--accent);text-decoration:none;font-size:.9rem}
+h1{font-size:1.5rem;margin:.6rem 0 .2rem}.sub{color:var(--muted);margin:0 0 1.4rem}
+h2{font-size:1.1rem;margin:1.6rem 0 .5rem;color:var(--accent)}
+.item{border:1px solid var(--line);border-radius:10px;background:var(--card);padding:.6rem .8rem;margin:.5rem 0}
+.item .l{font-weight:700}
+.item .n{color:var(--muted);font-size:.92rem;margin-top:.2rem}
+pre{margin:.45rem 0 0;background:var(--code);color:var(--codefg);border:1px solid var(--line);border-radius:8px;padding:.6rem .8rem;overflow-x:auto}
+code,pre{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:.86rem}
+.tips{border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:10px;background:var(--card);padding:.6rem 1rem}
+.tips li{margin:.35rem 0}
+@media print{.back{display:none}}</style></head><body><div class="wrap">
+<a class="back" href="../revision.html">← Back to revision index</a>
+<h1>Ownership And Authorities and PDAs — Cheat Sheet</h1>
+<p class="sub">Cohort 3.0 · 6 lessons · quick reference</p>
+<h2>Account Model &amp; Fields</h2><div class="item"><div class="l">On-chain account layout (every account has these 5 fields)</div><pre><code>pub struct Account {
+    pub lamports: u64,       // SOL balance
+    pub data: Vec&lt;u8&gt;,       // raw state bytes
+    pub owner: Pubkey,       // program allowed to mutate this
+    pub executable: bool,    // true = program account
+    pub rent_epoch: Epoch,   // legacy rent field
+}</code></pre><div class="n">Everything on Solana is an account — wallets, programs, program state, token mints.</div></div><div class="item"><div class="l">AccountInfo (what your program receives at runtime)</div><pre><code>pub struct AccountInfo&lt;'a&gt; {
+    pub key: &amp;'a Pubkey,
+    pub lamports: Rc&lt;RefCell&lt;&amp;'a mut u64&gt;&gt;,
+    pub data:     Rc&lt;RefCell&lt;&amp;'a mut [u8]&gt;&gt;,
+    pub owner: &amp;'a Pubkey,
+    pub is_signer: bool,
+    pub is_writable: bool,
+    pub executable: bool,
+}</code></pre><div class="n">is_signer / is_writable come from the transaction, not from the account state.</div></div><div class="item"><div class="l">The ownership rule (core invariant)</div><div class="n">Only the OWNER program can mutate data or DEBIT lamports. ANYONE can CREDIT lamports (send SOL). Non-owners get read-only view.</div></div><div class="item"><div class="l">Inspect accounts / rent from CLI</div><pre><code>solana account &lt;PUBKEY&gt;        # dump owner, lamports, data
+solana balance &lt;PUBKEY&gt;
+solana rent 200                # rent-exempt minimum for 200 bytes</code></pre></div><h2>Context — instruction entrypoint</h2><div class="item"><div class="l">Native entrypoint: program_id + accounts + data</div><pre><code>entrypoint!(process_instruction);
+fn process_instruction(
+    program_id: &amp;Pubkey,
+    accounts: &amp;[AccountInfo],
+    instruction_data: &amp;[u8],
+) -&gt; ProgramResult {
+    let acc_iter = &amp;mut accounts.iter();
+    let payer = next_account_info(acc_iter)?;
+    ...
+}</code></pre><div class="n">Accounts arrive in a fixed order defined by the client — you validate each one manually.</div></div><div class="item"><div class="l">Anchor Context&lt;T&gt; — typed, validated accounts</div><pre><code>pub struct Context&lt;'a,'b,'c,'info, T&gt; {
+    pub program_id: &amp;'a Pubkey,
+    pub accounts: &amp;'b mut T,          // your #[derive(Accounts)] struct
+    pub remaining_accounts: &amp;'c [AccountInfo&lt;'info&gt;],
+    pub bumps: T::Bumps,              // generated PDA bumps struct
+}</code></pre><div class="n">Access as ctx.accounts.vault, ctx.bumps.vault, ctx.remaining_accounts.</div></div><div class="item"><div class="l">Accounts struct = declarative validation</div><pre><code>#[derive(Accounts)]
+pub struct Deposit&lt;'info&gt; {
+    #[account(mut)]
+    pub user: Signer&lt;'info&gt;,
+    #[account(mut)]
+    pub vault: Account&lt;'info, Vault&gt;,
+    pub system_program: Program&lt;'info, System&gt;,
+}</code></pre></div><h2>System Program — create / fund / assign</h2><div class="item"><div class="l">ID + role</div><pre><code>11111111111111111111111111111111</code></pre><div class="n">Owns all new/empty accounts &amp; wallets. Only it can allocate space, assign owners, and create accounts.</div></div><div class="item"><div class="l">create_account: alloc space + fund rent + set owner (one op)</div><pre><code>let rent = Rent::get()?;
+let lamports = rent.minimum_balance(space);
+let ix = system_instruction::create_account(
+    payer.key, new_acc.key, lamports, space as u64,
+    program_id,           // new owner = YOUR program
+);
+invoke(&amp;ix, &amp;[payer.clone(), new_acc.clone(), system_program.clone()])?;</code></pre><div class="n">new_acc must sign (it's a keypair) unless created as a PDA via invoke_signed.</div></div><div class="item"><div class="l">transfer SOL</div><pre><code>invoke(
+  &amp;system_instruction::transfer(from.key, to.key, lamports),
+  &amp;[from.clone(), to.clone(), system_program.clone()],
+)?;</code></pre></div><div class="item"><div class="l">allocate + assign (two-step ownership handoff)</div><pre><code>system_instruction::allocate(acc.key, space as u64);
+system_instruction::assign(acc.key, &amp;new_owner);</code></pre><div class="n">Alternative to create_account when the account already holds lamports.</div></div><h2>BPF Loader &amp; Deployment</h2><div class="item"><div class="l">Loader IDs</div><pre><code>BPFLoaderUpgradeab1e11111111111111111111111  # upgradeable (default)
+BPFLoader2111111111111111111111111111111111  # v2, immutable</code></pre><div class="n">A deployed program's OWNER is the loader. executable=true. Loader marks the account executable after deploy.</div></div><div class="item"><div class="l">Program vs ProgramData account (upgradeable)</div><div class="n">Program account is a thin pointer -&gt; ProgramData account, which stores the actual bytecode + the upgrade_authority. Upgrading rewrites ProgramData.</div></div><div class="item"><div class="l">Deploy / upgrade</div><pre><code>solana program deploy target/deploy/prog.so
+solana program deploy --program-id &lt;ID&gt; prog.so   # upgrade in place
+solana program show &lt;PROGRAM_ID&gt;                   # authority, size, slot</code></pre></div><div class="item"><div class="l">Manage upgrade authority</div><pre><code>solana program set-upgrade-authority &lt;ID&gt; \
+    --new-upgrade-authority &lt;PUBKEY&gt;
+solana program set-upgrade-authority &lt;ID&gt; --final  # immutable forever</code></pre><div class="n">--final is IRREVERSIBLE: no more upgrades, no reclaim. Only current authority can upgrade/close.</div></div><div class="item"><div class="l">Reclaim rent / grow program</div><pre><code>solana program close &lt;ID&gt; --recipient &lt;PUBKEY&gt;
+solana program extend &lt;ID&gt; &lt;ADDITIONAL_BYTES&gt;</code></pre></div><h2>Authority &amp; Ownership Checks</h2><div class="item"><div class="l">Signer check (native) — is this action authorized?</div><pre><code>if !authority.is_signer {
+    return Err(ProgramError::MissingRequiredSignature);
+}</code></pre></div><div class="item"><div class="l">Owner check (native) — is this account really mine?</div><pre><code>if data_acc.owner != program_id {
+    return Err(ProgramError::IllegalOwner);
+}</code></pre><div class="n">ALWAYS verify owner before trusting/deserializing account data — else attacker feeds fake accounts.</div></div><div class="item"><div class="l">Anchor: types enforce checks automatically</div><pre><code>pub user: Signer&lt;'info&gt;,               // must sign
+pub cfg:  Account&lt;'info, Config&gt;,      // owner==program_id + discriminator
+pub token_prog: Program&lt;'info, Token&gt;, // owner==Token program</code></pre><div class="n">Account&lt;T&gt; checks owner + 8-byte discriminator. Signer checks is_signer.</div></div><div class="item"><div class="l">has_one — field-level authority match</div><pre><code>#[account(mut, has_one = authority)]
+pub config: Account&lt;'info, Config&gt;,
+pub authority: Signer&lt;'info&gt;,</code></pre><div class="n">Asserts config.authority == authority.key(). Classic admin-gate pattern.</div></div><div class="item"><div class="l">SPL Token authorities</div><div class="n">mint_authority (who can mint), freeze_authority (who can freeze accounts), account owner (who can transfer). Set to None to permanently disable minting.</div></div><h2>PDAs — Derivation</h2><div class="item"><div class="l">What a PDA is</div><div class="n">Deterministic address OFF the ed25519 curve =&gt; no private key exists. Only the deriving program can 'sign' for it. Used for program-owned accounts (vaults, state, escrows).</div></div><div class="item"><div class="l">find_program_address — get PDA + canonical bump</div><pre><code>let (pda, bump) = Pubkey::find_program_address(
+    &amp;[b"vault", user.key.as_ref()],
+    program_id,
+);</code></pre><div class="n">Loops bump 255-&gt;0 until an off-curve address is found. Use off-chain or at init; it's compute-heavy.</div></div><div class="item"><div class="l">create_program_address — derive with a known bump (cheap)</div><pre><code>let pda = Pubkey::create_program_address(
+    &amp;[b"vault", user.key.as_ref(), &amp;[bump]],
+    program_id,
+)?;</code></pre><div class="n">Store the bump on-chain and reuse it to skip the find loop and save CU.</div></div><div class="item"><div class="l">Anchor: derive + init a PDA account</div><pre><code>#[account(
+    init, payer = user, space = 8 + 40,
+    seeds = [b"vault", user.key().as_ref()],
+    bump
+)]
+pub vault: Account&lt;'info, Vault&gt;,</code></pre><div class="n">On later calls use bump = vault.bump to re-check the same PDA. Access as ctx.bumps.vault.</div></div><h2>PDAs — Signing via CPI</h2><div class="item"><div class="l">invoke_signed — program signs for its PDA (native)</div><pre><code>let seeds: &amp;[&amp;[u8]] = &amp;[b"vault", user.key.as_ref(), &amp;[bump]];
+invoke_signed(
+    &amp;system_instruction::transfer(vault.key, user.key, amount),
+    &amp;[vault.clone(), user.clone(), system_program.clone()],
+    &amp;[seeds],   // signer seeds MUST match the PDA derivation
+)?;</code></pre><div class="n">Runtime re-derives the PDA from seeds; if it matches an account, that account is treated as a signer.</div></div><div class="item"><div class="l">Anchor CPI with signer seeds</div><pre><code>let bump = ctx.bumps.vault;
+let seeds: &amp;[&amp;[u8]] = &amp;[b"vault", user.key().as_ref(), &amp;[bump]];
+let signer = &amp;[seeds];
+token::transfer(
+    CpiContext::new_with_signer(
+        ctx.accounts.token_program.to_account_info(),
+        cpi_accounts,
+        signer,
+    ),
+    amount,
+)?;</code></pre></div><div class="item"><div class="l">Seed constraints</div><div class="n">Max 16 seeds, each &lt;= 32 bytes. The bump is appended as the final seed when signing. Use the canonical (highest) bump only.</div></div>
+<h2>Quick tips &amp; gotchas</h2><ul class="tips"><li>Ownership asymmetry: only the owner program can debit lamports &amp; mutate data, but ANYONE can send (credit) SOL to any account.</li><li>New accounts are owned by the System Program by default — call create_account (or allocate + assign) to transfer ownership to your program before writing state.</li><li>Always check BOTH is_signer and owner in native code. Anchor's Signer / Account&lt;T&gt; types do this for you; skipping owner checks is the #1 exploit vector.</li><li>PDAs have no private key (off-curve), so they can only be 'signed' by the owning program via invoke_signed with the exact derivation seeds + bump.</li><li>Use find_program_address off-chain / at init, then store the bump and use create_program_address (or Anchor's bump = state.bump) on-chain to save compute — find loops up to 256 times.</li><li>Anchor init space must include the 8-byte discriminator: space = 8 + &lt;struct size&gt;. Forgetting the 8 is a classic deserialization bug.</li><li>solana program set-upgrade-authority --final is irreversible: the program can never be upgraded or closed again.</li><li>Seeds: max 16, each &lt;= 32 bytes, and the bump byte is appended last when signing — signer seeds must exactly match how the PDA was derived or the sign fails.</li></ul>
+</div></body></html>

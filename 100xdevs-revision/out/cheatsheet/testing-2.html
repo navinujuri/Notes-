@@ -1,0 +1,121 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Cheat Sheet · Integration and End to End testing</title><style>:root{--bg:#fff;--fg:#1a1a1a;--muted:#6b7280;--line:#e5e7eb;--accent:#0d9488;--card:#f9fafb;--code:#f3f4f6;--codefg:#111}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1115;--fg:#e6e6e6;--muted:#9aa0aa;--line:#242833;--accent:#2dd4bf;--card:#171a21;--code:#0b0e13;--codefg:#e6e6e6}}
+*{box-sizing:border-box}body{margin:0;font:16px/1.6 system-ui,Segoe UI,sans-serif;background:var(--bg);color:var(--fg)}
+.wrap{max-width:860px;margin:0 auto;padding:1.2rem}
+a.back{color:var(--accent);text-decoration:none;font-size:.9rem}
+h1{font-size:1.5rem;margin:.6rem 0 .2rem}.sub{color:var(--muted);margin:0 0 1.4rem}
+h2{font-size:1.1rem;margin:1.6rem 0 .5rem;color:var(--accent)}
+.item{border:1px solid var(--line);border-radius:10px;background:var(--card);padding:.6rem .8rem;margin:.5rem 0}
+.item .l{font-weight:700}
+.item .n{color:var(--muted);font-size:.92rem;margin-top:.2rem}
+pre{margin:.45rem 0 0;background:var(--code);color:var(--codefg);border:1px solid var(--line);border-radius:8px;padding:.6rem .8rem;overflow-x:auto}
+code,pre{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:.86rem}
+.tips{border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:10px;background:var(--card);padding:.6rem 1rem}
+.tips li{margin:.35rem 0}
+@media print{.back{display:none}}</style></head><body><div class="wrap">
+<a class="back" href="../revision.html">← Back to revision index</a>
+<h1>Integration and End to End testing — Cheat Sheet</h1>
+<p class="sub">Cohort 2.0 · 10 lessons · quick reference</p>
+<h2>Test pyramid &amp; install</h2><div class="item"><div class="l">Unit test — pure fn / single module, mock all I/O (fast, most numerous)</div><pre><code>import { describe, it, expect } from 'vitest'
+describe('add', () =&gt; {
+  it('sums', () =&gt; expect(add(2,3)).toBe(5))
+})</code></pre><div class="n">No network/DB/filesystem. Milliseconds. Run on every save.</div></div><div class="item"><div class="l">Integration test — multiple real units wired together (route + service + real DB)</div><div class="n">Hits a REAL test database, not mocks. Verifies SQL, migrations, serialization.</div></div><div class="item"><div class="l">E2E test — full stack through the browser as a user (frontend+backend+DB)</div><div class="n">Slowest, fewest. Cypress/Playwright drive a real browser against a running app.</div></div><div class="item"><div class="l">Install stack</div><pre><code>npm i -D vitest supertest
+npm i -D cypress
+npx vitest        # watch
+npx cypress open  # interactive runner</code></pre></div><h2>Prerequisites for integration tests</h2><div class="item"><div class="l">Isolated test DB (never your dev/prod DB)</div><pre><code># .env.test
+DATABASE_URL="postgresql://postgres:postgres@localhost:5433/appdb_test"</code></pre><div class="n">Different PORT/DB name than dev so a test wipe can't nuke real data.</div></div><div class="item"><div class="l">Migrations applied to the test DB before the suite runs</div><pre><code>npx prisma migrate deploy   # or: prisma db push for throwaway schema</code></pre></div><div class="item"><div class="l">Deterministic seed / clean slate per run</div><div class="n">Tests must not depend on ordering or leftover rows.</div></div><div class="item"><div class="l">App exportable without auto-listening</div><pre><code>// server.ts
+export const app = express() // ...routes
+// index.ts (only prod entry)
+app.listen(3000)</code></pre><div class="n">Export `app` so supertest can bind it without an open port.</div></div><h2>Starting the DB (Docker)</h2><div class="item"><div class="l">One-off Postgres container</div><pre><code>docker run -d --name pg-test -e POSTGRES_PASSWORD=postgres \
+  -e POSTGRES_DB=appdb_test -p 5433:5432 postgres:16</code></pre></div><div class="item"><div class="l">docker-compose for repeatable local + CI (docker compose -f docker-compose.test.yml up -d)</div><pre><code># docker-compose.test.yml
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: appdb_test
+    ports: ['5433:5432']
+    healthcheck:
+      test: ['CMD-SHELL','pg_isready -U postgres']
+      interval: 2s
+      retries: 10</code></pre></div><div class="item"><div class="l">Wait until ready before migrating</div><pre><code>docker compose -f docker-compose.test.yml up -d --wait
+npx prisma migrate deploy</code></pre><div class="n">--wait blocks until healthcheck passes; avoids race on first connect.</div></div><div class="item"><div class="l">Testcontainers (spin DB from inside the test process)</div><pre><code>const pg = await new PostgreSqlContainer('postgres:16').start()
+process.env.DATABASE_URL = pg.getConnectionUri()</code></pre><div class="n">Ephemeral, port randomised — great for CI parallelism.</div></div><h2>Bootstrapping Vitest for integration</h2><div class="item"><div class="l">Separate config so unit and integration run independently</div><pre><code>// vitest.config.integration.ts
+import { defineConfig } from 'vitest/config'
+export default defineConfig({
+  test: {
+    include: ['**/*.int.test.ts'],
+    globalSetup: './test/global-setup.ts',
+    hookTimeout: 30_000,
+    fileParallelism: false, // shared DB -&gt; run files serially
+  },
+})</code></pre></div><div class="item"><div class="l">globalSetup — start DB + migrate ONCE for the whole run</div><pre><code>// test/global-setup.ts
+export async function setup() {
+  execSync('docker compose -f docker-compose.test.yml up -d --wait')
+  execSync('npx prisma migrate deploy')
+}
+export async function teardown() {
+  execSync('docker compose -f docker-compose.test.yml down -v')
+}</code></pre><div class="n">globalSetup runs in a separate context — you can't share JS objects, only side effects/env.</div></div><div class="item"><div class="l">npm scripts</div><pre><code>"test": "vitest run",
+"test:int": "vitest run --config vitest.config.integration.ts",
+"test:e2e": "cypress run"</code></pre></div><div class="item"><div class="l">Load .env.test</div><pre><code>import 'dotenv/config'
+// or: vitest --config ... with test.env / setupFiles</code></pre><div class="n">Set NODE_ENV=test and point DATABASE_URL at the test DB before Prisma client instantiates.</div></div><h2>Writing integration tests + hooks</h2><div class="item"><div class="l">beforeAll — expensive one-time setup (connect client, create server)</div><pre><code>import { beforeAll, afterAll, beforeEach, describe, it, expect } from 'vitest'
+const prisma = new PrismaClient()
+beforeAll(async () =&gt; { await prisma.$connect() })
+afterAll(async () =&gt; { await prisma.$disconnect() })</code></pre></div><div class="item"><div class="l">beforeEach — reset state so tests are independent</div><pre><code>beforeEach(async () =&gt; {
+  await prisma.$executeRawUnsafe('TRUNCATE users, posts RESTART IDENTITY CASCADE')
+})</code></pre><div class="n">beforeAll runs ONCE per file; beforeEach runs before EVERY it(). Clean in beforeEach, not after — a crashed test still leaves a clean slate for the next.</div></div><div class="item"><div class="l">Assert through the HTTP layer with supertest (route → DB round trip)</div><pre><code>import request from 'supertest'
+import { app } from '../src/server'
+
+it('creates + persists a user', async () =&gt; {
+  const res = await request(app)
+    .post('/users').send({ email: 'a@b.com' })
+  expect(res.status).toBe(201)
+  const row = await prisma.user.findUnique({ where: { email: 'a@b.com' } })
+  expect(row).not.toBeNull()  // verify it actually hit the DB
+})</code></pre></div><div class="item"><div class="l">Hook order (nested describe)</div><div class="n">beforeAll(outer) → beforeAll(inner) → beforeEach(outer) → beforeEach(inner) → test → afterEach(inner→outer) → afterAll. Return a fn from beforeEach to auto-run as afterEach cleanup.</div></div><h2>CI/CD pipeline (GitHub Actions)</h2><div class="item"><div class="l">Postgres as a service container</div><pre><code>jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env: { POSTGRES_PASSWORD: postgres, POSTGRES_DB: appdb_test }
+        ports: ['5432:5432']
+        options: &gt;-
+          --health-cmd pg_isready --health-interval 2s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/appdb_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20, cache: npm }
+      - run: npm ci
+      - run: npx prisma migrate deploy
+      - run: npm run test:int</code></pre><div class="n">`services` are managed by the runner (started/healthchecked before steps) — no docker-compose needed in CI.</div></div><div class="item"><div class="l">Gate merges on green tests</div><div class="n">Make the job a required status check on the protected branch so failing integration/e2e blocks the PR.</div></div><div class="item"><div class="l">Run E2E in CI</div><pre><code>- run: npm run build &amp;&amp; npm start &amp;
+- run: npx wait-on http://localhost:3000
+- run: npx cypress run</code></pre><div class="n">Start the app, wait for the port, then run headless Cypress.</div></div><h2>Cypress E2E</h2><div class="item"><div class="l">Config</div><pre><code>// cypress.config.ts
+import { defineConfig } from 'cypress'
+export default defineConfig({
+  e2e: {
+    baseUrl: 'http://localhost:3000',
+    supportFile: 'cypress/support/e2e.ts',
+  },
+})</code></pre></div><div class="item"><div class="l">A spec — cypress/e2e/login.cy.ts</div><pre><code>describe('login', () =&gt; {
+  it('logs in', () =&gt; {
+    cy.visit('/login')
+    cy.get('[data-cy=email]').type('a@b.com')
+    cy.get('[data-cy=password]').type('pw{enter}')
+    cy.url().should('include', '/dashboard')
+    cy.contains('Welcome').should('be.visible')
+  })
+})</code></pre><div class="n">Prefer stable data-cy attributes over CSS/text selectors.</div></div><div class="item"><div class="l">Commands don't return — chain, don't await</div><pre><code>cy.get('.btn').click()          // queued, retries automatically
+// WRONG: const el = await cy.get(...)</code></pre><div class="n">Cypress commands are async but not Promises; use .then() to read values. Assertions auto-retry until timeout.</div></div><div class="item"><div class="l">Stub network / seed via API for speed</div><pre><code>cy.intercept('GET', '/api/users', { fixture: 'users.json' }).as('users')
+cy.request('POST', '/test/seed', { email: 'a@b.com' })  // reset backend state
+cy.wait('@users')</code></pre></div><div class="item"><div class="l">Reusable steps as custom commands</div><pre><code>// support/commands.ts
+Cypress.Commands.add('login', (u,p) =&gt; {
+  cy.request('POST','/api/login',{u,p})
+})
+// spec: cy.login('a@b.com','pw')</code></pre><div class="n">Log in via API not the UI in setup — faster and less flaky than clicking through the form every test.</div></div><div class="item"><div class="l">Run modes</div><pre><code>npx cypress open   # GUI, watch, time-travel debugger
+npx cypress run    # headless, for CI (records video/screenshots on fail)</code></pre></div>
+<h2>Quick tips &amp; gotchas</h2><ul class="tips"><li>Isolation first: each test must set up and tear down its own data. A shared, mutating DB with order-dependent tests is the #1 source of flake.</li><li>Clean in beforeEach (TRUNCATE ... RESTART IDENTITY CASCADE), not afterEach — a crashed test then can't poison the next one.</li><li>beforeAll = once per file (connect DB, boot server); beforeEach = before every it() (reset rows). Mixing these up causes cross-test bleed or slow suites.</li><li>Set fileParallelism:false (or maxWorkers:1) when integration test files share one DB, or give each worker its own schema/DB to keep parallelism.</li><li>Never point tests at dev/prod: guard with a separate DATABASE_URL and refuse to run if NODE_ENV !== 'test'. TRUNCATE on the wrong DB is unrecoverable.</li><li>Bump hook/test timeouts (hookTimeout, testTimeout ~30s) — Docker start + migrate is slow and the default 5s will falsely fail the first run.</li><li>In CI use `services:` (managed containers with healthchecks) and run `prisma migrate deploy` before the suite; wait-on the port before Cypress.</li><li>Cypress commands are queued, not awaited — never `await cy.get()`. Assert with .should() (auto-retries) and select via data-cy attributes to survive markup changes.</li></ul>
+</div></body></html>

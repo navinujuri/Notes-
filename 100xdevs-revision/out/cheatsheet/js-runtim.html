@@ -1,0 +1,72 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Cheat Sheet · Node.js Runtime</title><style>:root{--bg:#fff;--fg:#1a1a1a;--muted:#6b7280;--line:#e5e7eb;--accent:#0d9488;--card:#f9fafb;--code:#f3f4f6;--codefg:#111}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1115;--fg:#e6e6e6;--muted:#9aa0aa;--line:#242833;--accent:#2dd4bf;--card:#171a21;--code:#0b0e13;--codefg:#e6e6e6}}
+*{box-sizing:border-box}body{margin:0;font:16px/1.6 system-ui,Segoe UI,sans-serif;background:var(--bg);color:var(--fg)}
+.wrap{max-width:860px;margin:0 auto;padding:1.2rem}
+a.back{color:var(--accent);text-decoration:none;font-size:.9rem}
+h1{font-size:1.5rem;margin:.6rem 0 .2rem}.sub{color:var(--muted);margin:0 0 1.4rem}
+h2{font-size:1.1rem;margin:1.6rem 0 .5rem;color:var(--accent)}
+.item{border:1px solid var(--line);border-radius:10px;background:var(--card);padding:.6rem .8rem;margin:.5rem 0}
+.item .l{font-weight:700}
+.item .n{color:var(--muted);font-size:.92rem;margin-top:.2rem}
+pre{margin:.45rem 0 0;background:var(--code);color:var(--codefg);border:1px solid var(--line);border-radius:8px;padding:.6rem .8rem;overflow-x:auto}
+code,pre{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:.86rem}
+.tips{border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:10px;background:var(--card);padding:.6rem 1rem}
+.tips li{margin:.35rem 0}
+@media print{.back{display:none}}</style></head><body><div class="wrap">
+<a class="back" href="../revision.html">← Back to revision index</a>
+<h1>Node.js Runtime — Cheat Sheet</h1>
+<p class="sub">Cohort 3.0 · 9 lessons · quick reference</p>
+<h2>Node.js &amp; Bun — what they are</h2><div class="item"><div class="l">Node.js</div><div class="n">C++ runtime embedding Google's V8 JS engine + libuv event loop. Runs JS outside the browser (servers, CLIs, tooling). Single-threaded event loop, non-blocking async I/O.</div></div><div class="item"><div class="l">Check version / run a file</div><pre><code>node -v          # runtime version
+node script.js   # execute a file
+node             # REPL</code></pre></div><div class="item"><div class="l">Bun</div><div class="n">All-in-one JS/TS runtime (uses JavaScriptCore, not V8). Drop-in Node replacement + bundler + test runner + package manager. Runs .ts directly, much faster installs.</div></div><div class="item"><div class="l">Run with Bun</div><pre><code>bun -v
+bun run index.ts   # native TS, no tsc
+bun index.ts       # shorthand
+bun install        # fast npm-compatible installs</code></pre></div><div class="item"><div class="l">Runtime globals (no import needed)</div><pre><code>process, console, __dirname, __filename,
+setTimeout, setInterval, Buffer, global</code></pre><div class="n">__dirname/__filename are CJS-only; in ESM use import.meta.url / import.meta.dirname.</div></div><h2>Start a project</h2><div class="item"><div class="l">Init package.json interactively</div><pre><code>npm init</code></pre></div><div class="item"><div class="l">Init with all defaults (fast)</div><pre><code>npm init -y</code></pre></div><div class="item"><div class="l">Minimal package.json</div><pre><code>{
+  "name": "my-app",
+  "version": "1.0.0",
+  "main": "index.js",
+  "type": "commonjs",
+  "scripts": { "start": "node index.js" }
+}</code></pre><div class="n">Set "type": "module" to use ESM import/export instead of require.</div></div><div class="item"><div class="l">Run a script</div><pre><code>npm run start   # runs scripts.start
+npm start       # start/test/stop are special: 'run' optional</code></pre><div class="n">Custom scripts always need 'run' (e.g. npm run build).</div></div><div class="item"><div class="l">Gitignore node_modules</div><pre><code>echo node_modules/ &gt; .gitignore</code></pre><div class="n">Never commit node_modules — reinstall from lockfile instead.</div></div><h2>npm — install &amp; manage</h2><div class="item"><div class="l">Install all deps from package.json</div><pre><code>npm install   # or: npm i</code></pre></div><div class="item"><div class="l">Add a runtime dependency</div><pre><code>npm install express</code></pre><div class="n">Goes under "dependencies"; writes exact tree to package-lock.json.</div></div><div class="item"><div class="l">Add a dev-only dependency</div><pre><code>npm install -D typescript nodemon</code></pre><div class="n">-D / --save-dev → "devDependencies", excluded in `npm i --production`.</div></div><div class="item"><div class="l">Install a specific version</div><pre><code>npm install lodash@4.17.21
+npm install react@latest</code></pre></div><div class="item"><div class="l">Global install (CLIs)</div><pre><code>npm install -g nodemon</code></pre><div class="n">Prefer npx for one-off use to avoid polluting global env.</div></div><div class="item"><div class="l">Run a package binary without installing</div><pre><code>npx cowsay "hi"
+npx create-react-app my-app</code></pre></div><div class="item"><div class="l">Remove / update / audit</div><pre><code>npm uninstall express
+npm update
+npm outdated
+npm audit fix</code></pre></div><h2>Modules — internal (built-in)</h2><div class="item"><div class="l">Import built-ins (CommonJS)</div><pre><code>const fs = require('fs');
+const path = require('path');
+const os = require('os');</code></pre><div class="n">Use the 'node:' prefix to be explicit: require('node:fs').</div></div><div class="item"><div class="l">Import built-ins (ESM)</div><pre><code>import fs from 'node:fs';
+import { readFile } from 'node:fs/promises';</code></pre></div><div class="item"><div class="l">fs — read/write files</div><pre><code>const fs = require('fs');
+fs.readFileSync('a.txt', 'utf8');           // sync
+fs.promises.writeFile('a.txt', 'hi');       // async/await</code></pre><div class="n">Always pass 'utf8' or you get a raw Buffer.</div></div><div class="item"><div class="l">path — build safe paths</div><pre><code>path.join(__dirname, 'data', 'a.txt');
+path.resolve('./a.txt');
+path.extname('a.tar.gz');   // '.gz'</code></pre></div><div class="item"><div class="l">process — env, args, exit</div><pre><code>process.argv;        // CLI args array
+process.env.PORT;     // environment vars
+process.cwd();        // working dir
+process.exit(1);      // exit with code</code></pre></div><div class="item"><div class="l">Other common built-ins</div><pre><code>http, https, url, crypto, events,
+stream, util, child_process, readline</code></pre></div><h2>Modules — external &amp; your own</h2><div class="item"><div class="l">Your own file (relative path)</div><pre><code>// CommonJS
+module.exports = { add };
+const { add } = require('./math');</code></pre><div class="n">Must start with ./ or ../ for local files; bare names resolve to node_modules.</div></div><div class="item"><div class="l">Your own file (ESM)</div><pre><code>// math.mjs / "type":"module"
+export const add = (a, b) =&gt; a + b;
+import { add } from './math.js';</code></pre><div class="n">ESM requires the file extension in the import path.</div></div><div class="item"><div class="l">External package (installed)</div><pre><code>const express = require('express');
+// or ESM:
+import express from 'express';</code></pre></div><div class="item"><div class="l">Resolution order</div><div class="n">Local ./path → core module → node_modules (up the dir tree). Directory imports use its package.json "main" or index.js.</div></div><h2>package-lock.json &amp; versioning</h2><div class="item"><div class="l">What package-lock.json is</div><div class="n">Auto-generated. Pins the EXACT version + integrity hash of every dep AND transitive dep so installs are reproducible. Commit it.</div></div><div class="item"><div class="l">Semver ranges in package.json</div><pre><code>"express": "^4.18.2"   // caret: 4.x.x  (minor+patch)
+"express": "~4.18.2"   // tilde: 4.18.x (patch only)
+"express": "4.18.2"    // exact</code></pre><div class="n">^ allows minor bumps, ~ only patch. Lockfile records what was actually installed within that range.</div></div><div class="item"><div class="l">Clean reproducible install (CI)</div><pre><code>npm ci</code></pre><div class="n">Installs strictly from lockfile, deletes node_modules first, fails if package.json &amp; lock disagree. Faster than `npm i`.</div></div><div class="item"><div class="l">dependencies vs devDependencies</div><div class="n">Runtime code (express, dotenv) → dependencies. Build/test tooling (typescript, jest, nodemon) → devDependencies.</div></div><h2>Assignments — build a CLI</h2><div class="item"><div class="l">Read CLI arguments</div><pre><code>// node app.js add 5
+const [,, cmd, ...args] = process.argv;
+console.log(cmd, args); // 'add' ['5']</code></pre><div class="n">argv[0]=node path, argv[1]=script path, real args start at index 2.</div></div><div class="item"><div class="l">Basic command router</div><pre><code>switch (cmd) {
+  case 'add':  addTodo(args.join(' ')); break;
+  case 'list': listTodos(); break;
+  default: console.log('Unknown command');
+}</code></pre></div><div class="item"><div class="l">Persist data to a JSON file</div><pre><code>const fs = require('fs');
+const FILE = './todos.json';
+const load = () =&gt;
+  fs.existsSync(FILE) ? JSON.parse(fs.readFileSync(FILE,'utf8')) : [];
+const save = (d) =&gt; fs.writeFileSync(FILE, JSON.stringify(d, null, 2));</code></pre></div><div class="item"><div class="l">Interactive prompts (readline)</div><pre><code>const readline = require('readline');
+const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+rl.question('Name? ', (name) =&gt; { console.log(name); rl.close(); });</code></pre></div><div class="item"><div class="l">Make it an executable bin</div><pre><code>// top of index.js
+#!/usr/bin/env node</code></pre><div class="n">Add "bin": { "mycli": "index.js" } to package.json, then `npm link` to run `mycli` globally.</div></div><div class="item"><div class="l">Parse flags cleanly (Node 18.3+)</div><pre><code>const { values } = require('node:util')
+  .parseArgs({ options: { name: { type: 'string' } } });</code></pre><div class="n">Built-in flag parser; for anything richer use commander or yargs.</div></div>
+<h2>Quick tips &amp; gotchas</h2><ul class="tips"><li>process.argv real args start at index 2 — argv[0] is the node binary and argv[1] is the script path.</li><li>Commit package-lock.json; never commit node_modules. Use `npm ci` in CI for exact, reproducible installs.</li><li>`^` (caret) allows minor+patch upgrades, `~` (tilde) only patch. The lockfile records the exact resolved version.</li><li>require() is synchronous CommonJS; import is ESM. Mixing them needs "type":"module" or the .mjs/.cjs extensions — pick one per file.</li><li>Local imports must start with ./ or ../; a bare name like 'fs' or 'express' resolves to a core module or node_modules.</li><li>fs.readFileSync returns a Buffer unless you pass an encoding like 'utf8'.</li><li>Node's I/O is async/non-blocking — prefer fs.promises / await over the Sync variants in servers to avoid blocking the event loop.</li><li>Use npx to run a package binary once (npx create-react-app) instead of installing it globally.</li><li>Bun runs TypeScript and installs deps natively with no extra tooling — `bun index.ts`, `bun install` — and is largely npm/Node compatible.</li></ul>
+</div></body></html>

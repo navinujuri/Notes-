@@ -1,0 +1,114 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Cheat Sheet · Client side apps in Solana, Wallet adapter</title><style>:root{--bg:#fff;--fg:#1a1a1a;--muted:#6b7280;--line:#e5e7eb;--accent:#0d9488;--card:#f9fafb;--code:#f3f4f6;--codefg:#111}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1115;--fg:#e6e6e6;--muted:#9aa0aa;--line:#242833;--accent:#2dd4bf;--card:#171a21;--code:#0b0e13;--codefg:#e6e6e6}}
+*{box-sizing:border-box}body{margin:0;font:16px/1.6 system-ui,Segoe UI,sans-serif;background:var(--bg);color:var(--fg)}
+.wrap{max-width:860px;margin:0 auto;padding:1.2rem}
+a.back{color:var(--accent);text-decoration:none;font-size:.9rem}
+h1{font-size:1.5rem;margin:.6rem 0 .2rem}.sub{color:var(--muted);margin:0 0 1.4rem}
+h2{font-size:1.1rem;margin:1.6rem 0 .5rem;color:var(--accent)}
+.item{border:1px solid var(--line);border-radius:10px;background:var(--card);padding:.6rem .8rem;margin:.5rem 0}
+.item .l{font-weight:700}
+.item .n{color:var(--muted);font-size:.92rem;margin-top:.2rem}
+pre{margin:.45rem 0 0;background:var(--code);color:var(--codefg);border:1px solid var(--line);border-radius:8px;padding:.6rem .8rem;overflow-x:auto}
+code,pre{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:.86rem}
+.tips{border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:10px;background:var(--card);padding:.6rem 1rem}
+.tips li{margin:.35rem 0}
+@media print{.back{display:none}}</style></head><body><div class="wrap">
+<a class="back" href="../revision.html">← Back to revision index</a>
+<h1>Client side apps in Solana, Wallet adapter — Cheat Sheet</h1>
+<p class="sub">Cohort 3.0 · 8 lessons · quick reference</p>
+<h2>Scaffold &amp; Install</h2><div class="item"><div class="l">Create React app (Vite recommended)</div><pre><code>npm create vite@latest my-dapp -- --template react
+cd my-dapp &amp;&amp; npm install</code></pre></div><div class="item"><div class="l">Install wallet-adapter + web3.js</div><pre><code>npm i @solana/web3.js \
+  @solana/wallet-adapter-base \
+  @solana/wallet-adapter-react \
+  @solana/wallet-adapter-react-ui \
+  @solana/wallet-adapter-wallets</code></pre></div><div class="item"><div class="l">Buffer polyfill (Vite only — web3.js needs Node globals)</div><pre><code>npm i buffer
+// main.jsx (top of file)
+import { Buffer } from 'buffer';
+globalThis.Buffer = Buffer;</code></pre><div class="n">Without this you get "Buffer is not defined" on Vite. CRA already polyfills it.</div></div><h2>Wrap app in providers</h2><div class="item"><div class="l">Provider tree: Connection &gt; Wallet &gt; WalletModal</div><pre><code>import { ConnectionProvider, WalletProvider } from '@solana/wallet-adapter-react';
+import { WalletModalProvider } from '@solana/wallet-adapter-react-ui';
+import { clusterApiUrl } from '@solana/web3.js';
+import { useMemo } from 'react';
+import '@solana/wallet-adapter-react-ui/styles.css'; // required for default UI
+
+function Root() {
+  const endpoint = useMemo(() =&gt; clusterApiUrl('devnet'), []);
+  return (
+    &lt;ConnectionProvider endpoint={endpoint}&gt;
+      &lt;WalletProvider wallets={[]} autoConnect&gt;
+        &lt;WalletModalProvider&gt;
+          &lt;App /&gt;
+        &lt;/WalletModalProvider&gt;
+      &lt;/WalletProvider&gt;
+    &lt;/ConnectionProvider&gt;
+  );
+}</code></pre><div class="n">Order matters: ConnectionProvider outermost, WalletModalProvider innermost.</div></div><div class="item"><div class="l">Endpoint options</div><pre><code>clusterApiUrl('devnet')       // https://api.devnet.solana.com
+clusterApiUrl('mainnet-beta') // rate-limited; use a paid RPC in prod
+'https://api.devnet.solana.com' // or a raw string</code></pre></div><div class="item"><div class="l">wallets prop — usually just []</div><pre><code>// Phantom/Solflare/Backpack implement the Wallet Standard
+// and auto-register, so an empty array is fine.
+&lt;WalletProvider wallets={[]} autoConnect&gt;
+
+// Only add explicit adapters for wallets NOT auto-detected:
+import { UnsafeBurnerWalletAdapter } from '@solana/wallet-adapter-wallets';
+const wallets = useMemo(() =&gt; [new UnsafeBurnerWalletAdapter()], []);</code></pre><div class="n">Wrap adapter array in useMemo([]) so it isn't recreated every render.</div></div><h2>Connect UI + core hooks</h2><div class="item"><div class="l">Drop-in connect / disconnect buttons</div><pre><code>import { WalletMultiButton, WalletDisconnectButton }
+  from '@solana/wallet-adapter-react-ui';
+
+&lt;WalletMultiButton /&gt;      // Connect / shows address when connected
+&lt;WalletDisconnectButton /&gt;</code></pre></div><div class="item"><div class="l">useConnection — RPC connection object</div><pre><code>import { useConnection } from '@solana/wallet-adapter-react';
+const { connection } = useConnection();</code></pre></div><div class="item"><div class="l">useWallet — everything about the connected wallet</div><pre><code>import { useWallet } from '@solana/wallet-adapter-react';
+const {
+  publicKey,       // PublicKey | null (null when disconnected)
+  connected,
+  sendTransaction,
+  signMessage,     // may be undefined if wallet lacks support
+  signTransaction,
+} = useWallet();</code></pre><div class="n">Always guard on publicKey before RPC calls; it's null until connected.</div></div><h2>Requesting airdrop (faucet)</h2><div class="item"><div class="l">Request devnet SOL to the connected wallet</div><pre><code>import { useConnection, useWallet } from '@solana/wallet-adapter-react';
+import { LAMPORTS_PER_SOL } from '@solana/web3.js';
+
+async function airdrop(amount) {
+  const { connection } = useConnection();      // from component scope
+  const { publicKey } = useWallet();
+  if (!publicKey) throw new Error('Wallet not connected');
+  const sig = await connection.requestAirdrop(
+    publicKey,
+    amount * LAMPORTS_PER_SOL
+  );
+  await connection.confirmTransaction(sig, 'confirmed');
+}</code></pre></div><div class="item"><div class="l">LAMPORTS_PER_SOL</div><pre><code>LAMPORTS_PER_SOL === 1_000_000_000 // 1 SOL = 1e9 lamports</code></pre><div class="n">web3.js works in lamports (integers). Always multiply/divide by this.</div></div><h2>Showing user balance</h2><div class="item"><div class="l">Fetch balance (lamports → SOL)</div><pre><code>const lamports = await connection.getBalance(publicKey);
+const sol = lamports / LAMPORTS_PER_SOL;</code></pre></div><div class="item"><div class="l">Fetch in an effect, re-run on key change</div><pre><code>import { useEffect, useState } from 'react';
+const [bal, setBal] = useState(0);
+useEffect(() =&gt; {
+  if (!publicKey) return;
+  connection.getBalance(publicKey).then(l =&gt; setBal(l / LAMPORTS_PER_SOL));
+}, [publicKey, connection]);</code></pre></div><div class="item"><div class="l">Live updates via account subscription</div><pre><code>const id = connection.onAccountChange(publicKey, (acc) =&gt;
+  setBal(acc.lamports / LAMPORTS_PER_SOL));
+// cleanup: connection.removeAccountChangeListener(id);</code></pre><div class="n">Cheaper than polling; unsubscribe in the effect cleanup.</div></div><h2>Sign a message</h2><div class="item"><div class="l">Sign arbitrary bytes (off-chain, no fee)</div><pre><code>const { publicKey, signMessage } = useWallet();
+if (!signMessage) throw new Error('Wallet does not support message signing');
+
+const message = new TextEncoder().encode('Sign into my dapp');
+const signature = await signMessage(message); // Uint8Array (64 bytes)</code></pre></div><div class="item"><div class="l">Verify the signature (ed25519)</div><pre><code>import { ed25519 } from '@noble/curves/ed25519';
+const ok = ed25519.verify(signature, message, publicKey.toBytes());
+if (!ok) throw new Error('Invalid signature');</code></pre><div class="n">@noble/curves ships with web3.js. Signing proves ownership without spending gas — used for auth.</div></div><h2>Sending SOL</h2><div class="item"><div class="l">Build + send a transfer transaction</div><pre><code>import { useConnection, useWallet } from '@solana/wallet-adapter-react';
+import {
+  Transaction, SystemProgram, PublicKey, LAMPORTS_PER_SOL,
+} from '@solana/web3.js';
+
+async function sendSol(to, amountSol) {
+  const { connection } = useConnection();
+  const { publicKey, sendTransaction } = useWallet();
+
+  const tx = new Transaction().add(
+    SystemProgram.transfer({
+      fromPubkey: publicKey,
+      toPubkey: new PublicKey(to),
+      lamports: amountSol * LAMPORTS_PER_SOL,
+    })
+  );
+
+  const sig = await sendTransaction(tx, connection); // wallet signs + sends
+  await connection.confirmTransaction(sig, 'confirmed');
+  return sig;
+}</code></pre><div class="n">sendTransaction auto-fills recent blockhash + feePayer and prompts the wallet to sign.</div></div><div class="item"><div class="l">Assignment shape (tie it together)</div><pre><code>// One component that: connects wallet, shows balance,
+// has an Airdrop button, a Send-SOL form, and a Sign-Message button.
+// Reuse the snippets above; guard every action on `publicKey`.</code></pre><div class="n">Test end-to-end on devnet with a throwaway Phantom account.</div></div>
+<h2>Quick tips &amp; gotchas</h2><ul class="tips"><li>Import '@solana/wallet-adapter-react-ui/styles.css' once — without it the WalletMultiButton renders unstyled.</li><li>publicKey is null until connected: guard every RPC/tx call with `if (!publicKey) return` to avoid runtime crashes.</li><li>Everything on-chain is in lamports (integers). Convert with LAMPORTS_PER_SOL (1e9); never send floats as lamports.</li><li>Devnet airdrops are heavily rate-limited — request 1-2 SOL max; if it 429s, use faucet.solana.com in the browser.</li><li>signMessage/signTransaction can be undefined depending on the wallet — check before calling, don't assume support.</li><li>Wrap the `wallets` array and `endpoint` in useMemo so providers don't reset the connection on every render.</li><li>Modern wallets (Phantom, Solflare, Backpack) auto-register via the Wallet Standard, so `wallets={[]}` is enough — you rarely need explicit adapters.</li><li>On Vite, polyfill Buffer (globalThis.Buffer = Buffer) or you'll hit 'Buffer is not defined' from web3.js.</li><li>Always confirmTransaction after airdrop/send before reading balance, or the UI shows stale numbers.</li></ul>
+</div></body></html>

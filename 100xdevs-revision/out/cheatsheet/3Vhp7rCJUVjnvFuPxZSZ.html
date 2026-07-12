@@ -1,0 +1,141 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Cheat Sheet · Custom Hooks</title><style>:root{--bg:#fff;--fg:#1a1a1a;--muted:#6b7280;--line:#e5e7eb;--accent:#0d9488;--card:#f9fafb;--code:#f3f4f6;--codefg:#111}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1115;--fg:#e6e6e6;--muted:#9aa0aa;--line:#242833;--accent:#2dd4bf;--card:#171a21;--code:#0b0e13;--codefg:#e6e6e6}}
+*{box-sizing:border-box}body{margin:0;font:16px/1.6 system-ui,Segoe UI,sans-serif;background:var(--bg);color:var(--fg)}
+.wrap{max-width:860px;margin:0 auto;padding:1.2rem}
+a.back{color:var(--accent);text-decoration:none;font-size:.9rem}
+h1{font-size:1.5rem;margin:.6rem 0 .2rem}.sub{color:var(--muted);margin:0 0 1.4rem}
+h2{font-size:1.1rem;margin:1.6rem 0 .5rem;color:var(--accent)}
+.item{border:1px solid var(--line);border-radius:10px;background:var(--card);padding:.6rem .8rem;margin:.5rem 0}
+.item .l{font-weight:700}
+.item .n{color:var(--muted);font-size:.92rem;margin-top:.2rem}
+pre{margin:.45rem 0 0;background:var(--code);color:var(--codefg);border:1px solid var(--line);border-radius:8px;padding:.6rem .8rem;overflow-x:auto}
+code,pre{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:.86rem}
+.tips{border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:10px;background:var(--card);padding:.6rem 1rem}
+.tips li{margin:.35rem 0}
+@media print{.back{display:none}}</style></head><body><div class="wrap">
+<a class="back" href="../revision.html">← Back to revision index</a>
+<h1>Custom Hooks — Cheat Sheet</h1>
+<p class="sub">Cohort 2.0 · 5 lessons · quick reference</p>
+<h2>Hooks fundamentals &amp; rules</h2><div class="item"><div class="l">Built-in hooks you'll compose</div><pre><code>const [v, setV] = useState(0);       // local state
+useEffect(() =&gt; {...}, [deps]);       // side effects
+const ref = useRef(null);             // mutable box / DOM
+const memo = useMemo(() =&gt; calc, [d]);// cache value
+const cb = useCallback(fn, [d]);      // cache fn identity
+const ctx = useContext(MyContext);    // read provider</code></pre><div class="n">Hooks are functions starting with `use` that let function components hook into React state/lifecycle.</div></div><div class="item"><div class="l">Rules of Hooks (enforced by eslint-plugin-react-hooks)</div><pre><code>// Call at the TOP LEVEL only:
+if (cond) useState();   // BAD - conditional
+for (...) useEffect();   // BAD - loop
+function handler() { useState(); } // BAD - nested fn</code></pre><div class="n">Only call hooks at the top level of a component OR another hook. Same order every render — React tracks them by call index.</div></div><div class="item"><div class="l">Effect cleanup runs before re-run &amp; on unmount</div><pre><code>useEffect(() =&gt; {
+  const id = setInterval(tick, 1000);
+  return () =&gt; clearInterval(id); // cleanup
+}, []);</code></pre><div class="n">Return a function to tear down subscriptions/timers/listeners. StrictMode double-invokes effects in dev to surface missing cleanup.</div></div><h2>Anatomy of a custom hook</h2><div class="item"><div class="l">A custom hook = a function named useX that calls other hooks</div><pre><code>function useToggle(initial = false) {
+  const [on, setOn] = useState(initial);
+  const toggle = useCallback(() =&gt; setOn(o =&gt; !o), []);
+  return [on, toggle];
+}
+
+// usage
+const [isOpen, toggleOpen] = useToggle();</code></pre><div class="n">It's just extraction/reuse of stateful logic. Each call gets its OWN isolated state — hooks share logic, not state.</div></div><div class="item"><div class="l">Return shape: array for 2 values, object for many</div><pre><code>return [value, setValue];              // destructure w/ any name
+return { data, loading, error, refetch }; // self-documenting</code></pre><div class="n">Arrays let callers rename; objects avoid positional mistakes when returning 3+ things.</div></div><div class="item"><div class="l">Accept + forward deps so effects stay reactive</div><pre><code>function useTitle(title) {
+  useEffect(() =&gt; { document.title = title; }, [title]);
+}</code></pre><div class="n">Whatever the hook uses from arguments/state must be in the dep array — treat the hook like a mini-component.</div></div><h2>Data fetching hooks</h2><div class="item"><div class="l">useFetch — data/loading/error triad with abort</div><pre><code>function useFetch(url) {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  useEffect(() =&gt; {
+    const ctrl = new AbortController();
+    setLoading(true);
+    fetch(url, { signal: ctrl.signal })
+      .then(r =&gt; { if (!r.ok) throw new Error(r.status); return r.json(); })
+      .then(setData)
+      .catch(e =&gt; { if (e.name !== 'AbortError') setError(e); })
+      .finally(() =&gt; setLoading(false));
+    return () =&gt; ctrl.abort();
+  }, [url]);
+  return { data, loading, error };
+}</code></pre><div class="n">AbortController cancels the in-flight request when `url` changes or the component unmounts — prevents setting state on stale/unmounted responses.</div></div><div class="item"><div class="l">Add refetch via a manual trigger</div><pre><code>const [tick, setTick] = useState(0);
+const refetch = () =&gt; setTick(t =&gt; t + 1);
+useEffect(() =&gt; { /* fetch */ }, [url, tick]);
+return { data, loading, error, refetch };</code></pre></div><div class="item"><div class="l">useDebounce — debounce fast-changing search input</div><pre><code>function useDebounce(value, delay = 500) {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() =&gt; {
+    const id = setTimeout(() =&gt; setDebounced(value), delay);
+    return () =&gt; clearTimeout(id); // reset timer on each keystroke
+  }, [value, delay]);
+  return debounced;
+}
+// const results = useFetch(`/api?q=${useDebounce(query)}`)</code></pre><div class="n">Cleanup clears the previous timeout so the effect only fires after the value stops changing for `delay` ms.</div></div><h2>Browser functionality hooks</h2><div class="item"><div class="l">useLocalStorage — state synced to localStorage</div><pre><code>function useLocalStorage(key, initial) {
+  const [val, setVal] = useState(() =&gt; {
+    const s = localStorage.getItem(key);
+    return s ? JSON.parse(s) : initial;
+  });
+  useEffect(() =&gt; {
+    localStorage.setItem(key, JSON.stringify(val));
+  }, [key, val]);
+  return [val, setVal];
+}</code></pre><div class="n">Lazy initializer `() =&gt; ...` reads storage only once. Wrap getItem in try/catch for SSR / private-mode / bad JSON.</div></div><div class="item"><div class="l">useWindowSize — track viewport on resize</div><pre><code>function useWindowSize() {
+  const [size, setSize] = useState({ w: innerWidth, h: innerHeight });
+  useEffect(() =&gt; {
+    const onResize = () =&gt; setSize({ w: innerWidth, h: innerHeight });
+    window.addEventListener('resize', onResize);
+    return () =&gt; window.removeEventListener('resize', onResize);
+  }, []);
+  return size;
+}</code></pre><div class="n">Always remove the listener in cleanup or you leak on every mount. Consider throttling onResize (see timer section).</div></div><div class="item"><div class="l">useMediaQuery — reactive breakpoints</div><pre><code>function useMediaQuery(query) {
+  const [match, setMatch] = useState(() =&gt; matchMedia(query).matches);
+  useEffect(() =&gt; {
+    const mql = matchMedia(query);
+    const h = e =&gt; setMatch(e.matches);
+    mql.addEventListener('change', h);
+    return () =&gt; mql.removeEventListener('change', h);
+  }, [query]);
+  return match;
+}
+// const isDark = useMediaQuery('(prefers-color-scheme: dark)')</code></pre></div><div class="item"><div class="l">useOnlineStatus / useClickOutside</div><pre><code>// online
+const [online, setOnline] = useState(navigator.onLine);
+useEffect(() =&gt; {
+  const on = () =&gt; setOnline(true), off = () =&gt; setOnline(false);
+  addEventListener('online', on); addEventListener('offline', off);
+  return () =&gt; { removeEventListener('online', on); removeEventListener('offline', off); };
+}, []);
+
+// click outside
+function useClickOutside(ref, cb) {
+  useEffect(() =&gt; {
+    const h = e =&gt; { if (ref.current &amp;&amp; !ref.current.contains(e.target)) cb(); };
+    document.addEventListener('mousedown', h);
+    return () =&gt; document.removeEventListener('mousedown', h);
+  }, [ref, cb]);
+}</code></pre></div><h2>Performance / Timer hooks</h2><div class="item"><div class="l">useInterval — declarative setInterval (Dan Abramov pattern)</div><pre><code>function useInterval(callback, delay) {
+  const saved = useRef(callback);
+  useEffect(() =&gt; { saved.current = callback; }, [callback]);
+  useEffect(() =&gt; {
+    if (delay == null) return;            // pause when null
+    const id = setInterval(() =&gt; saved.current(), delay);
+    return () =&gt; clearInterval(id);
+  }, [delay]);
+}</code></pre><div class="n">The ref keeps the latest callback without resetting the interval each render. Pass `delay = null` to pause.</div></div><div class="item"><div class="l">useTimeout — same ref trick, one-shot</div><pre><code>function useTimeout(callback, delay) {
+  const saved = useRef(callback);
+  useEffect(() =&gt; { saved.current = callback; }, [callback]);
+  useEffect(() =&gt; {
+    if (delay == null) return;
+    const id = setTimeout(() =&gt; saved.current(), delay);
+    return () =&gt; clearTimeout(id);
+  }, [delay]);
+}</code></pre></div><div class="item"><div class="l">useThrottle — cap update frequency (scroll/resize)</div><pre><code>function useThrottle(value, limit = 200) {
+  const [throttled, setThrottled] = useState(value);
+  const last = useRef(Date.now());
+  useEffect(() =&gt; {
+    const now = Date.now();
+    const remaining = limit - (now - last.current);
+    if (remaining &lt;= 0) { last.current = now; setThrottled(value); return; }
+    const id = setTimeout(() =&gt; { last.current = Date.now(); setThrottled(value); }, remaining);
+    return () =&gt; clearTimeout(id);
+  }, [value, limit]);
+  return throttled;
+}</code></pre><div class="n">Throttle = at most once per interval (steady stream). Debounce = only after activity stops. Pick throttle for scroll, debounce for search.</div></div><div class="item"><div class="l">usePrevious — remember last render's value</div><pre><code>function usePrevious(value) {
+  const ref = useRef();
+  useEffect(() =&gt; { ref.current = value; });
+  return ref.current; // returns value from previous render
+}</code></pre></div>
+<h2>Quick tips &amp; gotchas</h2><ul class="tips"><li>Name every custom hook `useSomething` — the `use` prefix is what lets the linter apply the Rules of Hooks and lets you call other hooks inside.</li><li>Custom hooks share LOGIC, not STATE. Two components calling the same hook each get fully independent state — there's no magic global.</li><li>Every value from props/state used inside an effect must be in its dependency array. Silencing eslint-plugin-react-hooks warnings hides stale-closure bugs.</li><li>Always return a cleanup function from effects that add listeners, timers, or subscriptions — otherwise you leak and get 'setState on unmounted component' warnings.</li><li>For data fetching, use AbortController to cancel stale requests; otherwise a slow earlier response can overwrite a newer one (race condition).</li><li>Timer/interval hooks: stash the callback in a useRef and update it in a separate effect, so the interval isn't torn down and recreated every render.</li><li>Debounce for 'wait until user stops' (search boxes); throttle for 'run at most every N ms' (scroll, resize, mousemove). They are not interchangeable.</li><li>Prefer battle-tested libs (usehooks-ts, react-use, @uidotdev/usehooks, or TanStack Query for fetching) over hand-rolling — but know the internals for interviews.</li></ul>
+</div></body></html>

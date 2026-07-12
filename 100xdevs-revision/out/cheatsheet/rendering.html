@@ -1,0 +1,75 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Cheat Sheet · CSR vs SSR vs SSG</title><style>:root{--bg:#fff;--fg:#1a1a1a;--muted:#6b7280;--line:#e5e7eb;--accent:#0d9488;--card:#f9fafb;--code:#f3f4f6;--codefg:#111}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1115;--fg:#e6e6e6;--muted:#9aa0aa;--line:#242833;--accent:#2dd4bf;--card:#171a21;--code:#0b0e13;--codefg:#e6e6e6}}
+*{box-sizing:border-box}body{margin:0;font:16px/1.6 system-ui,Segoe UI,sans-serif;background:var(--bg);color:var(--fg)}
+.wrap{max-width:860px;margin:0 auto;padding:1.2rem}
+a.back{color:var(--accent);text-decoration:none;font-size:.9rem}
+h1{font-size:1.5rem;margin:.6rem 0 .2rem}.sub{color:var(--muted);margin:0 0 1.4rem}
+h2{font-size:1.1rem;margin:1.6rem 0 .5rem;color:var(--accent)}
+.item{border:1px solid var(--line);border-radius:10px;background:var(--card);padding:.6rem .8rem;margin:.5rem 0}
+.item .l{font-weight:700}
+.item .n{color:var(--muted);font-size:.92rem;margin-top:.2rem}
+pre{margin:.45rem 0 0;background:var(--code);color:var(--codefg);border:1px solid var(--line);border-radius:8px;padding:.6rem .8rem;overflow-x:auto}
+code,pre{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:.86rem}
+.tips{border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:10px;background:var(--card);padding:.6rem 1rem}
+.tips li{margin:.35rem 0}
+@media print{.back{display:none}}</style></head><body><div class="wrap">
+<a class="back" href="../revision.html">← Back to revision index</a>
+<h1>CSR vs SSR vs SSG — Cheat Sheet</h1>
+<p class="sub">Cohort 2.0 · 3 lessons · quick reference</p>
+<h2>The 3 Strategies at a Glance</h2><div class="item"><div class="l">CSR — render in the browser</div><div class="n">Server sends near-empty HTML + JS bundle; React builds DOM client-side. Fast nav after load, weak SEO/first paint. Use for auth'd dashboards, SPAs.</div></div><div class="item"><div class="l">SSR — render per request on the server</div><div class="n">HTML built on every request with fresh data, then hydrated. Good SEO + personalization; higher TTFB, needs a running server. Use for feeds, per-user pages.</div></div><div class="item"><div class="l">SSG — render once at build time</div><div class="n">HTML generated during `next build`, served from CDN. Fastest + cheapest; data is frozen until rebuild. Use for blogs, docs, marketing, product pages.</div></div><div class="item"><div class="l">ISR — SSG that self-updates</div><div class="n">Static page regenerated in background on a timer / on-demand. Static speed with periodic freshness. Best of SSG+SSR for semi-dynamic content.</div></div><div class="item"><div class="l">Hydration</div><div class="n">SSR/SSG ship HTML AND JS; the JS 'hydrates' static markup into an interactive React tree. Mismatched server/client output = hydration error.</div></div><h2>CSR — Client Side Rendering</h2><div class="item"><div class="l">Plain React SPA scaffold</div><pre><code>npm create vite@latest my-app -- --template react
+cd my-app &amp;&amp; npm i &amp;&amp; npm run dev</code></pre></div><div class="item"><div class="l">Fetch data after mount (classic CSR)</div><pre><code>function Users() {
+  const [data, setData] = useState(null);
+  useEffect(() =&gt; {
+    fetch('/api/users').then(r =&gt; r.json()).then(setData);
+  }, []);
+  if (!data) return &lt;Spinner/&gt;;
+  return &lt;List items={data}/&gt;;
+}</code></pre><div class="n">User sees a loading spinner first — data is NOT in the initial HTML, so crawlers may miss it.</div></div><div class="item"><div class="l">Force client rendering in Next.js App Router</div><pre><code>'use client';
+import { useState, useEffect } from 'react';</code></pre><div class="n">'use client' opts a component (and its imports) into the client bundle. Required for hooks, event handlers, browser APIs.</div></div><div class="item"><div class="l">Client-only data with SWR / React Query</div><pre><code>const { data, isLoading } = useSWR('/api/users', fetcher);</code></pre><div class="n">Handles caching, revalidation, dedupe — the idiomatic CSR data layer.</div></div><h2>SSR — Server Side Rendering</h2><div class="item"><div class="l">Pages Router: getServerSideProps</div><pre><code>export async function getServerSideProps(ctx) {
+  const res = await fetch(`https://api/x/${ctx.params.id}`);
+  const data = await res.json();
+  return { props: { data } }; // -&gt; page props
+}
+export default function Page({ data }) { return &lt;div&gt;{data.name}&lt;/div&gt;; }</code></pre><div class="n">Runs on the server for EVERY request. Access ctx.req, ctx.res, ctx.query, ctx.params. Never bundled to the client.</div></div><div class="item"><div class="l">Redirect / 404 from SSR</div><pre><code>return { redirect: { destination: '/login', permanent: false } };
+// or
+return { notFound: true };</code></pre></div><div class="item"><div class="l">App Router: dynamic by default via no-store</div><pre><code>export default async function Page() {
+  const data = await fetch('https://api/x', { cache: 'no-store' })
+    .then(r =&gt; r.json());
+  return &lt;div&gt;{data.name}&lt;/div&gt;;
+}</code></pre><div class="n">Server Components are async. `cache: 'no-store'` makes the route render per request (SSR).</div></div><div class="item"><div class="l">App Router: force whole segment dynamic</div><pre><code>export const dynamic = 'force-dynamic';</code></pre><div class="n">Also triggered implicitly by using cookies(), headers(), or searchParams.</div></div><h2>SSG — Static Site Generation</h2><div class="item"><div class="l">Pages Router: getStaticProps</div><pre><code>export async function getStaticProps() {
+  const posts = await fetch('https://api/posts').then(r =&gt; r.json());
+  return { props: { posts } };
+}</code></pre><div class="n">Runs ONLY at build time (and during ISR). No access to req/res. Data is baked into the HTML.</div></div><div class="item"><div class="l">Pages Router: getStaticPaths for dynamic routes</div><pre><code>// pages/posts/[id].js
+export async function getStaticPaths() {
+  const posts = await fetch('https://api/posts').then(r =&gt; r.json());
+  return {
+    paths: posts.map(p =&gt; ({ params: { id: String(p.id) } })),
+    fallback: false,
+  };
+}</code></pre><div class="n">getStaticPaths tells Next WHICH dynamic pages to pre-render. Pair with getStaticProps({ params }).</div></div><div class="item"><div class="l">fallback modes</div><pre><code>fallback: false   // unlisted paths -&gt; 404
+fallback: 'blocking' // SSR on first hit, then cached
+fallback: true    // serve fallback UI, then swap in</code></pre></div><div class="item"><div class="l">App Router: static by default + generateStaticParams</div><pre><code>// app/posts/[id]/page.js
+export async function generateStaticParams() {
+  const posts = await fetch('https://api/posts').then(r =&gt; r.json());
+  return posts.map(p =&gt; ({ id: String(p.id) }));
+}</code></pre><div class="n">App Router prerenders statically unless you opt out. Default fetch cache = 'force-cache'.</div></div><h2>ISR — Incremental Static Regeneration</h2><div class="item"><div class="l">Pages Router: time-based revalidate</div><pre><code>export async function getStaticProps() {
+  const data = await fetch('https://api/x').then(r =&gt; r.json());
+  return { props: { data }, revalidate: 60 }; // seconds
+}</code></pre><div class="n">First request after 60s serves stale, triggers background regen; next request gets fresh HTML (stale-while-revalidate).</div></div><div class="item"><div class="l">App Router: fetch-level revalidate</div><pre><code>const data = await fetch('https://api/x', {
+  next: { revalidate: 60 },
+}).then(r =&gt; r.json());</code></pre><div class="n">Or set for the whole segment: `export const revalidate = 60;`</div></div><div class="item"><div class="l">On-demand revalidation (webhook / server action)</div><pre><code>import { revalidatePath, revalidateTag } from 'next/cache';
+revalidatePath('/posts');
+revalidateTag('posts');</code></pre><div class="n">Tag a fetch to invalidate it precisely: fetch(url, { next: { tags: ['posts'] } }).</div></div><h2>App Router Rendering Control (Next 13+)</h2><div class="item"><div class="l">fetch cache = strategy switch</div><pre><code>fetch(url)                              // cached -&gt; SSG
+fetch(url, { cache: 'no-store' })       // uncached -&gt; SSR
+fetch(url, { next: { revalidate: 60 }}) // ISR</code></pre></div><div class="item"><div class="l">Route segment config exports</div><pre><code>export const dynamic = 'auto' | 'force-dynamic' | 'force-static';
+export const revalidate = 60 | false;
+export const fetchCache = 'auto' | 'force-cache' | 'force-no-store';
+export const runtime = 'nodejs' | 'edge';</code></pre></div><div class="item"><div class="l">Server vs Client components</div><div class="n">Everything is a Server Component by default (runs on server, 0 JS shipped). Add 'use client' only where interactivity/hooks are needed. Keep 'use client' at leaves.</div></div><div class="item"><div class="l">Streaming SSR with Suspense</div><pre><code>&lt;Suspense fallback={&lt;Skeleton/&gt;}&gt;
+  &lt;SlowServerComponent/&gt;
+&lt;/Suspense&gt;</code></pre><div class="n">Shell streams instantly; slow parts stream in. Improves TTFB without going full CSR.</div></div><h2>Commands &amp; Build Diagnostics</h2><div class="item"><div class="l">Scaffold a Next.js app</div><pre><code>npx create-next-app@latest my-app</code></pre></div><div class="item"><div class="l">Build + inspect rendering per route</div><pre><code>next build   # prints route table + strategy legend</code></pre><div class="n">Read the legend to verify each page rendered as you intended.</div></div><div class="item"><div class="l">Build output legend</div><pre><code>○  Static    - prerendered, no data
+●  SSG       - prerendered w/ getStaticProps
+ƒ  Dynamic   - server-rendered on demand (SSR)
+ISR          - revalidate shown next to route</code></pre></div><div class="item"><div class="l">Full static export (no Node server)</div><pre><code>// next.config.js
+module.exports = { output: 'export' };</code></pre><div class="n">Pure SSG to static files. Disables SSR/ISR, API routes, and image optimization defaults.</div></div><h2>Decision Cheat Sheet</h2><div class="item"><div class="l">Content same for all users, changes rarely</div><div class="n">-&gt; SSG (blog, docs, landing).</div></div><div class="item"><div class="l">Content same for all, changes periodically</div><div class="n">-&gt; ISR (product listings, pricing, news).</div></div><div class="item"><div class="l">Per-request / per-user / real-time fresh data</div><div class="n">-&gt; SSR (dashboards feed, personalized, search results).</div></div><div class="item"><div class="l">Highly interactive, SEO irrelevant, behind auth</div><div class="n">-&gt; CSR (admin panels, editors, internal tools).</div></div><div class="item"><div class="l">SEO + speed both critical</div><div class="n">-&gt; SSG/ISR first, SSR only if data must be per-request.</div></div><div class="item"><div class="l">Mix per page</div><div class="n">Modern default: static shell (SSG/ISR) + client islands (CSR) + a few dynamic (SSR) routes.</div></div>
+<h2>Quick tips &amp; gotchas</h2><ul class="tips"><li>CSR hurts SEO &amp; first paint because initial HTML is empty — crawlers/slow devices see a blank shell until JS runs.</li><li>getServerSideProps (SSR) runs on EVERY request; getStaticProps (SSG) runs at BUILD time. Neither ships to the client bundle — safe for secrets/DB calls.</li><li>In App Router the mental model flips: pages are static by default; you opt INTO dynamic via cache:'no-store', cookies(), headers(), or dynamic='force-dynamic'.</li><li>ISR revalidate is stale-while-revalidate: the request that triggers regen still gets the OLD page; the NEXT request gets the fresh one.</li><li>Hydration errors come from server/client output mismatch — Date.now(), Math.random(), window checks, or locale formatting. Gate them behind useEffect or suppressHydrationWarning.</li><li>'use client' is contagious downward but not upward: it marks a boundary; children become client too, but a client component can still receive server-rendered children as props.</li><li>output:'export' gives pure static hosting (S3/CDN) but kills SSR, ISR, API routes, and middleware — only choose it if the site is fully static.</li><li>Always run `next build` and read the route table (○ ● ƒ) to CONFIRM each page uses the strategy you expect — silent fallbacks to dynamic are common.</li></ul>
+</div></body></html>

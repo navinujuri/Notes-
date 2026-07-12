@@ -1,0 +1,77 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Cheat Sheet · WebRTC Basic implementation, advance discussion</title><style>:root{--bg:#fff;--fg:#1a1a1a;--muted:#6b7280;--line:#e5e7eb;--accent:#0d9488;--card:#f9fafb;--code:#f3f4f6;--codefg:#111}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1115;--fg:#e6e6e6;--muted:#9aa0aa;--line:#242833;--accent:#2dd4bf;--card:#171a21;--code:#0b0e13;--codefg:#e6e6e6}}
+*{box-sizing:border-box}body{margin:0;font:16px/1.6 system-ui,Segoe UI,sans-serif;background:var(--bg);color:var(--fg)}
+.wrap{max-width:860px;margin:0 auto;padding:1.2rem}
+a.back{color:var(--accent);text-decoration:none;font-size:.9rem}
+h1{font-size:1.5rem;margin:.6rem 0 .2rem}.sub{color:var(--muted);margin:0 0 1.4rem}
+h2{font-size:1.1rem;margin:1.6rem 0 .5rem;color:var(--accent)}
+.item{border:1px solid var(--line);border-radius:10px;background:var(--card);padding:.6rem .8rem;margin:.5rem 0}
+.item .l{font-weight:700}
+.item .n{color:var(--muted);font-size:.92rem;margin-top:.2rem}
+pre{margin:.45rem 0 0;background:var(--code);color:var(--codefg);border:1px solid var(--line);border-radius:8px;padding:.6rem .8rem;overflow-x:auto}
+code,pre{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:.86rem}
+.tips{border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:10px;background:var(--card);padding:.6rem 1rem}
+.tips li{margin:.35rem 0}
+@media print{.back{display:none}}</style></head><body><div class="wrap">
+<a class="back" href="../revision.html">← Back to revision index</a>
+<h1>WebRTC Basic implementation, advance discussion — Cheat Sheet</h1>
+<p class="sub">Cohort 2.0 · 9 lessons · quick reference</p>
+<h2>Why WebRTC &amp; Core Jargon</h2><div class="item"><div class="l">Why WebRTC</div><div class="n">Browser-native, plugin-free P2P real-time media + arbitrary data. Sub-500ms latency over UDP (SRTP/DTLS), encrypted by default. Alternatives (WebSocket/HLS) add server hop + latency.</div></div><div class="item"><div class="l">Signaling</div><div class="n">How peers exchange SDP + ICE candidates BEFORE the P2P link exists. NOT part of the WebRTC spec — you build it (WebSocket, HTTP, even a QR code).</div></div><div class="item"><div class="l">SDP (Session Description Protocol)</div><div class="n">Text blob describing codecs, resolutions, IPs, encryption keys. Exchanged as offer/answer.</div></div><div class="item"><div class="l">ICE</div><div class="n">Interactive Connectivity Establishment — framework that gathers candidate address:port pairs and probes them to find a working path through NATs.</div></div><div class="item"><div class="l">STUN</div><div class="n">Lightweight server that tells a peer its public IP:port (server-reflexive candidate). Free (e.g. stun:stun.l.google.com:19302). Handles ~80% of NATs.</div></div><div class="item"><div class="l">TURN</div><div class="n">Relay server that forwards media when direct P2P fails (symmetric NAT). Bandwidth-heavy, must be authenticated. Needed for ~15-20% of connections.</div></div><div class="item"><div class="l">Candidate types</div><div class="n">host (local LAN) &lt; srflx (STUN/public) &lt; relay (TURN). ICE picks the best working candidate-pair.</div></div><h2>Frontend Setup: Media + PeerConnection</h2><div class="item"><div class="l">Capture camera/mic</div><pre><code>const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+localVideo.srcObject = stream;</code></pre><div class="n">Requires a secure context (HTTPS or localhost). Returns a rejected promise otherwise.</div></div><div class="item"><div class="l">Screen share</div><pre><code>const screen = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });</code></pre><div class="n">Cannot be combined with getUserMedia in one call — capture separately.</div></div><div class="item"><div class="l">Create the peer connection</div><pre><code>const pc = new RTCPeerConnection({
+  iceServers: [
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'turn:turn.example.com:3478', username: 'user', credential: 'pass' }
+  ]
+});</code></pre></div><div class="item"><div class="l">Add local tracks (send media)</div><pre><code>stream.getTracks().forEach(track =&gt; pc.addTrack(track, stream));</code></pre><div class="n">Adding a track fires onnegotiationneeded — do this before/around offer creation.</div></div><div class="item"><div class="l">Receive remote media</div><pre><code>pc.ontrack = ({ streams: [remoteStream] }) =&gt; {
+  remoteVideo.srcObject = remoteStream;
+};</code></pre></div><div class="item"><div class="l">Watch connection health</div><pre><code>pc.onconnectionstatechange = () =&gt; console.log(pc.connectionState);</code></pre><div class="n">States: new → connecting → connected → disconnected → failed → closed. Treat 'failed' as fatal (restart ICE).</div></div><h2>Connecting: Offer / Answer / ICE</h2><div class="item"><div class="l">Caller — create &amp; send offer</div><pre><code>const offer = await pc.createOffer();
+await pc.setLocalDescription(offer);
+signaling.send({ type: 'offer', sdp: pc.localDescription });</code></pre></div><div class="item"><div class="l">Callee — answer the offer</div><pre><code>await pc.setRemoteDescription(offer);
+const answer = await pc.createAnswer();
+await pc.setLocalDescription(answer);
+signaling.send({ type: 'answer', sdp: pc.localDescription });</code></pre></div><div class="item"><div class="l">Caller — apply the answer</div><pre><code>await pc.setRemoteDescription(answer);</code></pre></div><div class="item"><div class="l">Trickle ICE — send candidates</div><pre><code>pc.onicecandidate = ({ candidate }) =&gt; {
+  if (candidate) signaling.send({ type: 'candidate', candidate });
+};</code></pre><div class="n">Send each candidate as it's found — don't wait for full gathering. null candidate = gathering complete.</div></div><div class="item"><div class="l">Add remote candidates</div><pre><code>await pc.addIceCandidate(new RTCIceCandidate(candidate));</code></pre><div class="n">Can arrive before setRemoteDescription — buffer them in an array and flush after remote desc is set, or use perfect negotiation.</div></div><div class="item"><div class="l">Perfect negotiation (glare-proof)</div><pre><code>let makingOffer = false;
+pc.onnegotiationneeded = async () =&gt; {
+  makingOffer = true;
+  await pc.setLocalDescription();
+  signaling.send({ description: pc.localDescription });
+  makingOffer = false;
+};</code></pre><div class="n">Designate one peer 'polite' (rolls back on collision) and one 'impolite' to resolve simultaneous offers.</div></div><h2>Data Channels</h2><div class="item"><div class="l">Open a channel (initiator)</div><pre><code>const dc = pc.createDataChannel('chat', { ordered: true });
+dc.onopen = () =&gt; dc.send('hello');
+dc.onmessage = (e) =&gt; console.log('recv', e.data);</code></pre></div><div class="item"><div class="l">Receive a channel (other side)</div><pre><code>pc.ondatachannel = ({ channel }) =&gt; {
+  channel.onmessage = (e) =&gt; console.log(e.data);
+};</code></pre></div><div class="item"><div class="l">Unreliable / low-latency mode</div><pre><code>pc.createDataChannel('game', { ordered: false, maxRetransmits: 0 });</code></pre><div class="n">UDP-like semantics for game state / cursors — skips retransmits, avoids head-of-line blocking.</div></div><div class="item"><div class="l">Backpressure</div><pre><code>if (dc.bufferedAmount &gt; 16 * 1024 * 1024) return; // pause sends
+dc.bufferedAmountLowThreshold = 1024 * 1024;
+dc.onbufferedamountlow = () =&gt; resumeSending();</code></pre><div class="n">Sending faster than the link drains bloats the buffer — gate on bufferedAmount.</div></div><h2>Backend: Signaling Server</h2><div class="item"><div class="l">Minimal WebSocket relay (Node ws)</div><pre><code>import { WebSocketServer } from 'ws';
+const wss = new WebSocketServer({ port: 8080 });
+wss.on('connection', (ws) =&gt; {
+  ws.on('message', (msg) =&gt; {
+    // relay to everyone else (naive: use rooms in prod)
+    wss.clients.forEach((c) =&gt; {
+      if (c !== ws &amp;&amp; c.readyState === 1) c.send(msg.toString());
+    });
+  });
+});</code></pre><div class="n">Server only shuttles offer/answer/candidate JSON — it never touches media in a P2P topology.</div></div><div class="item"><div class="l">Room-scoped routing</div><div class="n">In production key sockets by roomId and forward only within the room. Track peer join/leave to trigger renegotiation.</div></div><div class="item"><div class="l">Run coturn (STUN+TURN)</div><pre><code>turnserver -a -u user:pass -r example.com \
+  --min-port=49152 --max-port=65535 \
+  --listening-port=3478 --fingerprint</code></pre><div class="n">Self-hosting TURN is the reliability fix for corporate/symmetric NATs. Use TLS (turns:) + short-lived credentials in prod.</div></div><div class="item"><div class="l">Force relay (test TURN)</div><pre><code>new RTCPeerConnection({ iceServers, iceTransportPolicy: 'relay' });</code></pre><div class="n">Drops host/srflx candidates so only TURN paths are used — verifies your TURN server actually works.</div></div><h2>Stats, Bitrate &amp; Track Control</h2><div class="item"><div class="l">Read live stats</div><pre><code>const stats = await pc.getStats();
+stats.forEach((r) =&gt; {
+  if (r.type === 'inbound-rtp' &amp;&amp; r.kind === 'video')
+    console.log(r.framesPerSecond, r.packetsLost, r.jitter);
+});</code></pre><div class="n">Key report types: inbound-rtp, outbound-rtp, candidate-pair (chosen path + RTT), remote-inbound-rtp (round-trip + loss reported by peer).</div></div><div class="item"><div class="l">Round-trip time</div><pre><code>if (r.type === 'candidate-pair' &amp;&amp; r.state === 'succeeded')
+  console.log('RTT', r.currentRoundTripTime);</code></pre></div><div class="item"><div class="l">Cap send bitrate</div><pre><code>const sender = pc.getSenders().find(s =&gt; s.track?.kind === 'video');
+const p = sender.getParameters();
+p.encodings[0].maxBitrate = 500_000; // 500 kbps
+await sender.setParameters(p);</code></pre></div><div class="item"><div class="l">Switch track (screen share toggle)</div><pre><code>const sender = pc.getSenders().find(s =&gt; s.track.kind === 'video');
+await sender.replaceTrack(screenTrack);</code></pre><div class="n">replaceTrack swaps media WITHOUT renegotiation — smoother than remove/add.</div></div><div class="item"><div class="l">Cleanup (release camera)</div><pre><code>stream.getTracks().forEach(t =&gt; t.stop());
+pc.close();</code></pre><div class="n">Forgetting t.stop() leaves the camera light on and the device locked.</div></div><h2>Libraries &amp; Topologies</h2><div class="item"><div class="l">simple-peer (thin P2P wrapper)</div><pre><code>import Peer from 'simple-peer';
+const peer = new Peer({ initiator: true, stream });
+peer.on('signal', (data) =&gt; signaling.send(data)); // pass to other side
+peer.signal(remoteData);                            // feed remote signal in
+peer.on('stream', (s) =&gt; { remoteVideo.srcObject = s; });</code></pre><div class="n">Bundles offer/answer/ICE into one opaque 'signal' blob. You still ship it over your own channel.</div></div><div class="item"><div class="l">Other P2P libs</div><div class="n">PeerJS (hosted broker + client), Daily/Twilio (managed SDKs). Fine for 1:1 or tiny groups.</div></div><div class="item"><div class="l">Mesh</div><div class="n">Every peer ↔ every peer: N·(N-1)/2 connections, each uploads N-1 copies. Zero server media cost but dies past ~4-5 participants (uplink + CPU).</div></div><div class="item"><div class="l">SFU (Selective Forwarding Unit)</div><div class="n">Each peer uploads ONCE to the server; server forwards streams to others. Scales to dozens+. Servers: mediasoup, LiveKit, ion-sfu, Janus, Jitsi Videobridge.</div></div><div class="item"><div class="l">Simulcast (SFU)</div><pre><code>pc.addTransceiver(track, { sendEncodings: [
+  { rid: 'h', maxBitrate: 900_000 },
+  { rid: 'm', maxBitrate: 300_000, scaleResolutionDownBy: 2 },
+  { rid: 'l', maxBitrate: 100_000, scaleResolutionDownBy: 4 }
+] });</code></pre><div class="n">Send multiple quality layers; SFU forwards the layer each receiver can handle.</div></div><div class="item"><div class="l">MCU (Multipoint Control Unit)</div><div class="n">Server decodes + mixes all streams into one composite. Lowest client bandwidth/CPU, highest server cost. Used for recording, PSTN bridges, legacy endpoints.</div></div>
+<h2>Quick tips &amp; gotchas</h2><ul class="tips"><li>getUserMedia/getDisplayMedia only work in a secure context — HTTPS or localhost. Deploying to plain HTTP silently breaks camera access.</li><li>Signaling is your responsibility — WebRTC defines no wire protocol for exchanging SDP/candidates. Any transport (WS/HTTP/SSE) works.</li><li>ICE candidates often arrive before setRemoteDescription resolves. Buffer them and flush after remote desc is set, or adopt the perfect-negotiation pattern.</li><li>Always deploy TURN for production. STUN alone fails behind symmetric/corporate NATs (~15-20% of users). Test with iceTransportPolicy: 'relay'.</li><li>Mesh topology does not scale — uplink is O(N) per peer. Switch to an SFU (mediasoup/LiveKit) beyond ~4 participants.</li><li>Handle simultaneous offers (glare) with perfect negotiation: one polite peer that rolls back, one impolite peer that ignores the incoming offer.</li><li>Use replaceTrack() to swap camera↔screen or change quality without a full renegotiation round-trip.</li><li>On teardown, call track.stop() on every track AND pc.close() — closing the connection alone leaves the camera/mic hardware active.</li></ul>
+</div></body></html>

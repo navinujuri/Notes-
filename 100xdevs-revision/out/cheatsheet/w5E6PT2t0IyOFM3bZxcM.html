@@ -1,0 +1,56 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Cheat Sheet · Frontend Deployments on AWS</title><style>:root{--bg:#fff;--fg:#1a1a1a;--muted:#6b7280;--line:#e5e7eb;--accent:#0d9488;--card:#f9fafb;--code:#f3f4f6;--codefg:#111}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1115;--fg:#e6e6e6;--muted:#9aa0aa;--line:#242833;--accent:#2dd4bf;--card:#171a21;--code:#0b0e13;--codefg:#e6e6e6}}
+*{box-sizing:border-box}body{margin:0;font:16px/1.6 system-ui,Segoe UI,sans-serif;background:var(--bg);color:var(--fg)}
+.wrap{max-width:860px;margin:0 auto;padding:1.2rem}
+a.back{color:var(--accent);text-decoration:none;font-size:.9rem}
+h1{font-size:1.5rem;margin:.6rem 0 .2rem}.sub{color:var(--muted);margin:0 0 1.4rem}
+h2{font-size:1.1rem;margin:1.6rem 0 .5rem;color:var(--accent)}
+.item{border:1px solid var(--line);border-radius:10px;background:var(--card);padding:.6rem .8rem;margin:.5rem 0}
+.item .l{font-weight:700}
+.item .n{color:var(--muted);font-size:.92rem;margin-top:.2rem}
+pre{margin:.45rem 0 0;background:var(--code);color:var(--codefg);border:1px solid var(--line);border-radius:8px;padding:.6rem .8rem;overflow-x:auto}
+code,pre{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:.86rem}
+.tips{border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:10px;background:var(--card);padding:.6rem 1rem}
+.tips li{margin:.35rem 0}
+@media print{.back{display:none}}</style></head><body><div class="wrap">
+<a class="back" href="../revision.html">← Back to revision index</a>
+<h1>Frontend Deployments on AWS — Cheat Sheet</h1>
+<p class="sub">Cohort 2.0 · 9 lessons · quick reference</p>
+<h2>1. Build the React bundle</h2><div class="item"><div class="l">Vite production build</div><pre><code>npm run build
+# outputs to ./dist  (index.html + assets/*.[hash].js|css)</code></pre><div class="n">Vite default output dir is dist/. Filenames are content-hashed for cache busting.</div></div><div class="item"><div class="l">Create React App build</div><pre><code>npm run build
+# outputs to ./build</code></pre><div class="n">CRA uses build/ not dist/. Know which one your tool emits before uploading.</div></div><div class="item"><div class="l">Set base path (S3 subfolder / non-root)</div><pre><code>// vite.config.js
+export default defineConfig({ base: '/' })  // '/' for root domain
+// package.json (CRA)
+"homepage": "https://cdn.example.com"</code></pre><div class="n">Wrong base = broken asset URLs (blank page, 404 on /assets/*). Keep '/' when served at domain root.</div></div><div class="item"><div class="l">Verify the bundle locally before upload</div><pre><code>npm run preview          # Vite serves dist/ on :4173
+npx serve -s build       # CRA / any static dir</code></pre><div class="n">-s = SPA mode: serves index.html for unknown routes so client routing works.</div></div><h2>2. CDN concepts (why CloudFront)</h2><div class="item"><div class="l">What a CDN does</div><div class="n">Caches static assets at edge PoPs near users -&gt; lower latency, less origin (S3) load, TLS termination + HTTP/2/3.</div></div><div class="item"><div class="l">Origin vs edge</div><div class="n">Origin = S3 bucket (source of truth). Edge = CloudFront cache copies. Cache miss -&gt; fetch from origin, then serve cached.</div></div><div class="item"><div class="l">Cache key &amp; TTL</div><div class="n">Object cached until TTL expires or you invalidate. Hashed asset filenames -&gt; cache forever; index.html -&gt; short/no cache.</div></div><div class="item"><div class="l">Why not just S3 website URL</div><div class="n">Raw S3 website endpoint = HTTP only, no custom SSL, single region latency. CloudFront adds HTTPS + global edge + custom domain.</div></div><h2>3. Create S3 bucket &amp; upload</h2><div class="item"><div class="l">Create bucket</div><pre><code>aws s3 mb s3://my-app-frontend --region us-east-1</code></pre><div class="n">Bucket names are globally unique. For CloudFront-only access, keep it private (don't enable public site).</div></div><div class="item"><div class="l">Enable static website hosting (public-endpoint path)</div><pre><code>aws s3 website s3://my-app-frontend \
+  --index-document index.html \
+  --error-document index.html</code></pre><div class="n">error-document = index.html makes SPA deep links work on the S3 website endpoint.</div></div><div class="item"><div class="l">Allow public read (only if using public S3 endpoint)</div><pre><code>aws s3api put-public-access-block --bucket my-app-frontend \
+  --public-access-block-configuration BlockPublicPolicy=false,RestrictPublicBuckets=false
+# then attach bucket policy allowing s3:GetObject on arn:aws:s3:::my-app-frontend/*</code></pre><div class="n">Skip this entirely if using CloudFront + OAC (bucket stays fully private — preferred).</div></div><div class="item"><div class="l">Upload the bundle (sync)</div><pre><code>aws s3 sync ./dist s3://my-app-frontend --delete</code></pre><div class="n">--delete removes stale objects (old hashed assets) so the bucket mirrors dist/ exactly.</div></div><div class="item"><div class="l">Cache headers per file type</div><pre><code># long cache for hashed assets
+aws s3 sync ./dist/assets s3://my-app-frontend/assets \
+  --cache-control "public,max-age=31536000,immutable"
+# no cache for the HTML entrypoint
+aws s3 cp ./dist/index.html s3://my-app-frontend/index.html \
+  --cache-control "no-cache"</code></pre><div class="n">index.html must NOT be long-cached or users get stale bundles pointing at deleted asset hashes.</div></div><h2>4. Access via S3 website endpoint</h2><div class="item"><div class="l">Website endpoint URL format</div><pre><code>http://&lt;bucket&gt;.s3-website-&lt;region&gt;.amazonaws.com
+# e.g. http://my-app-frontend.s3-website-us-east-1.amazonaws.com</code></pre><div class="n">HTTP only. Region-specific hostname. This is the quick smoke test before wiring CloudFront.</div></div><div class="item"><div class="l">Website vs REST endpoint (don't mix them up)</div><div class="n">s3-website-* = serves index/error docs, SPA-friendly. *.s3.amazonaws.com (REST) = returns XML/403 for a bare path, no index resolution.</div></div><div class="item"><div class="l">403 / 404 troubleshooting</div><div class="n">403 usually = block-public-access still on or missing bucket policy. 404 = object key wrong or index-document not set.</div></div><h2>5. Put CloudFront in front</h2><div class="item"><div class="l">Create distribution (recommended: OAC + private bucket)</div><div class="n">Origin = S3 REST domain (my-app-frontend.s3.us-east-1.amazonaws.com). Attach Origin Access Control (OAC) so only CloudFront can read the bucket.</div></div><div class="item"><div class="l">OAC bucket policy</div><pre><code>{
+  "Effect": "Allow",
+  "Principal": { "Service": "cloudfront.amazonaws.com" },
+  "Action": "s3:GetObject",
+  "Resource": "arn:aws:s3:::my-app-frontend/*",
+  "Condition": { "StringEquals":
+    { "AWS:SourceArn": "arn:aws:cloudfront::&lt;acct&gt;:distribution/&lt;dist-id&gt;" } }
+}</code></pre><div class="n">OAC replaces the deprecated OAI. Bucket public access can stay fully blocked.</div></div><div class="item"><div class="l">Default root object</div><pre><code>aws cloudfront ... --default-root-object index.html</code></pre><div class="n">Without this, hitting https://d123.cloudfront.net/ returns a 403/AccessDenied instead of your app.</div></div><div class="item"><div class="l">Redirect HTTP -&gt; HTTPS</div><div class="n">Set Viewer Protocol Policy = redirect-to-https on the default cache behavior.</div></div><div class="item"><div class="l">Invalidate cache after each deploy</div><pre><code>aws cloudfront create-invalidation \
+  --distribution-id E123ABC \
+  --paths "/index.html" "/"</code></pre><div class="n">Hashed assets need no invalidation. Only invalidate index.html (and /) — invalidations beyond the free 1000/mo cost money.</div></div><h2>6. Custom domain + HTTPS</h2><div class="item"><div class="l">Request ACM cert — MUST be us-east-1</div><pre><code>aws acm request-certificate \
+  --domain-name app.example.com \
+  --validation-method DNS \
+  --region us-east-1</code></pre><div class="n">CloudFront ONLY accepts certs from us-east-1 (N. Virginia), regardless of where your bucket lives. Validate via DNS CNAME.</div></div><div class="item"><div class="l">Attach domain to distribution</div><div class="n">Add app.example.com to CloudFront 'Alternate domain names (CNAMEs)' and select the ACM cert. Cert domain must cover the CNAME.</div></div><div class="item"><div class="l">Point DNS at CloudFront</div><pre><code># Route 53 (best: alias A/AAAA record)
+app.example.com  ALIAS -&gt; d123abc.cloudfront.net
+# External DNS provider
+app.example.com  CNAME -&gt; d123abc.cloudfront.net</code></pre><div class="n">Route 53 alias lets you point an apex/root domain; a plain CNAME cannot be used on the zone apex.</div></div><h2>7. Error pages &amp; SPA routing</h2><div class="item"><div class="l">The SPA deep-link problem</div><div class="n">/dashboard has no S3 object -&gt; S3 returns 403/404. React Router never loads. Fix: rewrite errors to index.html with 200.</div></div><div class="item"><div class="l">CloudFront custom error responses (OAC/REST origin)</div><pre><code>Error code:        403   (and 404)
+Response page path: /index.html
+HTTP response code: 200
+Error caching TTL:  0</code></pre><div class="n">With a private bucket + OAC, missing keys return 403 — map BOTH 403 and 404 to /index.html so client routing takes over.</div></div><div class="item"><div class="l">S3 website-endpoint alternative</div><pre><code>aws s3 website s3://my-app-frontend \
+  --index-document index.html --error-document index.html</code></pre><div class="n">If origin is the S3 *website* endpoint (not REST), error-document=index.html handles routing — but you lose OAC/private bucket.</div></div><div class="item"><div class="l">Real 404 page (optional)</div><div class="n">Ship a 404.html and only map genuine not-found routes to it inside your app; keep the catch-all -&gt; index.html for real routes.</div></div>
+<h2>Quick tips &amp; gotchas</h2><ul class="tips"><li>ACM certs for CloudFront MUST be in us-east-1 — a cert in your bucket's region will not appear in the distribution dropdown.</li><li>Never long-cache index.html. Cache hashed assets forever (immutable, 1yr) but serve HTML with no-cache so new deploys are picked up.</li><li>Prefer OAC over public buckets: keep Block Public Access ON, let only CloudFront read S3 via the OAC bucket policy.</li><li>Deploy = sync + invalidate. `aws s3 sync --delete` then `create-invalidation --paths /index.html` — forgetting the invalidation serves the old app.</li><li>Set --default-root-object index.html or the CloudFront root URL returns AccessDenied.</li><li>Map BOTH 403 and 404 CloudFront error responses to /index.html (HTTP 200) or React Router deep links break on refresh.</li><li>Match your build's `base` (Vite) / `homepage` (CRA) to the serving path — mismatch shows a blank page with 404s on /assets/*.</li><li>Use `aws s3 sync` not `cp` for deploys; --delete prunes old hashed files so the bucket exactly mirrors dist/.</li></ul>
+</div></body></html>

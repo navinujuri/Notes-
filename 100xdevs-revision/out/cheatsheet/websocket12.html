@@ -1,0 +1,118 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Cheat Sheet · Websockets</title><style>:root{--bg:#fff;--fg:#1a1a1a;--muted:#6b7280;--line:#e5e7eb;--accent:#0d9488;--card:#f9fafb;--code:#f3f4f6;--codefg:#111}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1115;--fg:#e6e6e6;--muted:#9aa0aa;--line:#242833;--accent:#2dd4bf;--card:#171a21;--code:#0b0e13;--codefg:#e6e6e6}}
+*{box-sizing:border-box}body{margin:0;font:16px/1.6 system-ui,Segoe UI,sans-serif;background:var(--bg);color:var(--fg)}
+.wrap{max-width:860px;margin:0 auto;padding:1.2rem}
+a.back{color:var(--accent);text-decoration:none;font-size:.9rem}
+h1{font-size:1.5rem;margin:.6rem 0 .2rem}.sub{color:var(--muted);margin:0 0 1.4rem}
+h2{font-size:1.1rem;margin:1.6rem 0 .5rem;color:var(--accent)}
+.item{border:1px solid var(--line);border-radius:10px;background:var(--card);padding:.6rem .8rem;margin:.5rem 0}
+.item .l{font-weight:700}
+.item .n{color:var(--muted);font-size:.92rem;margin-top:.2rem}
+pre{margin:.45rem 0 0;background:var(--code);color:var(--codefg);border:1px solid var(--line);border-radius:8px;padding:.6rem .8rem;overflow-x:auto}
+code,pre{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:.86rem}
+.tips{border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:10px;background:var(--card);padding:.6rem 1rem}
+.tips li{margin:.35rem 0}
+@media print{.back{display:none}}</style></head><body><div class="wrap">
+<a class="back" href="../revision.html">← Back to revision index</a>
+<h1>Websockets — Cheat Sheet</h1>
+<p class="sub">Cohort 3.0 · 5 lessons · quick reference</p>
+<h2>Protocol &amp; Concepts</h2><div class="item"><div class="l">What it is</div><div class="n">Full-duplex, persistent TCP connection over a single socket. Bidirectional — server can push without client polling.</div></div><div class="item"><div class="l">Handshake = HTTP Upgrade</div><pre><code>GET /chat HTTP/1.1
+Host: server.example.com
+Upgrade: websocket
+Connection: Upgrade
+Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==
+Sec-WebSocket-Version: 13
+
+// 101 Switching Protocols -&gt; connection becomes a ws</code></pre><div class="n">Starts as HTTP, then switches protocols. After 101, it's no longer HTTP.</div></div><div class="item"><div class="l">Schemes</div><pre><code>ws://  -&gt; plaintext (port 80)
+wss:// -&gt; TLS       (port 443)</code></pre><div class="n">Use wss:// in production. Browsers block ws:// from https:// pages (mixed content).</div></div><div class="item"><div class="l">vs HTTP polling / SSE</div><div class="n">Polling = repeated requests (wasteful). SSE = server-&gt;client only, text only, auto-reconnect. WS = both directions, binary + text.</div></div><div class="item"><div class="l">Frame types</div><div class="n">text (UTF-8), binary, ping, pong, close. Ping/pong are control frames for keepalive.</div></div><h2>Node.js Server Setup (ws)</h2><div class="item"><div class="l">Install</div><pre><code>npm install ws          # server lib
+npm i -D @types/ws      # TS types</code></pre></div><div class="item"><div class="l">Standalone server</div><pre><code>const { WebSocketServer } = require('ws');
+const wss = new WebSocketServer({ port: 8080 });
+
+wss.on('connection', (ws, req) =&gt; {
+  ws.send('welcome');
+  ws.on('message', (data, isBinary) =&gt; {
+    ws.send(isBinary ? data : `echo: ${data}`);
+  });
+  ws.on('close', (code, reason) =&gt; {});
+  ws.on('error', console.error);
+});</code></pre></div><div class="item"><div class="l">Attach to existing HTTP/Express server</div><pre><code>const http = require('http');
+const server = http.createServer(app);   // app = express()
+const wss = new WebSocketServer({ server });
+server.listen(3000);</code></pre><div class="n">Lets HTTP routes and WS share one port. wss listens for upgrade events automatically.</div></div><div class="item"><div class="l">noServer mode — auth on upgrade</div><pre><code>const wss = new WebSocketServer({ noServer: true });
+server.on('upgrade', (req, socket, head) =&gt; {
+  const token = new URL(req.url, 'http://x').searchParams.get('token');
+  if (!verify(token)) return socket.destroy();   // reject before handshake
+  wss.handleUpgrade(req, socket, head, (ws) =&gt; {
+    wss.emit('connection', ws, req);
+  });
+});</code></pre><div class="n">The ONLY reliable place to authenticate — browsers can't set custom headers on WebSocket(). Reject via socket.destroy().</div></div><h2>Server Patterns</h2><div class="item"><div class="l">Broadcast to all clients</div><pre><code>import { WebSocket } from 'ws';
+function broadcast(msg) {
+  wss.clients.forEach((c) =&gt; {
+    if (c.readyState === WebSocket.OPEN) c.send(msg);
+  });
+}</code></pre><div class="n">Always guard on readyState === OPEN (1); a closing socket throws on send.</div></div><div class="item"><div class="l">Rooms / channels (no built-in support)</div><pre><code>const rooms = new Map();  // roomId -&gt; Set&lt;ws&gt;
+function join(ws, id) {
+  if (!rooms.has(id)) rooms.set(id, new Set());
+  rooms.get(id).add(ws);
+  ws.on('close', () =&gt; rooms.get(id)?.delete(ws));
+}
+function toRoom(id, msg) {
+  rooms.get(id)?.forEach((c) =&gt;
+    c.readyState === 1 &amp;&amp; c.send(msg));
+}</code></pre><div class="n">ws has no rooms — you track membership yourself. socket.io gives rooms out of the box.</div></div><div class="item"><div class="l">Message framing (JSON convention)</div><pre><code>ws.on('message', (raw) =&gt; {
+  const { type, payload } = JSON.parse(raw);
+  switch (type) {
+    case 'chat': handleChat(payload); break;
+    case 'join': join(ws, payload.room); break;
+  }
+});
+ws.send(JSON.stringify({ type: 'ack', payload: {} }));</code></pre><div class="n">WS gives you a byte stream, not RPC. Define your own {type,payload} envelope. Wrap JSON.parse in try/catch.</div></div><div class="item"><div class="l">Heartbeat — detect dead connections</div><pre><code>function heartbeat() { this.isAlive = true; }
+wss.on('connection', (ws) =&gt; {
+  ws.isAlive = true;
+  ws.on('pong', heartbeat);
+});
+const iv = setInterval(() =&gt; {
+  wss.clients.forEach((ws) =&gt; {
+    if (!ws.isAlive) return ws.terminate(); // no pong -&gt; kill
+    ws.isAlive = false;
+    ws.ping();
+  });
+}, 30000);
+wss.on('close', () =&gt; clearInterval(iv));</code></pre><div class="n">TCP won't tell you a client vanished (dead router, closed laptop). Ping/pong is the only reliable liveness check. terminate() is immediate; close() is graceful.</div></div><div class="item"><div class="l">Backpressure check</div><pre><code>if (ws.bufferedAmount &lt; 1e6) ws.send(bigChunk);</code></pre><div class="n">bufferedAmount = bytes queued but not yet sent. Growing = slow client; drop or throttle.</div></div><h2>Client-side (Browser)</h2><div class="item"><div class="l">Connect &amp; handle events</div><pre><code>const ws = new WebSocket('wss://api.example.com/chat?token=abc');
+ws.onopen  = () =&gt; ws.send(JSON.stringify({ type: 'join' }));
+ws.onmessage = (e) =&gt; console.log(JSON.parse(e.data));
+ws.onerror = (e) =&gt; console.error('ws error', e);
+ws.onclose = (e) =&gt; console.log(e.code, e.reason, e.wasClean);</code></pre><div class="n">No custom headers allowed on the constructor — pass auth via query string or subprotocol, then validate on upgrade.</div></div><div class="item"><div class="l">readyState constants</div><pre><code>WebSocket.CONNECTING // 0
+WebSocket.OPEN       // 1  &lt;- only state where send() is safe
+WebSocket.CLOSING    // 2
+WebSocket.CLOSED     // 3
+if (ws.readyState === WebSocket.OPEN) ws.send(data);</code></pre></div><div class="item"><div class="l">Send / receive binary</div><pre><code>ws.binaryType = 'arraybuffer';   // default 'blob'
+ws.send(new Uint8Array([1,2,3]).buffer);
+ws.send(JSON.stringify({ a: 1 }));</code></pre><div class="n">send() accepts string | ArrayBuffer | Blob | TypedArray.</div></div><div class="item"><div class="l">Close cleanly</div><pre><code>ws.close(1000, 'user left');  // 1000 = normal</code></pre><div class="n">Codes: 1000 normal, 1001 going away, 1006 abnormal (no close frame), 1011 server error. Custom app codes: 4000-4999.</div></div><div class="item"><div class="l">Subprotocol negotiation</div><pre><code>const ws = new WebSocket(url, ['graphql-ws', 'json']);
+// server: new WebSocketServer({ handleProtocols: () =&gt; 'graphql-ws' })
+ws.protocol; // chosen one</code></pre></div><h2>Resilience (client reconnect)</h2><div class="item"><div class="l">Auto-reconnect with exponential backoff</div><pre><code>let retries = 0;
+function connect() {
+  const ws = new WebSocket(URL);
+  ws.onopen = () =&gt; { retries = 0; };
+  ws.onclose = () =&gt; {
+    const delay = Math.min(1000 * 2 ** retries++, 30000);
+    setTimeout(connect, delay + Math.random() * 1000); // + jitter
+  };
+}
+connect();</code></pre><div class="n">Browsers do NOT auto-reconnect WebSockets (unlike EventSource/SSE). Add jitter to avoid thundering-herd reconnects after a server restart.</div></div><div class="item"><div class="l">App-level heartbeat from client</div><pre><code>setInterval(() =&gt; ws.readyState === 1 &amp;&amp;
+  ws.send(JSON.stringify({ type: 'ping' })), 25000);</code></pre><div class="n">Proxies/LBs kill idle connections (~60s). Keep traffic flowing under the idle timeout.</div></div><div class="item"><div class="l">Resume state after reconnect</div><div class="n">Reconnection = fresh connection. Re-auth, re-join rooms, and request a delta since lastSeenId (server should support message replay/cursor).</div></div><h2>Scaling WS Servers</h2><div class="item"><div class="l">Core problem: connections are stateful</div><div class="n">Each socket is pinned to ONE process. Client on server A can't be reached by server B — unlike stateless HTTP behind a round-robin LB.</div></div><div class="item"><div class="l">Sticky sessions at the load balancer</div><pre><code># nginx: hash client to a fixed backend
+upstream ws { ip_hash; server a:8080; server b:8080; }</code></pre><div class="n">Keeps a client pinned to its process. Needed if any per-process in-memory state exists. L4 (TCP) LBs also work well for WS.</div></div><div class="item"><div class="l">nginx proxy — required upgrade headers</div><pre><code>location /ws {
+  proxy_pass http://ws;
+  proxy_http_version 1.1;
+  proxy_set_header Upgrade $http_upgrade;
+  proxy_set_header Connection "upgrade";
+  proxy_read_timeout 3600s;   # else idle conns dropped
+}</code></pre><div class="n">Without Upgrade/Connection headers the handshake fails (101 never happens).</div></div><div class="item"><div class="l">Pub/Sub backplane for cross-node broadcast</div><pre><code>const sub = redis.duplicate(); await sub.subscribe('chat');
+sub.on('message', (ch, msg) =&gt; broadcastLocal(msg));
+// on receive from a client:
+redis.publish('chat', msg);   // fan-out to ALL server instances</code></pre><div class="n">The key scaling pattern: each node publishes to Redis; every node's subscriber pushes to ITS local clients. Now server A can reach clients on server B.</div></div><div class="item"><div class="l">socket.io + Redis adapter</div><pre><code>const { createAdapter } = require('@socket.io/redis-adapter');
+io.adapter(createAdapter(pubClient, subClient));
+io.to('room1').emit('msg', data); // works across all nodes</code></pre><div class="n">socket.io handles rooms, reconnection, fallbacks, and cross-node fan-out for you. Trade-off: heavier + custom protocol (not raw WS).</div></div><div class="item"><div class="l">Capacity &amp; tuning</div><pre><code># raise open file descriptor limit (each conn = 1 fd)
+ulimit -n 100000</code></pre><div class="n">Bottleneck is memory/fds per connection, not CPU. ~tens of thousands of idle conns per node. Offload TLS to the LB; scale horizontally + backplane, not vertically.</div></div>
+<h2>Quick tips &amp; gotchas</h2><ul class="tips"><li>send() throws if readyState !== OPEN. Always guard with `ws.readyState === WebSocket.OPEN` (=== 1) before sending.</li><li>Authenticate during the HTTP upgrade (noServer mode / server 'upgrade' event) — browsers can't set custom headers, so pass tokens via query string or subprotocol and validate BEFORE handshake.</li><li>Browsers never auto-reconnect a WebSocket. You must implement reconnect with exponential backoff + jitter yourself.</li><li>TCP can't detect a silently-dead peer. Implement ping/pong heartbeat + terminate() on missed pong, or you leak zombie connections.</li><li>Proxies/LBs drop idle connections (~60s default). Send app-level or protocol pings under that timeout, and raise proxy_read_timeout.</li><li>Horizontal scaling needs a Redis (or similar) pub/sub backplane — connections are pinned to one process, so a plain round-robin LB can't route pushes across nodes.</li><li>Use wss:// (TLS) always in prod; ws:// from an https page is blocked as mixed content. Terminate TLS at the LB to save app-server CPU.</li><li>WS gives you raw bytes, not RPC — define a {type, payload} JSON envelope and wrap JSON.parse in try/catch to survive malformed frames.</li></ul>
+</div></body></html>

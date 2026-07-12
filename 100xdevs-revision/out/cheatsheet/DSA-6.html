@@ -1,0 +1,95 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Cheat Sheet · C++ Part 2</title><style>:root{--bg:#fff;--fg:#1a1a1a;--muted:#6b7280;--line:#e5e7eb;--accent:#0d9488;--card:#f9fafb;--code:#f3f4f6;--codefg:#111}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1115;--fg:#e6e6e6;--muted:#9aa0aa;--line:#242833;--accent:#2dd4bf;--card:#171a21;--code:#0b0e13;--codefg:#e6e6e6}}
+*{box-sizing:border-box}body{margin:0;font:16px/1.6 system-ui,Segoe UI,sans-serif;background:var(--bg);color:var(--fg)}
+.wrap{max-width:860px;margin:0 auto;padding:1.2rem}
+a.back{color:var(--accent);text-decoration:none;font-size:.9rem}
+h1{font-size:1.5rem;margin:.6rem 0 .2rem}.sub{color:var(--muted);margin:0 0 1.4rem}
+h2{font-size:1.1rem;margin:1.6rem 0 .5rem;color:var(--accent)}
+.item{border:1px solid var(--line);border-radius:10px;background:var(--card);padding:.6rem .8rem;margin:.5rem 0}
+.item .l{font-weight:700}
+.item .n{color:var(--muted);font-size:.92rem;margin-top:.2rem}
+pre{margin:.45rem 0 0;background:var(--code);color:var(--codefg);border:1px solid var(--line);border-radius:8px;padding:.6rem .8rem;overflow-x:auto}
+code,pre{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:.86rem}
+.tips{border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:10px;background:var(--card);padding:.6rem 1rem}
+.tips li{margin:.35rem 0}
+@media print{.back{display:none}}</style></head><body><div class="wrap">
+<a class="back" href="../revision.html">← Back to revision index</a>
+<h1>C++ Part 2 — Cheat Sheet</h1>
+<p class="sub">Cohort 2.0 · 5 lessons · quick reference</p>
+<h2>Strings</h2><div class="item"><div class="l">std::string basics (prefer over C-strings)</div><pre><code>#include &lt;string&gt;
+std::string s = "hello";
+s += " world";        // concat
+s.size();  s.length(); // count
+s.empty();             // bool
+s[0]; s.at(0);         // at() bounds-checks</code></pre><div class="n">at() throws std::out_of_range; operator[] is UB out of bounds.</div></div><div class="item"><div class="l">Common operations</div><pre><code>s.substr(0, 5);            // pos,len
+s.find("lo");             // idx or std::string::npos
+s.replace(0, 5, "bye");
+s.append("x"); s.push_back('!');
+s.c_str();                // const char* (for C APIs)
+s.compare(t);             // &lt;0 ==0 &gt;0</code></pre><div class="n">find returns std::string::npos (not -1) when not found.</div></div><div class="item"><div class="l">Iterate / range-for</div><pre><code>for (char c : s) std::cout &lt;&lt; c;
+for (char&amp; c : s) c = toupper(c);   // &amp; to mutate</code></pre></div><div class="item"><div class="l">Number &lt;-&gt; string conversion</div><pre><code>std::string n = std::to_string(42);
+int x   = std::stoi("42");
+double d = std::stod("3.14");
+long l   = std::stol("99");</code></pre><div class="n">stoi throws std::invalid_argument / std::out_of_range.</div></div><div class="item"><div class="l">C-string (char array) — legacy</div><pre><code>char buf[] = "hi";        // null-terminated: {'h','i','\0'}
+#include &lt;cstring&gt;
+strlen(buf); strcpy(d,s); strcmp(a,b);</code></pre><div class="n">Always leave room for the trailing '\0'; buffer overruns are UB.</div></div><div class="item"><div class="l">Read input</div><pre><code>std::cin &gt;&gt; s;              // one token (stops at whitespace)
+std::getline(std::cin, s);  // whole line</code></pre><div class="n">Mixing &gt;&gt; then getline: flush stray newline with std::cin.ignore().</div></div><h2>Pointers</h2><div class="item"><div class="l">Declare, address-of, dereference</div><pre><code>int x = 10;
+int* p = &amp;x;    // p holds address of x
+*p = 20;        // x is now 20
+std::cout &lt;&lt; p  // prints address
+          &lt;&lt; *p; // prints value</code></pre><div class="n">*p in a declaration = pointer type; *p in an expression = dereference.</div></div><div class="item"><div class="l">Null pointer</div><pre><code>int* p = nullptr;   // C++11, prefer over NULL/0
+if (p) { /* safe */ }</code></pre><div class="n">Dereferencing nullptr is UB — always check before *p.</div></div><div class="item"><div class="l">Pointer arithmetic / arrays</div><pre><code>int a[3] = {1,2,3};
+int* p = a;      // decays to &amp;a[0]
+*(p+1);          // == a[1] == 2
+p++;             // next element (scaled by sizeof(int))</code></pre><div class="n">Array name decays to pointer; sizeof(a) != sizeof(p).</div></div><div class="item"><div class="l">const and pointers (read right-to-left)</div><pre><code>const int* p;    // ptr to const int (can't change *p)
+int* const p;    // const ptr (can't change p)
+const int* const p; // both fixed</code></pre></div><div class="item"><div class="l">Reference vs pointer</div><pre><code>int&amp; r = x;   // alias, can't be null, can't rebind
+int* p = &amp;x;  // can be null, reassignable</code></pre><div class="n">Prefer references for params/returns when null isn't meaningful.</div></div><div class="item"><div class="l">Pointer to pointer / member access</div><pre><code>int** pp = &amp;p;
+obj-&gt;method();    // (*obj).method()
+ptr-&gt;field;       // deref + member</code></pre></div><h2>Dynamic Allocation</h2><div class="item"><div class="l">new / delete (single object)</div><pre><code>int* p = new int(42);   // heap, initialized to 42
+delete p;               // free
+p = nullptr;            // avoid dangling</code></pre><div class="n">Every new needs exactly one matching delete or it leaks.</div></div><div class="item"><div class="l">new[] / delete[] (arrays)</div><pre><code>int* arr = new int[n];      // uninitialized
+int* z   = new int[n]();    // zero-initialized
+delete[] arr;               // MUST use delete[]</code></pre><div class="n">Mismatching new[] with delete (no brackets) is UB.</div></div><div class="item"><div class="l">Smart pointers — prefer these (RAII)</div><pre><code>#include &lt;memory&gt;
+auto u = std::make_unique&lt;int&gt;(42);   // sole owner
+auto s = std::make_shared&lt;int&gt;(42);   // ref-counted
+// auto-freed at scope end; no manual delete</code></pre><div class="n">unique_ptr is move-only; use shared_ptr only when ownership is shared.</div></div><div class="item"><div class="l">unique_ptr for arrays / release</div><pre><code>auto a = std::make_unique&lt;int[]&gt;(n);
+a[0] = 1;
+int* raw = u.get();     // borrow, don't delete
+u.reset();              // free early</code></pre></div><div class="item"><div class="l">Dangling pointer trap</div><pre><code>int* p = new int(5);
+delete p;
+*p = 10;   // UB: use-after-free</code></pre><div class="n">Set to nullptr after delete; don't return address of local variable.</div></div><h2>Function Call Arguments</h2><div class="item"><div class="l">Pass by value (copy)</div><pre><code>void f(int x)  { x = 5; }   // caller unchanged
+void g(std::string s);      // copies whole string!</code></pre><div class="n">Cheap for primitives; expensive for big objects — copies each call.</div></div><div class="item"><div class="l">Pass by reference (mutate caller)</div><pre><code>void inc(int&amp; x) { x++; }
+int a = 1; inc(a);   // a == 2
+void swap(int&amp; a, int&amp; b);</code></pre><div class="n">No copy; caller's variable is modified directly.</div></div><div class="item"><div class="l">Pass by const reference (read-only, no copy)</div><pre><code>void print(const std::string&amp; s);  // idiomatic for large objs
+double sum(const std::vector&lt;int&gt;&amp; v);</code></pre><div class="n">Default for non-trivial types you don't need to modify.</div></div><div class="item"><div class="l">Pass by pointer</div><pre><code>void inc(int* x) { if (x) (*x)++; }
+int a = 1; inc(&amp;a);</code></pre><div class="n">Use when arg is optional (can be nullptr) or for C-style APIs.</div></div><div class="item"><div class="l">Default arguments</div><pre><code>int pow(int b, int e = 2);
+pow(3);      // 9
+pow(3, 3);   // 27</code></pre><div class="n">Defaults go in the declaration only, not the definition. Must be trailing.</div></div><div class="item"><div class="l">Arrays decay to pointers</div><pre><code>void f(int a[], int n);  // a is really int*
+// sizeof(a) inside f == sizeof(int*), not the array!</code></pre><div class="n">Pass length separately, or use std::vector / std::span (C++20).</div></div><h2>Classes &amp; Objects</h2><div class="item"><div class="l">Basic class + access specifiers</div><pre><code>class Point {
+public:
+    int x, y;                 // accessible everywhere
+    int getX() const;         // const = doesn't modify
+private:
+    int secret;               // class-only (default)
+};</code></pre><div class="n">class members default to private; struct defaults to public.</div></div><div class="item"><div class="l">Constructor / member init list</div><pre><code>class Point {
+    int x, y;
+public:
+    Point() : x(0), y(0) {}          // default
+    Point(int a, int b) : x(a), y(b) {}
+};
+Point p(1, 2);
+Point q{3, 4};   // brace init</code></pre><div class="n">Prefer init lists over assignment in body; required for const/reference members.</div></div><div class="item"><div class="l">Destructor</div><pre><code>class Buf {
+    int* data;
+public:
+    Buf(int n) : data(new int[n]) {}
+    ~Buf() { delete[] data; }   // cleanup
+};</code></pre><div class="n">Called automatically at scope end / on delete. One per class.</div></div><div class="item"><div class="l">Methods: definition &amp; const</div><pre><code>int Point::getX() const { return x; }  // out-of-line
+void setX(int v) { x = v; }            // inline</code></pre><div class="n">const methods can be called on const objects; mark getters const.</div></div><div class="item"><div class="l">this pointer &amp; static members</div><pre><code>void Point::setX(int x) { this-&gt;x = x; }  // disambiguate
+static int count;      // shared across all instances
+static int get() { return count; }        // no this</code></pre><div class="n">static members defined once outside class: int Point::count = 0;</div></div><div class="item"><div class="l">Object on stack vs heap</div><pre><code>Point p(1,2);              // stack, auto-destroyed
+Point* h = new Point(1,2); // heap
+h-&gt;getX();
+delete h;                  // manual (or use unique_ptr)</code></pre></div>
+<h2>Quick tips &amp; gotchas</h2><ul class="tips"><li>Prefer std::string over char[] and smart pointers (make_unique/make_shared) over raw new/delete — RAII frees automatically and avoids leaks.</li><li>Every new pairs with delete, every new[] with delete[]. Mismatch = UB. Better: don't call them directly.</li><li>std::string::find returns std::string::npos, not -1, when the substring is missing.</li><li>Pass large objects by const reference; primitives by value; use pointer/reference only when you must mutate the caller's variable.</li><li>After delete, set the pointer to nullptr to avoid dangling use-after-free; never dereference nullptr.</li><li>Mark getters and non-mutating methods const so they work on const objects; use member init lists in constructors (mandatory for const/reference members).</li><li>Arrays decay to pointers when passed to functions — sizeof gives the pointer size, so pass the length explicitly.</li><li>class defaults to private access, struct defaults to public — otherwise identical in C++.</li></ul>
+</div></body></html>

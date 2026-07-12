@@ -1,0 +1,115 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Cheat Sheet · Upgradable staking contract</title><style>:root{--bg:#fff;--fg:#1a1a1a;--muted:#6b7280;--line:#e5e7eb;--accent:#0d9488;--card:#f9fafb;--code:#f3f4f6;--codefg:#111}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1115;--fg:#e6e6e6;--muted:#9aa0aa;--line:#242833;--accent:#2dd4bf;--card:#171a21;--code:#0b0e13;--codefg:#e6e6e6}}
+*{box-sizing:border-box}body{margin:0;font:16px/1.6 system-ui,Segoe UI,sans-serif;background:var(--bg);color:var(--fg)}
+.wrap{max-width:860px;margin:0 auto;padding:1.2rem}
+a.back{color:var(--accent);text-decoration:none;font-size:.9rem}
+h1{font-size:1.5rem;margin:.6rem 0 .2rem}.sub{color:var(--muted);margin:0 0 1.4rem}
+h2{font-size:1.1rem;margin:1.6rem 0 .5rem;color:var(--accent)}
+.item{border:1px solid var(--line);border-radius:10px;background:var(--card);padding:.6rem .8rem;margin:.5rem 0}
+.item .l{font-weight:700}
+.item .n{color:var(--muted);font-size:.92rem;margin-top:.2rem}
+pre{margin:.45rem 0 0;background:var(--code);color:var(--codefg);border:1px solid var(--line);border-radius:8px;padding:.6rem .8rem;overflow-x:auto}
+code,pre{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:.86rem}
+.tips{border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:10px;background:var(--card);padding:.6rem 1rem}
+.tips li{margin:.35rem 0}
+@media print{.back{display:none}}</style></head><body><div class="wrap">
+<a class="back" href="../revision.html">← Back to revision index</a>
+<h1>Upgradable staking contract — Cheat Sheet</h1>
+<p class="sub">Cohort 3.0 · 6 lessons · quick reference</p>
+<h2>Setup &amp; tooling</h2><div class="item"><div class="l">Install OZ upgradeable libs + Hardhat plugin</div><pre><code>npm i @openzeppelin/contracts-upgradeable @openzeppelin/contracts
+npm i -D @openzeppelin/hardhat-upgrades hardhat ethers</code></pre><div class="n">Use *-upgradeable for logic (initializers, __gap); plain @openzeppelin/contracts for interfaces/proxies.</div></div><div class="item"><div class="l">Enable plugin in hardhat.config</div><pre><code>require("@openzeppelin/hardhat-upgrades");
+// exposes ethers + upgrades: deployProxy/upgradeProxy/validateUpgrade</code></pre></div><div class="item"><div class="l">Foundry alternative</div><pre><code>forge install OpenZeppelin/openzeppelin-contracts-upgradeable
+forge install OpenZeppelin/openzeppelin-foundry-upgrades
+# foundry.toml: ffi = true, ast = true, build_info = true</code></pre></div><div class="item"><div class="l">Core imports (UUPS staking)</div><pre><code>import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";</code></pre></div><h2>The problem (pre-requisites: EVM immutability)</h2><div class="item"><div class="l">Deployed bytecode is frozen</div><div class="n">You cannot patch code at an address. Each contract's state (staked balances, reward index) lives at its own address — there is no in-place edit.</div></div><div class="item"><div class="l">Naive redeploy breaks everything</div><div class="n">New address ⇒ every UI/integration/token allowance points at the old contract, and you'd have to migrate every staker's balance (gas-heavy, needs downtime). Registry/lookup adds a hop and still doesn't move state.</div></div><div class="item"><div class="l">delegatecall = run their code, touch MY storage</div><pre><code>// logic code runs, but writes to caller's (proxy's) storage;
+// msg.sender &amp; msg.value are preserved from the original call
+(bool ok, ) = impl.delegatecall(
+    abi.encodeWithSignature("stake(uint256)", amt)
+);
+// vs. plain call(): impl's OWN storage changes, msg.sender = proxy</code></pre><div class="n">This is the primitive the whole pattern rests on. Mixing up call vs delegatecall is the #1 conceptual error.</div></div><div class="item"><div class="l">Why a constructor cannot initialize a proxy</div><div class="n">A constructor runs once at IMPLEMENTATION deploy, against the implementation's storage. The proxy has separate storage and never sees it ⇒ proxy state stays zero. Fix: an initialize() called via delegatecall.</div></div><h2>Initialize the staking contract (initializer, not constructor)</h2><div class="item"><div class="l">UUPS-upgradeable StakingV1 skeleton</div><pre><code>contract StakingV1 is Initializable, OwnableUpgradeable, UUPSUpgradeable {
+    using SafeERC20 for IERC20;
+    IERC20 public stakingToken;
+    mapping(address =&gt; uint256) public staked;
+    uint256 public rewardRate;
+
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() { _disableInitializers(); }   // lock the impl itself
+
+    function initialize(address token, uint256 rate) public initializer {
+        __Ownable_init(msg.sender);      // OZ v5: takes initialOwner
+        __UUPSUpgradeable_init();
+        stakingToken = IERC20(token);
+        rewardRate   = rate;
+    }
+
+    function _authorizeUpgrade(address) internal override onlyOwner {}
+    uint256[50] private __gap;           // reserve slots for future vars
+}</code></pre><div class="n">`initializer` modifier lets the body run exactly once. Every parent must be init'd via its __X_init() (no constructors).</div></div><div class="item"><div class="l">Stake / unstake logic</div><pre><code>function stake(uint256 amt) external {
+    staked[msg.sender] += amt;
+    stakingToken.safeTransferFrom(msg.sender, address(this), amt);
+}
+function unstake(uint256 amt) external {
+    staked[msg.sender] -= amt;               // reverts on underflow (0.8+)
+    stakingToken.safeTransfer(msg.sender, amt);
+}</code></pre><div class="n">User must approve() the PROXY address first. Effects-before-interaction ordering guards reentrancy.</div></div><div class="item"><div class="l">initializer vs onlyInitializing vs reinitializer</div><pre><code>modifier initializer          // top-level init, runs once (version 1)
+function __Ownable_init() onlyInitializing  // parent init, callable during init
+modifier reinitializer(uint64 v)  // one-time migration for version v</code></pre><div class="n">Parent __X_init() functions use onlyInitializing so they can be chained from your initializer without tripping the once-guard.</div></div><h2>Proxy contract internals</h2><div class="item"><div class="l">Minimal ERC-1967 proxy (fallback + delegatecall)</div><pre><code>contract Proxy {
+    // keccak256('eip1967.proxy.implementation') - 1
+    bytes32 constant SLOT =
+      0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc;
+    constructor(address impl){ assembly { sstore(SLOT, impl) } }
+
+    fallback() external payable {
+        assembly {
+            let impl := sload(SLOT)
+            calldatacopy(0, 0, calldatasize())
+            let ok := delegatecall(gas(), impl, 0, calldatasize(), 0, 0)
+            returndatacopy(0, 0, returndatasize())
+            switch ok
+            case 0 { revert(0, returndatasize()) }
+            default { return(0, returndatasize()) }
+        }
+    }
+    receive() external payable {}
+}</code></pre><div class="n">fallback catches any selector the proxy doesn't define and forwards raw calldata — that's how one proxy exposes the whole impl ABI, including v2 functions.</div></div><div class="item"><div class="l">ERC-1967 reserved slots</div><pre><code>impl   = keccak256('eip1967.proxy.implementation') - 1
+admin  = keccak256('eip1967.proxy.admin')          - 1
+beacon = keccak256('eip1967.proxy.beacon')         - 1</code></pre><div class="n">Pseudo-random slots keep proxy bookkeeping from colliding with the impl's sequential slots 0,1,2... Also what lets Etherscan auto-detect proxies.</div></div><div class="item"><div class="l">Upgrade = repoint the slot (guarded)</div><pre><code>function upgradeToAndCall(address newImpl, bytes memory data)
+    external onlyOwner {
+    assembly { sstore(SLOT, newImpl) }
+    if (data.length &gt; 0) newImpl.delegatecall(data);  // run migration
+}</code></pre><div class="n">In UUPS this lives in the IMPLEMENTATION (via _authorizeUpgrade); in Transparent it lives in the proxy/ProxyAdmin.</div></div><h2>Deploy &amp; upgrade (OZ Upgrades plugin)</h2><div class="item"><div class="l">Deploy behind proxy</div><pre><code>const F = await ethers.getContractFactory("StakingV1");
+const proxy = await upgrades.deployProxy(
+    F, [tokenAddr, rate],
+    { kind: "uups", initializer: "initialize" }
+);
+await proxy.waitForDeployment();
+console.log("proxy:", await proxy.getAddress());</code></pre><div class="n">Deploys impl + proxy and calls initialize() atomically. kind: "transparent" | "uups" | "beacon".</div></div><div class="item"><div class="l">Upgrade + run migration atomically</div><pre><code>const V2 = await ethers.getContractFactory("StakingV2");
+await upgrades.upgradeProxy(proxyAddr, V2, {
+    call: { fn: "reinitialize", args: [newRate] }
+});</code></pre><div class="n">Proxy address, balances and approvals are unchanged. reinitialize runs once via upgradeToAndCall.</div></div><div class="item"><div class="l">Validate layout before shipping (dry run)</div><pre><code>await upgrades.validateUpgrade(proxyAddr, V2);   // throws on incompatible layout
+await upgrades.forceImport(proxyAddr, F);        // adopt an existing proxy</code></pre></div><div class="item"><div class="l">Foundry equivalent</div><pre><code>import {Upgrades} from "openzeppelin-foundry-upgrades/Upgrades.sol";
+address p = Upgrades.deployUUPSProxy(
+    "StakingV1.sol",
+    abi.encodeCall(StakingV1.initialize, (token, rate)));
+Upgrades.upgradeProxy(p, "StakingV2.sol",
+    abi.encodeCall(StakingV2.reinitialize, (newRate)));</code></pre></div><div class="item"><div class="l">Beacon (fleet of identical vaults)</div><pre><code>const beacon = await upgrades.deployBeacon(F);
+const v = await upgrades.deployBeaconProxy(beacon, F, args);
+await upgrades.upgradeBeacon(beacon, V2);  // upgrades ALL proxies at once</code></pre></div><h2>Storage layout &amp; migration (fixing the problem)</h2><div class="item"><div class="l">Golden rule: append-only</div><div class="n">Never reorder, remove, or change the type of an existing variable — slot N must mean the same thing in every version, or you silently corrupt balances (storage collision).</div></div><div class="item"><div class="l">Add v2 vars AFTER existing ones (consume the gap)</div><pre><code>contract StakingV2 is StakingV1 {
+    uint256 public rewardPerBlock;   // appended = safe
+    // WRONG: inserting before stakingToken shifts every later slot
+    uint256[49] private __gap;        // shrink gap by #vars added
+}</code></pre></div><div class="item"><div class="l">One-time data migration on upgrade</div><pre><code>function reinitialize(uint256 newRate) public reinitializer(2) {
+    rewardRate = newRate;   // runs exactly once, for version 2
+}</code></pre><div class="n">reinitializer(n) must strictly increase across versions; called via upgradeToAndCall so upgrade + migration land in one tx.</div></div><div class="item"><div class="l">Namespaced storage (ERC-7201) to isolate layout</div><pre><code>/// @custom:storage-location erc7201:staking.main
+struct MainStorage { mapping(address=&gt;uint256) staked; uint256 rate; }</code></pre><div class="n">Modern alternative to __gap: puts all state under one hashed slot so inheritance order can't collide. Used by OZ v5 internals.</div></div><h2>Security &amp; production hardening (moving further)</h2><div class="item"><div class="l">Disable initializers on the implementation</div><pre><code>constructor() { _disableInitializers(); }</code></pre><div class="n">Blocks the uninitialized-impl takeover (Parity multisig freeze): otherwise an attacker calls initialize() on the impl, becomes owner, and can selfdestruct/brick it.</div></div><div class="item"><div class="l">Guard the upgrade path (UUPS)</div><pre><code>function _authorizeUpgrade(address newImpl)
+    internal override onlyOwner {}</code></pre><div class="n">If a new impl OMITS this / UUPSUpgradeable, upgradeability is permanently bricked. Always re-inherit UUPSUpgradeable and test the upgrade on a fork.</div></div><div class="item"><div class="l">Upgrade key = drain key ⇒ multisig + timelock</div><pre><code>// transfer proxy admin / owner to a Gnosis Safe behind a TimelockController
+await proxy.transferOwnership(timelockAddr);</code></pre><div class="n">Whoever can upgrade can swap in malicious logic and drain all staked funds. Timelock gives users a window to exit before a live upgrade.</div></div><div class="item"><div class="l">Transparent vs UUPS vs Beacon</div><pre><code>Transparent: upgrade logic in proxy, routes by caller (admin vs user)
+             + no bricking  - extra SLOAD/branch gas, needs ProxyAdmin
+UUPS:        upgrade logic in impl (upgradeTo + _authorizeUpgrade)
+             + cheapest/lightest proxy  - bricks if impl omits it
+Beacon:      N proxies -&gt; 1 beacon impl slot
+             + upgrade whole fleet at once  - extra call/gas, SPOF</code></pre><div class="n">UUPS is the modern default. Beacon for factory-minted fleets (thousands of identical vaults).</div></div>
+<h2>Quick tips &amp; gotchas</h2><ul class="tips"><li>Constructors run against the IMPLEMENTATION's storage, so proxy state stays zero — always use an initialize() + `initializer` modifier and chain parents via __X_init().</li><li>Storage is append-only forever: never reorder/insert/retype existing vars. Reserve `uint256[50] __gap;` (or use ERC-7201 namespaced storage) and shrink the gap by the count of vars you add.</li><li>Call `_disableInitializers()` in the implementation's constructor — an uninitialized impl is the Parity-style takeover that permanently bricks the logic.</li><li>UUPS can be bricked: if a new implementation forgets to inherit UUPSUpgradeable / _authorizeUpgrade there's no upgrade path left. Test the upgrade itself on a mainnet fork.</li><li>Users must approve() the PROXY address, not the implementation — all funds and balances live in the proxy's storage.</li><li>The upgrade key can drain everything. Put it behind a multisig + TimelockController, never an EOA.</li><li>Run `upgrades.validateUpgrade()` (or the Foundry safety check) before every deploy to catch layout-incompatible changes.</li><li>Use reinitializer(n) with a strictly increasing version for one-time migrations, and call it atomically via upgradeToAndCall so upgrade + migration are one tx.</li></ul>
+</div></body></html>

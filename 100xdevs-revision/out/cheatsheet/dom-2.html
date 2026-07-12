@@ -1,0 +1,78 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Cheat Sheet · DOM Part 2</title><style>:root{--bg:#fff;--fg:#1a1a1a;--muted:#6b7280;--line:#e5e7eb;--accent:#0d9488;--card:#f9fafb;--code:#f3f4f6;--codefg:#111}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1115;--fg:#e6e6e6;--muted:#9aa0aa;--line:#242833;--accent:#2dd4bf;--card:#171a21;--code:#0b0e13;--codefg:#e6e6e6}}
+*{box-sizing:border-box}body{margin:0;font:16px/1.6 system-ui,Segoe UI,sans-serif;background:var(--bg);color:var(--fg)}
+.wrap{max-width:860px;margin:0 auto;padding:1.2rem}
+a.back{color:var(--accent);text-decoration:none;font-size:.9rem}
+h1{font-size:1.5rem;margin:.6rem 0 .2rem}.sub{color:var(--muted);margin:0 0 1.4rem}
+h2{font-size:1.1rem;margin:1.6rem 0 .5rem;color:var(--accent)}
+.item{border:1px solid var(--line);border-radius:10px;background:var(--card);padding:.6rem .8rem;margin:.5rem 0}
+.item .l{font-weight:700}
+.item .n{color:var(--muted);font-size:.92rem;margin-top:.2rem}
+pre{margin:.45rem 0 0;background:var(--code);color:var(--codefg);border:1px solid var(--line);border-radius:8px;padding:.6rem .8rem;overflow-x:auto}
+code,pre{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:.86rem}
+.tips{border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:10px;background:var(--card);padding:.6rem 1rem}
+.tips li{margin:.35rem 0}
+@media print{.back{display:none}}</style></head><body><div class="wrap">
+<a class="back" href="../revision.html">← Back to revision index</a>
+<h1>DOM Part 2 — Cheat Sheet</h1>
+<p class="sub">Cohort 3.0 · 8 lessons · quick reference</p>
+<h2>Create &amp; Insert Elements</h2><div class="item"><div class="l">Create a node</div><pre><code>const div = document.createElement("div");</code></pre></div><div class="item"><div class="l">Set visible text (safe, no HTML parsing)</div><pre><code>div.textContent = todo.title;</code></pre><div class="n">Prefer over innerHTML for user input — avoids XSS injection.</div></div><div class="item"><div class="l">Set inner HTML (parses tags)</div><pre><code>el.innerHTML = `&lt;span&gt;${title}&lt;/span&gt;`;</code></pre><div class="n">Unsafe with untrusted data; slower on repeated writes.</div></div><div class="item"><div class="l">Append / prepend children</div><pre><code>parent.appendChild(div);      // single node
+parent.append(a, b, "text");   // multiple + strings
+parent.prepend(div);           // insert first</code></pre></div><div class="item"><div class="l">Insert HTML at a position without reparsing parent</div><pre><code>el.insertAdjacentHTML("beforeend", `&lt;li&gt;${t}&lt;/li&gt;`);</code></pre><div class="n">positions: beforebegin | afterbegin | beforeend | afterend</div></div><div class="item"><div class="l">Attributes &amp; data-*</div><pre><code>btn.setAttribute("data-id", todo.id);
+btn.dataset.id = todo.id;        // same thing
+const id = btn.dataset.id;       // read back (string!)</code></pre></div><div class="item"><div class="l">Classes</div><pre><code>el.classList.add("done");
+el.classList.remove("done");
+el.classList.toggle("done");
+el.classList.contains("done");</code></pre></div><h2>Select &amp; Traverse</h2><div class="item"><div class="l">By id (fastest)</div><pre><code>const el = document.getElementById("todos");</code></pre></div><div class="item"><div class="l">CSS selector — first / all</div><pre><code>document.querySelector(".todo");        // first match | null
+document.querySelectorAll(".todo");     // static NodeList</code></pre></div><div class="item"><div class="l">Loop a NodeList</div><pre><code>document.querySelectorAll(".todo")
+  .forEach(el =&gt; el.remove());</code></pre><div class="n">NodeList has forEach; HTMLCollection (.children) does not — spread it: [...el.children]</div></div><div class="item"><div class="l">Walk the tree</div><pre><code>el.parentElement;
+el.children;              // element children only
+el.closest(".card");     // nearest ancestor (or self) matching</code></pre></div><div class="item"><div class="l">Match a selector on an element</div><pre><code>if (e.target.matches(".delete-btn")) { /* ... */ }</code></pre></div><h2>State-Derived Rendering (core mental model)</h2><div class="item"><div class="l">Single source of truth: UI is a function of state</div><pre><code>let todos = [];   // the ONLY thing you mutate
+// UI = render(todos). Never hand-patch the DOM ad hoc.</code></pre><div class="n">Change state -&gt; call render(). Don't surgically edit DOM in event handlers.</div></div><div class="item"><div class="l">render(): wipe + rebuild from state</div><pre><code>function render() {
+  const parent = document.getElementById("todos");
+  parent.innerHTML = "";              // clear
+  for (const todo of todos) {
+    parent.appendChild(makeRow(todo));
+  }
+}</code></pre><div class="n">Simplest correct pattern. Every render reflects current state exactly.</div></div><div class="item"><div class="l">Build one row (factory fn)</div><pre><code>function makeRow(todo) {
+  const div = document.createElement("div");
+  div.textContent = todo.title;
+
+  const del = document.createElement("button");
+  del.textContent = "Delete";
+  del.dataset.id = todo.id;
+  del.onclick = () =&gt; deleteTodo(todo.id);  // closure over id
+
+  div.appendChild(del);
+  return div;
+}</code></pre></div><div class="item"><div class="l">Batch inserts with a fragment (perf)</div><pre><code>const frag = document.createDocumentFragment();
+for (const t of todos) frag.appendChild(makeRow(t));
+parent.replaceChildren(frag);   // one reflow, clears + inserts</code></pre><div class="n">replaceChildren() replaces all kids in one shot; avoids N layout thrashes.</div></div><h2>Add TODO</h2><div class="item"><div class="l">Read input, push to state, re-render</div><pre><code>function addTodo() {
+  const input = document.getElementById("todo-input");
+  const title = input.value.trim();
+  if (!title) return;                    // guard empty
+  todos.push({ id: Date.now(), title, done: false });
+  input.value = "";                       // reset field
+  render();
+}</code></pre></div><div class="item"><div class="l">Stable unique id</div><pre><code>id: crypto.randomUUID()   // or Date.now() for simple apps</code></pre><div class="n">Array index is NOT a stable id — it shifts after deletes.</div></div><div class="item"><div class="l">Wire the button / Enter key</div><pre><code>document.getElementById("add").addEventListener("click", addTodo);
+input.addEventListener("keydown", e =&gt; {
+  if (e.key === "Enter") addTodo();
+});</code></pre></div><h2>Delete TODO</h2><div class="item"><div class="l">Remove from state by id, then re-render</div><pre><code>function deleteTodo(id) {
+  todos = todos.filter(t =&gt; t.id !== id);
+  render();
+}</code></pre><div class="n">filter returns a NEW array — reassign it. Delete from STATE, not the DOM directly.</div></div><div class="item"><div class="l">Toggle done (same pattern via map)</div><pre><code>function toggle(id) {
+  todos = todos.map(t =&gt;
+    t.id === id ? { ...t, done: !t.done } : t
+  );
+  render();
+}</code></pre></div><div class="item"><div class="l">Yank a single node (when not using full re-render)</div><pre><code>el.remove();                        // modern
+el.parentElement.removeChild(el);   // legacy equivalent</code></pre></div><h2>Event Handling &amp; Delegation</h2><div class="item"><div class="l">Per-element handler (simple, from render)</div><pre><code>del.onclick = () =&gt; deleteTodo(todo.id);</code></pre><div class="n">.onclick overwrites; addEventListener stacks multiple.</div></div><div class="item"><div class="l">Event delegation — one listener on the parent</div><pre><code>parent.addEventListener("click", (e) =&gt; {
+  const btn = e.target.closest(".delete-btn");
+  if (!btn) return;
+  deleteTodo(Number(btn.dataset.id));
+});</code></pre><div class="n">Survives re-renders: listener lives on the stable parent, not on rebuilt rows.</div></div><div class="item"><div class="l">dataset is always a string</div><pre><code>deleteTodo(Number(btn.dataset.id));</code></pre><div class="n">Coerce with Number()/parseInt before comparing to numeric ids.</div></div><div class="item"><div class="l">Prevent form reload</div><pre><code>form.addEventListener("submit", e =&gt; {
+  e.preventDefault();
+  addTodo();
+});</code></pre></div>
+<h2>Quick tips &amp; gotchas</h2><ul class="tips"><li>State is the source of truth: mutate the `todos` array, then call render(). Never patch the DOM directly in handlers — the two will drift out of sync.</li><li>Full re-render (innerHTML = "" then rebuild) is dead simple and correct for small lists; reach for DocumentFragment / replaceChildren only when it gets slow.</li><li>Use textContent, not innerHTML, for user-entered todo titles — innerHTML with untrusted input is an XSS hole.</li><li>dataset values are strings. Coerce (Number()/parseInt) before comparing dataset.id to numeric ids, or IDs will never match.</li><li>Give each todo a stable unique id (Date.now()/crypto.randomUUID()) — deleting by array index breaks after the first removal shifts everything.</li><li>filter() and map() return NEW arrays — you must reassign (todos = todos.filter(...)); they don't mutate in place.</li><li>Prefer event delegation (one listener on the parent) over per-row handlers: it keeps working after re-renders and avoids leaking listeners.</li><li>On a form, always e.preventDefault() in the submit handler or the page reloads and your state is wiped.</li></ul>
+</div></body></html>

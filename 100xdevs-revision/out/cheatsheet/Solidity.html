@@ -1,0 +1,94 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Cheat Sheet · Solidity</title><style>:root{--bg:#fff;--fg:#1a1a1a;--muted:#6b7280;--line:#e5e7eb;--accent:#0d9488;--card:#f9fafb;--code:#f3f4f6;--codefg:#111}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1115;--fg:#e6e6e6;--muted:#9aa0aa;--line:#242833;--accent:#2dd4bf;--card:#171a21;--code:#0b0e13;--codefg:#e6e6e6}}
+*{box-sizing:border-box}body{margin:0;font:16px/1.6 system-ui,Segoe UI,sans-serif;background:var(--bg);color:var(--fg)}
+.wrap{max-width:860px;margin:0 auto;padding:1.2rem}
+a.back{color:var(--accent);text-decoration:none;font-size:.9rem}
+h1{font-size:1.5rem;margin:.6rem 0 .2rem}.sub{color:var(--muted);margin:0 0 1.4rem}
+h2{font-size:1.1rem;margin:1.6rem 0 .5rem;color:var(--accent)}
+.item{border:1px solid var(--line);border-radius:10px;background:var(--card);padding:.6rem .8rem;margin:.5rem 0}
+.item .l{font-weight:700}
+.item .n{color:var(--muted);font-size:.92rem;margin-top:.2rem}
+pre{margin:.45rem 0 0;background:var(--code);color:var(--codefg);border:1px solid var(--line);border-radius:8px;padding:.6rem .8rem;overflow-x:auto}
+code,pre{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:.86rem}
+.tips{border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:10px;background:var(--card);padding:.6rem 1rem}
+.tips li{margin:.35rem 0}
+@media print{.back{display:none}}</style></head><body><div class="wrap">
+<a class="back" href="../revision.html">← Back to revision index</a>
+<h1>Solidity — Cheat Sheet</h1>
+<p class="sub">Cohort 3.0 · 4 lessons · quick reference</p>
+<h2>Setup &amp; Toolchain</h2><div class="item"><div class="l">Remix (fastest, zero-install)</div><div class="n">remix.ethereum.org — in-browser IDE, compile + deploy to JS VM or injected MetaMask. Best for learning.</div></div><div class="item"><div class="l">Foundry (Rust, fast — preferred)</div><pre><code>curl -L https://foundry.paradigm.xyz | bash
+foundryup
+forge init myproj
+forge build
+forge test</code></pre><div class="n">forge = build/test, cast = CLI RPC calls, anvil = local node.</div></div><div class="item"><div class="l">Hardhat (JS/TS ecosystem)</div><pre><code>npm i -D hardhat
+npx hardhat init
+npx hardhat compile
+npx hardhat test</code></pre><div class="n">Artifacts (ABI + bytecode) land in artifacts/. Uses ethers.js in scripts.</div></div><div class="item"><div class="l">solc directly</div><pre><code>solc --abi --bin Contract.sol -o out/
+solc --optimize --bin Contract.sol</code></pre><div class="n">Rarely called by hand; frameworks wrap it. --optimize reduces gas + bytecode size.</div></div><div class="item"><div class="l">Local chain + deploy (Foundry)</div><pre><code>anvil                 # spins up localhost:8545
+forge create src/C.sol:C --rpc-url http://localhost:8545 --private-key 0x...</code></pre></div><h2>Contract Anatomy</h2><div class="item"><div class="l">Minimal contract skeleton</div><pre><code>// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+contract Counter {
+    uint256 public count;              // auto getter count()
+
+    function increment() external {
+        count += 1;
+    }
+}</code></pre><div class="n">SPDX + pragma are compiler-required conventions. `public` state vars auto-generate a getter.</div></div><div class="item"><div class="l">Constructor (runs once at deploy)</div><pre><code>address public owner;
+constructor(uint256 _start) {
+    owner = msg.sender;
+    count = _start;
+}</code></pre><div class="n">No `function` keyword. Args passed at deploy time, baked into the deploy tx.</div></div><div class="item"><div class="l">State vs local vs global</div><pre><code>uint256 stored;                 // storage (persists on-chain, costs gas)
+function f() external view {
+    uint256 tmp = 1;            // memory/stack (transient)
+    address who = msg.sender;   // global
+}</code></pre><div class="n">storage writes are expensive (~20k gas cold). Minimize them.</div></div><div class="item"><div class="l">Globals cheat</div><pre><code>msg.sender   // caller address
+msg.value    // wei sent (needs payable)
+block.timestamp
+block.number
+address(this).balance</code></pre><div class="n">block.timestamp is miner-influenceable — don't use for strong randomness.</div></div><h2>Types (and how they differ from JS)</h2><div class="item"><div class="l">Statically typed, no `let`/`var`</div><pre><code>uint256 n = 5;      // unsigned int, no floats
+int256  s = -5;
+bool    ok = true;
+address a = 0xAbC...;
+bytes32 h;
+string  name = "gm";</code></pre><div class="n">JS has one `number`; Solidity has sized ints (uint8..uint256 in steps of 8). uint = uint256.</div></div><div class="item"><div class="l">NO floating point</div><pre><code>uint256 price = 1e18;   // represent 1.0 as 1e18 wei
+// use fixed-point manually; multiply before divide</code></pre><div class="n">Biggest JS-dev trap. Integer division truncates: 7/2 == 3.</div></div><div class="item"><div class="l">Overflow reverts (since 0.8)</div><pre><code>uint8 x = 255;
+x += 1;              // reverts (was silent wrap pre-0.8)
+unchecked { x += 1; } // opt out for gas</code></pre><div class="n">No NaN/Infinity like JS. Arithmetic errors revert the whole tx.</div></div><div class="item"><div class="l">Reference types need data location</div><pre><code>function g(uint256[] memory arr) external {}
+mapping(address =&gt; uint256) public balances;
+struct User { string name; uint256 age; }</code></pre><div class="n">memory / storage / calldata must be declared for arrays, structs, strings, bytes. calldata is cheapest for external fn args.</div></div><div class="item"><div class="l">mapping — no keys, no length, no iteration</div><pre><code>mapping(address =&gt; uint256) balances;
+balances[msg.sender] += 100;</code></pre><div class="n">Unlike a JS object: can't enumerate keys or get .length. Missing key returns the zero value, not undefined.</div></div><div class="item"><div class="l">Default values (no undefined/null)</div><pre><code>// uint-&gt;0, bool-&gt;false, address-&gt;address(0), string-&gt;""</code></pre><div class="n">There is no null/undefined. Everything is zero-initialized.</div></div><h2>Functions, Visibility &amp; Modifiers</h2><div class="item"><div class="l">Visibility (required on every fn)</div><pre><code>function a() public {}    // internal + external
+function b() external {}  // only outside calls
+function c() internal {}  // this + derived
+function d() private {}   // this contract only</code></pre><div class="n">external calldata args are cheaper than public memory args.</div></div><div class="item"><div class="l">State mutability</div><pre><code>function get() external view returns (uint256) { return count; } // reads only
+function add(uint a, uint b) external pure returns (uint) { return a+b; } // no state
+function pay() external payable {}  // can receive ETH</code></pre><div class="n">view/pure calls are free when called off-chain (eth_call), no tx needed.</div></div><div class="item"><div class="l">Named/multiple returns</div><pre><code>function stats() external view returns (uint256 c, address o) {
+    return (count, owner);
+}</code></pre></div><div class="item"><div class="l">Custom errors + require (gas-cheap reverts)</div><pre><code>error NotOwner(address caller);
+function admin() external {
+    if (msg.sender != owner) revert NotOwner(msg.sender);
+    require(count &gt; 0, "empty");   // older style
+}</code></pre><div class="n">Custom errors (0.8.4+) are cheaper than require strings. revert rolls back ALL state changes in the tx.</div></div><div class="item"><div class="l">Modifiers (reusable guards)</div><pre><code>modifier onlyOwner() {
+    require(msg.sender == owner, "!owner");
+    _;                 // placeholder = fn body runs here
+}
+function setX(uint v) external onlyOwner { x = v; }</code></pre></div><div class="item"><div class="l">Events (off-chain logs, indexed for filtering)</div><pre><code>event Transfer(address indexed from, address indexed to, uint256 amount);
+function send(address to, uint256 amt) external {
+    emit Transfer(msg.sender, to, amt);
+}</code></pre><div class="n">Up to 3 `indexed` params are searchable/filterable by dapps. Cheaper than storage but NOT readable from other contracts.</div></div><h2>ABI &amp; Bytecode</h2><div class="item"><div class="l">What compile produces</div><pre><code>// solc → two artifacts:
+//  1. bytecode (.bin)  → EVM machine code deployed on-chain
+//  2. ABI (.json)      → interface spec used by clients</code></pre><div class="n">Bytecode = what runs. ABI = how off-chain code knows how to talk to it. You need BOTH to interact.</div></div><div class="item"><div class="l">ABI = JSON interface descriptor</div><pre><code>[{"type":"function","name":"increment",
+  "inputs":[],"outputs":[],"stateMutability":"nonpayable"},
+ {"type":"function","name":"count",
+  "inputs":[],"outputs":[{"type":"uint256"}],"stateMutability":"view"}]</code></pre><div class="n">Describes functions, args, return types, events. The EVM does NOT read this — clients do, to encode calldata.</div></div><div class="item"><div class="l">Function selector (first 4 bytes of calldata)</div><pre><code>// selector = bytes4(keccak256("increment()"))
+cast sig "transfer(address,uint256)"   // → 0xa9059cbb</code></pre><div class="n">Calldata = selector (4 bytes) + ABI-encoded args (32-byte padded). This is how the EVM dispatches to the right function.</div></div><div class="item"><div class="l">Encode / decode calldata</div><pre><code>cast calldata "transfer(address,uint256)" 0xabc... 100
+cast abi-decode "balanceOf(address)(uint256)" 0x...</code></pre><div class="n">In Solidity: abi.encodeWithSelector(sel, args), abi.decode(data, (uint256)).</div></div><div class="item"><div class="l">Use ABI + address in ethers.js</div><pre><code>import { Contract } from "ethers";
+const c = new Contract(address, abi, signer);
+await c.increment();
+const n = await c.count();</code></pre><div class="n">The ABI tells ethers how to encode the call into bytecode calldata under the hood.</div></div><div class="item"><div class="l">Interface = ABI in Solidity form</div><pre><code>interface IERC20 {
+    function transfer(address to, uint256 amt) external returns (bool);
+}
+IERC20(token).transfer(to, 100);</code></pre><div class="n">Lets one contract call another using just the signature — no source/bytecode needed.</div></div><div class="item"><div class="l">Get on-chain bytecode</div><pre><code>cast code 0xContractAddress --rpc-url $RPC</code></pre><div class="n">Empty (0x) code means it's an EOA/wallet, not a contract.</div></div><h2>Solidity vs JavaScript — mindset shifts</h2><div class="item"><div class="l">Execution cost = gas</div><div class="n">Every op costs gas paid in ETH. There is no free loop. JS runs free on your CPU; Solidity runs on thousands of nodes.</div></div><div class="item"><div class="l">Deterministic &amp; sandboxed</div><div class="n">No fetch/HTTP, no fs, no Date.now() as truth, no Math.random(). All nodes must reach identical results. Use oracles (Chainlink) for external data.</div></div><div class="item"><div class="l">Immutable after deploy</div><div class="n">No hot-reload. Deployed bytecode is permanent. Bugs need a redeploy or upgrade proxy. `git push` mentality does not apply.</div></div><div class="item"><div class="l">State is global &amp; public</div><pre><code>uint256 private secret;  // still readable via storage slots!</code></pre><div class="n">`private` hides from other contracts, NOT from the public blockchain. Never store secrets.</div></div><div class="item"><div class="l">Sync only, no async/promises</div><pre><code>uint256 n = other.getValue();   // external call returns synchronously</code></pre><div class="n">No await/Promise. But external calls can re-enter your contract — guard against reentrancy.</div></div><div class="item"><div class="l">Whole-tx atomicity</div><div class="n">A revert anywhere undoes everything in the tx (like a DB rollback). JS throws leave partial mutations.</div></div><div class="item"><div class="l">== vs no === , no truthy coercion</div><pre><code>if (x) {}   // ERROR: x must be bool
+if (x != 0) {}</code></pre><div class="n">No loose/strict equality distinction, no truthy/falsy. Conditions must be strictly bool.</div></div><div class="item"><div class="l">Compiled, not interpreted</div><div class="n">solc → EVM bytecode ahead of time. Type errors caught at compile, not runtime like JS.</div></div>
+<h2>Quick tips &amp; gotchas</h2><ul class="tips"><li>Always pin the pragma to a tested range (^0.8.24) and include the SPDX line — the compiler warns without it.</li><li>You need BOTH the ABI and the contract address to call a deployed contract; the ABI encodes args into calldata, the address routes the tx.</li><li>Follow checks-effects-interactions: update state BEFORE making external calls to avoid reentrancy (the classic DAO hack).</li><li>Prefer custom errors (error Foo()) over require("string") — they cost less gas and deployment size.</li><li>Money is uint256 in wei; 1 ETH = 1e18 wei. There are no decimals/floats — scale by 1e18 and multiply before dividing.</li><li>`private`/`internal` only restrict contract-to-contract access; all state is publicly readable on-chain — never store secrets.</li><li>Since 0.8, arithmetic auto-reverts on overflow/underflow; only wrap in `unchecked{}` when you've proven it's safe for gas savings.</li><li>Use `calldata` for external function reference-type args and minimize `storage` writes (~20k gas each) — gas is the real constraint, not CPU.</li></ul>
+</div></body></html>

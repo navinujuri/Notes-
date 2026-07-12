@@ -1,0 +1,113 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Cheat Sheet · Building an Exchange - Part 1</title><style>:root{--bg:#fff;--fg:#1a1a1a;--muted:#6b7280;--line:#e5e7eb;--accent:#0d9488;--card:#f9fafb;--code:#f3f4f6;--codefg:#111}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1115;--fg:#e6e6e6;--muted:#9aa0aa;--line:#242833;--accent:#2dd4bf;--card:#171a21;--code:#0b0e13;--codefg:#e6e6e6}}
+*{box-sizing:border-box}body{margin:0;font:16px/1.6 system-ui,Segoe UI,sans-serif;background:var(--bg);color:var(--fg)}
+.wrap{max-width:860px;margin:0 auto;padding:1.2rem}
+a.back{color:var(--accent);text-decoration:none;font-size:.9rem}
+h1{font-size:1.5rem;margin:.6rem 0 .2rem}.sub{color:var(--muted);margin:0 0 1.4rem}
+h2{font-size:1.1rem;margin:1.6rem 0 .5rem;color:var(--accent)}
+.item{border:1px solid var(--line);border-radius:10px;background:var(--card);padding:.6rem .8rem;margin:.5rem 0}
+.item .l{font-weight:700}
+.item .n{color:var(--muted);font-size:.92rem;margin-top:.2rem}
+pre{margin:.45rem 0 0;background:var(--code);color:var(--codefg);border:1px solid var(--line);border-radius:8px;padding:.6rem .8rem;overflow-x:auto}
+code,pre{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:.86rem}
+.tips{border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:10px;background:var(--card);padding:.6rem 1rem}
+.tips li{margin:.35rem 0}
+@media print{.back{display:none}}</style></head><body><div class="wrap">
+<a class="back" href="../revision.html">← Back to revision index</a>
+<h1>Building an Exchange - Part 1 — Cheat Sheet</h1>
+<p class="sub">Cohort 2.0 · 9 lessons · quick reference</p>
+<h2>Core Concepts</h2><div class="item"><div class="l">Exchange = order matching engine that pairs buyers with sellers of an asset at an agreed price</div><div class="n">It never trades; it only matches counterparties and settles balances.</div></div><div class="item"><div class="l">Market / trading pair — always base_quote</div><pre><code>SOL_USDC  -&gt;  base = SOL (what you buy/sell), quote = USDC (what you price it in)
+price 120.5 means 1 SOL = 120.5 USDC</code></pre><div class="n">Buy = spend quote to get base. Sell = give base to get quote.</div></div><div class="item"><div class="l">Order book — resting bids (buys) and asks (sells)</div><pre><code>asks (sell)  121.0 x 1.5   &lt;- lowest ask = best sell
+             120.8 x 4.0
+----------- spread -----------
+bids (buy)   120.5 x 3.2   &lt;- highest bid = best buy
+             120.4 x 10</code></pre><div class="n">Bids sorted price DESC, asks price ASC. Best prices sit at the top.</div></div><div class="item"><div class="l">Spread &amp; mid price</div><pre><code>spread   = bestAsk - bestBid          // 121.0 - 120.5 = 0.5
+midPrice = (bestAsk + bestBid) / 2</code></pre></div><div class="item"><div class="l">Depth — cumulative quantity available at each price level</div><div class="n">Deep book = lots of resting liquidity = small price impact per trade.</div></div><h2>Jargon</h2><div class="item"><div class="l">Bid</div><div class="n">Highest price a buyer will pay.</div></div><div class="item"><div class="l">Ask / Offer</div><div class="n">Lowest price a seller will accept.</div></div><div class="item"><div class="l">Maker</div><div class="n">Order that rests on the book and adds liquidity (usually a limit order that doesn't cross). Lower fees.</div></div><div class="item"><div class="l">Taker</div><div class="n">Order that matches an existing resting order and removes liquidity. Higher fees.</div></div><div class="item"><div class="l">Fill</div><div class="n">A (partial or full) execution of an order against a counterparty at a price.</div></div><div class="item"><div class="l">Slippage</div><div class="n">Diff between expected price and actual avg fill price when eating through the book.</div></div><div class="item"><div class="l">Ticker</div><div class="n">24h rolling stats for a market: last price, high, low, volume, % change.</div></div><div class="item"><div class="l">Kline / Candlestick</div><div class="n">OHLCV bucketed by interval (1m, 1h, 1d). Open/High/Low/Close/Volume.</div></div><div class="item"><div class="l">Liquidity</div><div class="n">How much can be traded without moving price. Provided by makers.</div></div><h2>Order Types</h2><div class="item"><div class="l">Limit — execute at a set price or better; rests on book if it doesn't cross</div><pre><code>{ side: "buy", price: "120.5", quantity: "2", type: "limit" }</code></pre><div class="n">Buy limit fills at &lt;= price; sell limit fills at &gt;= price. Maker if it rests.</div></div><div class="item"><div class="l">Market — fill immediately at best available price(s), no price guarantee</div><pre><code>{ side: "buy", quantity: "2", type: "market" }  // no price field</code></pre><div class="n">Always a taker. Walks the book -&gt; slippage. Lock funds by worst-case, not price.</div></div><div class="item"><div class="l">IOC (Immediate-Or-Cancel) — fill whatever it can now, cancel the remainder</div><pre><code>{ side: "buy", price: "120.5", quantity: "5", type: "ioc" }</code></pre><div class="n">Never rests on the book. Partial fills allowed.</div></div><div class="item"><div class="l">Stop / Stop-limit — dormant until trigger price hit, then becomes market/limit</div><div class="n">Not held in the main book; kept in a trigger set and injected when price crosses.</div></div><h2>Order Lifecycle (how an order is made)</h2><div class="item"><div class="l">End-to-end flow</div><pre><code>1. Client -&gt; POST /api/v1/order (REST)
+2. API validates, LPUSH job to Redis queue with a unique clientId
+3. Engine RPOP job -&gt; checkAndLockFunds -&gt; match against book
+4. Engine creates fills, updates balances, adjusts book
+5. Engine PUBLISH depth/trade/ticker to pubsub channels
+6. Engine PUBLISH result to channel `clientId`
+7. API (subscribed to clientId) resolves promise -&gt; HTTP response
+8. DB processor consumes pubsub -&gt; persists to TimescaleDB</code></pre></div><div class="item"><div class="l">Lock funds before matching</div><pre><code>// buy  -&gt; lock quote:  price * qty  (USDC)
+// sell -&gt; lock base:   qty          (SOL)
+if (side==="buy" &amp;&amp; bal[quote].available &lt; price*qty) throw "insufficient funds";
+bal[quote].available -= price*qty;
+bal[quote].locked    += price*qty;</code></pre><div class="n">Reject early on insufficient balance so the engine never produces an invalid state.</div></div><div class="item"><div class="l">Matching (price-time priority)</div><pre><code>matchBid(order){
+  for (const ask of this.asks){                 // asks sorted price ASC
+    if (ask.price &gt; order.price) break;          // no cross -&gt; stop
+    const qty = Math.min(order.qty - filled, ask.qty - ask.filled);
+    filled += qty; ask.filled += qty;
+    fills.push({ price: ask.price, qty, tradeId: ++this.tid, markerOrderId: ask.id });
+  }
+}</code></pre><div class="n">Same price -&gt; FIFO (earliest order first). Remove fully-filled resting orders.</div></div><div class="item"><div class="l">Fill shape</div><pre><code>interface Fill { price: string; qty: number; tradeId: number;
+                 otherUserId: string; markerOrderId: string; }</code></pre></div><h2>Architecture</h2><div class="item"><div class="l">Service split — API is stateless, Engine is the single source of truth</div><pre><code>Frontend(Next.js)
+   |  REST + WS
+   v
+API Server (Express, stateless, N replicas)
+   |  LPUSH "messages"          ^ SUBSCRIBE clientId
+   v                            |
+[ Redis ]  --queue--&gt; Engine (single instance, in-mem order book)
+   ^  PUBLISH depth@ / trade@ / ticker@   |
+   |                                      v
+WS Server (fan-out)              DB Processor -&gt; TimescaleDB</code></pre><div class="n">Engine MUST be a single process so the in-memory book stays consistent.</div></div><div class="item"><div class="l">Redis as queue (durable, ordered, backpressure)</div><pre><code>// API produces
+redis.lPush("messages", JSON.stringify({ clientId, message }));
+// Engine consumes (blocking pop)
+const job = await redis.brPop("messages", 0);</code></pre></div><div class="item"><div class="l">Redis pub/sub for broadcast (trades, depth deltas, ticker, RPC replies)</div><pre><code>redis.publish(`depth@${market}`, JSON.stringify(depthDelta));
+redis.publish(clientId, JSON.stringify(orderResult)); // request/response over pubsub</code></pre></div><div class="item"><div class="l">Snapshot &amp; recovery</div><pre><code>// engine periodically flushes state
+fs.writeFileSync("./snapshot.json", JSON.stringify({ orderbooks, balances }));</code></pre><div class="n">On boot, load snapshot then replay any queued messages. Keeps restarts safe.</div></div><h2>Backend REST Routes</h2><div class="item"><div class="l">Create order</div><pre><code>POST /api/v1/order
+{ market, price, quantity, side, userId }</code></pre></div><div class="item"><div class="l">Cancel order</div><pre><code>DELETE /api/v1/order
+{ orderId, market }</code></pre></div><div class="item"><div class="l">Open orders for a user</div><pre><code>GET /api/v1/order/open?userId=1&amp;market=SOL_USDC</code></pre></div><div class="item"><div class="l">Order book depth</div><pre><code>GET /api/v1/depth?symbol=SOL_USDC
+-&gt; { bids: [[price,qty]...], asks: [[price,qty]...] }</code></pre></div><div class="item"><div class="l">Recent trades</div><pre><code>GET /api/v1/trades?symbol=SOL_USDC</code></pre></div><div class="item"><div class="l">Klines (candles) — from TimescaleDB continuous aggregate</div><pre><code>GET /api/v1/klines?symbol=SOL_USDC&amp;interval=1m&amp;startTime=..&amp;endTime=..</code></pre></div><div class="item"><div class="l">Tickers (24h stats)</div><pre><code>GET /api/v1/tickers</code></pre></div><div class="item"><div class="l">Klines materialized view (TimescaleDB)</div><pre><code>CREATE MATERIALIZED VIEW klines_1m
+WITH (timescaledb.continuous) AS
+SELECT time_bucket('1 minute', time) AS bucket,
+       first(price,time) AS open, max(price) AS high,
+       min(price)  AS low,        last(price,time) AS close,
+       sum(quantity) AS volume
+FROM trades GROUP BY bucket;</code></pre><div class="n">Continuous aggregate auto-refreshes; don't compute OHLCV per-request in the API.</div></div><h2>WebSocket Streams</h2><div class="item"><div class="l">Subscribe / unsubscribe protocol</div><pre><code>ws.send(JSON.stringify({ method: "SUBSCRIBE",
+  params: ["depth@SOL_USDC", "trade@SOL_USDC", "ticker@SOL_USDC"] }));
+ws.send(JSON.stringify({ method: "UNSUBSCRIBE", params: ["depth@SOL_USDC"] }));</code></pre></div><div class="item"><div class="l">depth@ stream — incremental book deltas</div><pre><code>{ e:"depth", s:"SOL_USDC",
+  b:[["120.5","3.2"],["120.4","0"]],   // qty 0 =&gt; remove level
+  a:[["121.0","1.5"]] }</code></pre><div class="n">Send deltas, not full book, every tick. qty "0" means delete that price level.</div></div><div class="item"><div class="l">trade@ stream — each execution</div><pre><code>{ e:"trade", s:"SOL_USDC", p:"120.5", q:"2", t:9931, m:false }</code></pre><div class="n">m = buyer is maker (side that was resting).</div></div><div class="item"><div class="l">ticker@ stream — rolling 24h stats push</div><pre><code>{ e:"ticker", s:"SOL_USDC", c:"120.5", h:"125", l:"118", v:"40213" }</code></pre></div><div class="item"><div class="l">Server maps Redis pubsub -&gt; subscribed sockets</div><pre><code>redis.subscribe(`trade@${market}`, (msg) =&gt;
+  subscribers[`trade@${market}`].forEach(s =&gt; s.send(msg)));</code></pre><div class="n">WS server holds subscription map only; it never touches the order book.</div></div><h2>Coding the API Server</h2><div class="item"><div class="l">Setup</div><pre><code>npm init -y
+npm i express redis uuid
+npm i -D typescript @types/express @types/node ts-node</code></pre></div><div class="item"><div class="l">Message type constants (shared with engine)</div><pre><code>export const CREATE_ORDER = "CREATE_ORDER";
+export const CANCEL_ORDER = "CANCEL_ORDER";
+export const GET_DEPTH    = "GET_DEPTH";
+export const GET_OPEN_ORDERS = "GET_OPEN_ORDERS";
+export const ON_RAMP      = "ON_RAMP";</code></pre></div><div class="item"><div class="l">RedisManager — request/response over queue + pubsub (singleton)</div><pre><code>class RedisManager {
+  private client; private publisher;
+  static getInstance(){ return this.instance ??= new RedisManager(); }
+  constructor(){ this.client=createClient(); this.publisher=createClient();
+    this.client.connect(); this.publisher.connect(); }
+
+  sendAndAwait(message){
+    return new Promise((resolve)=&gt;{
+      const id = randomUUID();
+      this.client.subscribe(id, (msg)=&gt;{
+        this.client.unsubscribe(id);
+        resolve(JSON.parse(msg));
+      });
+      this.publisher.lPush("messages", JSON.stringify({ clientId:id, message }));
+    });
+  }
+}</code></pre><div class="n">One channel per request keyed by uuid; engine publishes the reply to that channel.</div></div><div class="item"><div class="l">Order route wiring</div><pre><code>app.post("/api/v1/order", async (req,res)=&gt;{
+  const { market, price, quantity, side, userId } = req.body;
+  const r = await RedisManager.getInstance().sendAndAwait({
+    type: CREATE_ORDER,
+    data: { market, price, quantity, side, userId }
+  });
+  res.json(r.payload);           // { orderId, executedQty, fills }
+});</code></pre></div><div class="item"><div class="l">Depth route (read-only query to engine)</div><pre><code>app.get("/api/v1/depth", async (req,res)=&gt;{
+  const r = await RedisManager.getInstance().sendAndAwait({
+    type: GET_DEPTH, data: { market: req.query.symbol }
+  });
+  res.json(r.payload);
+});</code></pre></div><div class="item"><div class="l">Engine consumer loop (separate process)</div><pre><code>while (true) {
+  const res = await redis.rPop("messages");
+  if (!res) continue;
+  const { clientId, message } = JSON.parse(res);
+  Engine.getInstance().process({ clientId, message });
+}</code></pre></div>
+<h2>Quick tips &amp; gotchas</h2><ul class="tips"><li>Engine is single-threaded and single-instance — never horizontally scale it, or the in-memory order book forks. Scale the stateless API/WS layers instead.</li><li>Store price &amp; quantity as strings and do integer math in the smallest unit (lamports/cents). Floats silently corrupt balances.</li><li>Match price-time priority: best price first, FIFO within a price level. Break the match loop the moment the resting price stops crossing.</li><li>Lock funds up front (buy locks quote = price*qty, sell locks base = qty) and reject insufficient balance before matching — the engine must never emit an invalid state.</li><li>Push depth as incremental deltas over WS (qty "0" = remove level), not the full book each tick — full snapshots kill bandwidth on active markets.</li><li>Keep the engine off the DB. It publishes trades/fills to pub/sub; a separate DB processor persists them so matching stays microsecond-fast.</li><li>Use a Redis list as the job queue (LPUSH from API, BRPOP in engine) for ordering + durability + natural backpressure; use pub/sub only for broadcast and RPC replies.</li><li>Snapshot the order book + balances to disk periodically and reload on boot; otherwise an engine restart loses every resting order.</li></ul>
+</div></body></html>

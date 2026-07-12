@@ -1,0 +1,115 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Cheat Sheet · Intro Class 2- DSA</title><style>:root{--bg:#fff;--fg:#1a1a1a;--muted:#6b7280;--line:#e5e7eb;--accent:#0d9488;--card:#f9fafb;--code:#f3f4f6;--codefg:#111}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1115;--fg:#e6e6e6;--muted:#9aa0aa;--line:#242833;--accent:#2dd4bf;--card:#171a21;--code:#0b0e13;--codefg:#e6e6e6}}
+*{box-sizing:border-box}body{margin:0;font:16px/1.6 system-ui,Segoe UI,sans-serif;background:var(--bg);color:var(--fg)}
+.wrap{max-width:860px;margin:0 auto;padding:1.2rem}
+a.back{color:var(--accent);text-decoration:none;font-size:.9rem}
+h1{font-size:1.5rem;margin:.6rem 0 .2rem}.sub{color:var(--muted);margin:0 0 1.4rem}
+h2{font-size:1.1rem;margin:1.6rem 0 .5rem;color:var(--accent)}
+.item{border:1px solid var(--line);border-radius:10px;background:var(--card);padding:.6rem .8rem;margin:.5rem 0}
+.item .l{font-weight:700}
+.item .n{color:var(--muted);font-size:.92rem;margin-top:.2rem}
+pre{margin:.45rem 0 0;background:var(--code);color:var(--codefg);border:1px solid var(--line);border-radius:8px;padding:.6rem .8rem;overflow-x:auto}
+code,pre{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:.86rem}
+.tips{border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:10px;background:var(--card);padding:.6rem 1rem}
+.tips li{margin:.35rem 0}
+@media print{.back{display:none}}</style></head><body><div class="wrap">
+<a class="back" href="../revision.html">← Back to revision index</a>
+<h1>Intro Class 2- DSA — Cheat Sheet</h1>
+<p class="sub">Cohort 2.0 · 13 lessons · quick reference</p>
+<h2>Prefix Sums — build once, query O(1)</h2><div class="item"><div class="l">Standard 1-indexed prefix array (size n+1)</div><pre><code>// prefix[i] = a[0]+...+a[i-1]
+const prefix = [0];
+for (let i = 0; i &lt; a.length; i++)
+  prefix.push(prefix[i] + a[i]);</code></pre><div class="n">Size n+1 with leading 0 removes the l===0 edge case.</div></div><div class="item"><div class="l">Range sum of a[l..r] inclusive</div><pre><code>const sum = prefix[r + 1] - prefix[l];</code></pre><div class="n">With 1-indexed prefix, no special-casing needed.</div></div><div class="item"><div class="l">Running-prefix trick when you only need the answer (no array)</div><pre><code>let run = 0;
+for (const x of a) { run += x; /* use run */ }</code></pre><div class="n">If you never re-query a range, skip storing the full array.</div></div><div class="item"><div class="l">P1 · Highest Altitude (LC 1732)</div><pre><code>var largestAltitude = function(gain) {
+  let alt = 0, max = 0;
+  for (const g of gain) { alt += g; max = Math.max(max, alt); }
+  return max;
+};</code></pre><div class="n">Altitudes ARE the prefix sums of gain; start at 0, track the max.</div></div><h2>Frequency Arrays — count in O(n), O(1) space for fixed alphabet</h2><div class="item"><div class="l">Lowercase letters -&gt; size-26 array</div><pre><code>const freq = new Array(26).fill(0);
+for (const c of s) freq[c.charCodeAt(0) - 97]++;</code></pre><div class="n">'a'=97. Use 65 for uppercase, 48 for digits. Faster than a Map for small fixed sets.</div></div><div class="item"><div class="l">Arbitrary / large keys -&gt; Map</div><pre><code>const freq = new Map();
+for (const x of a) freq.set(x, (freq.get(x) || 0) + 1);</code></pre></div><div class="item"><div class="l">P2 · Most frequent character</div><pre><code>const freq = new Array(26).fill(0);
+for (const c of s) freq[c.charCodeAt(0) - 97]++;
+let idx = 0;
+for (let i = 1; i &lt; 26; i++) if (freq[i] &gt; freq[idx]) idx = i;
+return String.fromCharCode(97 + idx);</code></pre><div class="n">First-seen ties win because &gt; (not &gt;=) never overwrites an equal max.</div></div><h2>Difference Array — range updates + prefix (line sweep)</h2><div class="item"><div class="l">Add val to every index in [l, r] for many queries</div><pre><code>const diff = new Array(n + 1).fill(0);
+for (const [l, r, val] of queries) {
+  diff[l] += val;
+  diff[r + 1] -= val;   // needs size n+1
+}
+// recover final array with one prefix pass
+for (let i = 1; i &lt; n; i++) diff[i] += diff[i - 1];</code></pre><div class="n">Each query becomes O(1); rebuild in O(n) at the end. This is prefix sum run in reverse.</div></div><div class="item"><div class="l">P3 · Maximum platforms needed (timeline / freq buckets)</div><pre><code>const line = new Array(T + 2).fill(0);
+for (let k = 0; k &lt; n; k++) {
+  line[arr[k]]++;        // train arrives -&gt; +1
+  line[dep[k] + 1]--;    // frees platform AFTER departure
+}
+let cur = 0, ans = 0;
+for (let t = 0; t &lt;= T; t++) { cur += line[t]; ans = Math.max(ans, cur); }</code></pre><div class="n">dep+1 because a train on the platform at its departure minute still occupies it.</div></div><div class="item"><div class="l">P3 · Two-pointer variant (sort arr &amp; dep)</div><pre><code>arr.sort((a,b)=&gt;a-b); dep.sort((a,b)=&gt;a-b);
+let plat = 0, ans = 0, i = 0, j = 0;
+while (i &lt; n) {
+  if (arr[i] &lt;= dep[j]) { plat++; i++; ans = Math.max(ans, plat); }
+  else { plat--; j++; }
+}
+return ans;</code></pre><div class="n">Use &lt;= (arrival == departure overlaps -&gt; needs its own platform).</div></div><h2>Prefix + HashMap — count subarrays by property</h2><div class="item"><div class="l">P4 · Subarray sums divisible by K (LC 974)</div><pre><code>var subarraysDivByK = function(nums, k) {
+  const count = new Map([[0, 1]]); // empty prefix, remainder 0
+  let sum = 0, ans = 0;
+  for (const x of nums) {
+    sum += x;
+    const r = ((sum % k) + k) % k; // normalize negatives
+    const c = count.get(r) || 0;
+    ans += c;                       // pair with every earlier same-remainder prefix
+    count.set(r, c + 1);
+  }
+  return ans;
+};</code></pre><div class="n">Two prefixes with equal remainder =&gt; the slice between them is divisible by k. Seed {0:1}.</div></div><div class="item"><div class="l">Sibling pattern · subarray sum == k (LC 560)</div><pre><code>const cnt = new Map([[0, 1]]);
+let sum = 0, ans = 0;
+for (const x of nums) {
+  sum += x;
+  ans += cnt.get(sum - k) || 0;
+  cnt.set(sum, (cnt.get(sum) || 0) + 1);
+}</code></pre><div class="n">Same skeleton: count how many earlier prefixes make the gap equal the target.</div></div><h2>Sliding Window — contiguous subarray/substring templates</h2><div class="item"><div class="l">Fixed-size window (length k)</div><pre><code>let sum = 0;
+for (let r = 0; r &lt; n; r++) {
+  sum += a[r];
+  if (r &gt;= k) sum -= a[r - k];      // evict element leaving window
+  if (r &gt;= k - 1) { /* window [r-k+1 .. r] is complete */ }
+}</code></pre></div><div class="item"><div class="l">Variable window (longest satisfying a condition)</div><pre><code>let l = 0, ans = 0;
+for (let r = 0; r &lt; n; r++) {
+  add(a[r]);
+  while (!valid()) { remove(a[l]); l++; } // shrink until valid again
+  ans = Math.max(ans, r - l + 1);
+}</code></pre><div class="n">Use while (not if) to shrink — the window may need multiple removals.</div></div><div class="item"><div class="l">P5 · K-Beauty of a Number (LC 2269)</div><pre><code>var divisorSubstrings = function(num, k) {
+  const s = String(num);
+  let ans = 0;
+  for (let i = 0; i + k &lt;= s.length; i++) {
+    const d = Number(s.substr(i, k));
+    if (d !== 0 &amp;&amp; num % d === 0) ans++;   // skip divide-by-zero
+  }
+  return ans;
+};</code></pre><div class="n">Fixed window of k digits; a substring like '00' -&gt; 0 must be excluded.</div></div><div class="item"><div class="l">P6 · Substrings containing all of a, b, c (LC 1358)</div><pre><code>var numberOfSubstrings = function(s) {
+  const last = { a: -1, b: -1, c: -1 };
+  let ans = 0;
+  for (let i = 0; i &lt; s.length; i++) {
+    last[s[i]] = i;
+    ans += 1 + Math.min(last.a, last.b, last.c); // 0 while any char unseen
+  }
+  return ans;
+};</code></pre><div class="n">For each right end, all substrings starting &lt;= min(last a,b,c) are valid. -1 sentinel makes the term 0.</div></div><h2>Exactly-K via atMost(K) − atMost(K−1)</h2><div class="item"><div class="l">P7 · Count Nice Subarrays — sliding window (LC 1248)</div><pre><code>var numberOfSubarrays = function(nums, k) {
+  const atMost = (m) =&gt; {
+    if (m &lt; 0) return 0;
+    let l = 0, cnt = 0, res = 0;
+    for (let r = 0; r &lt; nums.length; r++) {
+      cnt += nums[r] &amp; 1;
+      while (cnt &gt; m) cnt -= nums[l++] &amp; 1;
+      res += r - l + 1;              // # subarrays ending at r with &lt;= m odds
+    }
+    return res;
+  };
+  return atMost(k) - atMost(k - 1);
+};</code></pre><div class="n">"Exactly k" of a monotone count = atMost(k) − atMost(k−1). Treat odd as 1 (x &amp; 1).</div></div><div class="item"><div class="l">P7 · Same problem via prefix-count + Map</div><pre><code>const cnt = new Map([[0, 1]]);
+let odds = 0, ans = 0;
+for (const x of nums) {
+  odds += x &amp; 1;
+  ans += cnt.get(odds - k) || 0;
+  cnt.set(odds, (cnt.get(odds) || 0) + 1);
+}
+return ans;</code></pre><div class="n">Map odd-count exactly like subarray-sum==k: odds is the prefix, k is the target.</div></div><h2>Pattern Recognition — pick the tool fast</h2><div class="item"><div class="l">"Sum/answer over range [l..r]", static array</div><div class="n">Prefix sum. Precompute once, answer each query in O(1).</div></div><div class="item"><div class="l">"Count subarrays where sum/count has property P"</div><div class="n">Prefix + HashMap of seen prefixes (== k, divisible by k, equal remainder). Seed {0:1}.</div></div><div class="item"><div class="l">"Apply many range updates, then read"</div><div class="n">Difference array: +val at l, −val at r+1, one prefix pass to materialize.</div></div><div class="item"><div class="l">"Contiguous window with a constraint (longest/shortest/count)"</div><div class="n">Sliding window. Fixed size -&gt; evict a[r-k]; variable -&gt; shrink with while(!valid).</div></div><div class="item"><div class="l">"Exactly K ... " of a monotone quantity</div><div class="n">atMost(K) − atMost(K−1). Turn a hard equality into two easy at-most windows.</div></div><div class="item"><div class="l">General approach (the technique)</div><div class="n">Brute force first -&gt; spot repeated work -&gt; replace it with prefix (cumulative) or window (incremental) so each step is O(1).</div></div>
+<h2>Quick tips &amp; gotchas</h2><ul class="tips"><li>Make prefix arrays size n+1 with a leading 0 — kills the l===0 special case and makes a[l..r] = prefix[r+1]-prefix[l].</li><li>Normalize negative remainders: ((sum % k) + k) % k. JS % keeps the sign of the dividend, which breaks the divisible-by-k Map.</li><li>Seed prefix-count maps with {0: 1} — it represents the empty prefix so subarrays starting at index 0 get counted.</li><li>In difference arrays and platform sweeps, size the array n+1 (or T+2) so the r+1 / dep+1 decrement never overflows.</li><li>Shrink variable windows with while, not if — one new right element can violate the constraint by more than one unit.</li><li>Maximum platforms: use &lt;= when comparing arrival to departure; a train arriving exactly when another leaves still needs its own platform.</li><li>K-Beauty and any 'divides num' check must guard against d === 0 before num % d (e.g. substring '00').</li><li>'Exactly k' is almost always atMost(k) - atMost(k-1); guard atMost(m) with m&lt;0 -&gt; return 0.</li></ul>
+</div></body></html>

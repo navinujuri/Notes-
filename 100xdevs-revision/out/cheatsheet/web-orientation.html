@@ -1,0 +1,106 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Cheat Sheet · Web Dev + Devops Orientation</title><style>:root{--bg:#fff;--fg:#1a1a1a;--muted:#6b7280;--line:#e5e7eb;--accent:#0d9488;--card:#f9fafb;--code:#f3f4f6;--codefg:#111}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1115;--fg:#e6e6e6;--muted:#9aa0aa;--line:#242833;--accent:#2dd4bf;--card:#171a21;--code:#0b0e13;--codefg:#e6e6e6}}
+*{box-sizing:border-box}body{margin:0;font:16px/1.6 system-ui,Segoe UI,sans-serif;background:var(--bg);color:var(--fg)}
+.wrap{max-width:860px;margin:0 auto;padding:1.2rem}
+a.back{color:var(--accent);text-decoration:none;font-size:.9rem}
+h1{font-size:1.5rem;margin:.6rem 0 .2rem}.sub{color:var(--muted);margin:0 0 1.4rem}
+h2{font-size:1.1rem;margin:1.6rem 0 .5rem;color:var(--accent)}
+.item{border:1px solid var(--line);border-radius:10px;background:var(--card);padding:.6rem .8rem;margin:.5rem 0}
+.item .l{font-weight:700}
+.item .n{color:var(--muted);font-size:.92rem;margin-top:.2rem}
+pre{margin:.45rem 0 0;background:var(--code);color:var(--codefg);border:1px solid var(--line);border-radius:8px;padding:.6rem .8rem;overflow-x:auto}
+code,pre{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:.86rem}
+.tips{border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:10px;background:var(--card);padding:.6rem 1rem}
+.tips li{margin:.35rem 0}
+@media print{.back{display:none}}</style></head><body><div class="wrap">
+<a class="back" href="../revision.html">← Back to revision index</a>
+<h1>Web Dev + Devops Orientation — Cheat Sheet</h1>
+<p class="sub">Cohort 2.0 · 8 lessons · quick reference</p>
+<h2>Orientation &amp; Study Strategy</h2><div class="item"><div class="l">Avoid the spikes — consistency &gt; cramming</div><div class="n">Don't binge 8h then vanish for a week. 1-2 focused hours daily beats weekend spikes; the dropout risk is the gap, not the pace.</div></div><div class="item"><div class="l">"What would I do if I was you?" — build, don't just watch</div><div class="n">Passive video-watching ≈ 0 retention. Pause, type every snippet yourself, then rebuild it from scratch without the video.</div></div><div class="item"><div class="l">Select your level — Beginner vs Advanced/DevOps track</div><div class="n">Beginner: start HTML/CSS/JS fundamentals. If you already know JS + React, skip ahead and start at the backend/DevOps level. Don't sit through material you know.</div></div><div class="item"><div class="l">Good things to hash out (before Day 1)</div><pre><code># accounts to create upfront
+- GitHub (auth, portfolio, deploys)
+- Vercel / Netlify (free frontend hosting)
+- Discord (cohort community + doubt support)</code></pre><div class="n">Get the boring setup out of the way so nothing blocks you mid-lesson.</div></div><div class="item"><div class="l">Take notes + ship projects publicly</div><div class="n">Push every exercise to GitHub. A green contribution graph + deployed links is your interview proof.</div></div><h2>VSCode Setup</h2><div class="item"><div class="l">Install (Windows)</div><pre><code># download from https://code.visualstudio.com
+# during install: check "Add to PATH" + "Open with Code" context menu
+code --version    # verify from terminal
+code .            # open current folder</code></pre></div><div class="item"><div class="l">Essential extensions</div><pre><code>Prettier - Code formatter
+Live Server            # right-click .html -&gt; Open with Live Server
+ESLint
+Auto Rename Tag
+ErrorLens</code></pre><div class="n">Live Server auto-reloads the browser on save — no manual F5.</div></div><div class="item"><div class="l">Format on save</div><pre><code>// .vscode/settings.json
+{
+  "editor.formatOnSave": true,
+  "editor.defaultFormatter": "esbenp.prettier-vscode",
+  "editor.tabSize": 2
+}</code></pre></div><div class="item"><div class="l">Emmet — HTML boilerplate fast</div><pre><code>! + Tab            -&gt; full HTML5 skeleton
+div.card&gt;h2+p      -&gt; &lt;div class="card"&gt;&lt;h2&gt;&lt;/h2&gt;&lt;p&gt;&lt;/p&gt;&lt;/div&gt;
+ul&gt;li*3           -&gt; &lt;ul&gt; with 3 &lt;li&gt;</code></pre><div class="n">Emmet ships built-in; just type the abbreviation and press Tab.</div></div><div class="item"><div class="l">Key shortcuts</div><pre><code>Ctrl+`        toggle terminal
+Ctrl+P        quick-open file
+Ctrl+Shift+P  command palette
+Alt+Click     multi-cursor
+Ctrl+/        toggle comment</code></pre></div><h2>HTML — Boilerplate &amp; Document Structure</h2><div class="item"><div class="l">HTML5 skeleton</div><pre><code>&lt;!DOCTYPE html&gt;
+&lt;html lang="en"&gt;
+&lt;head&gt;
+  &lt;meta charset="UTF-8"&gt;
+  &lt;meta name="viewport" content="width=device-width, initial-scale=1.0"&gt;
+  &lt;title&gt;My Page&lt;/title&gt;
+  &lt;link rel="stylesheet" href="style.css"&gt;
+&lt;/head&gt;
+&lt;body&gt;
+  &lt;!-- content --&gt;
+  &lt;script src="script.js"&gt;&lt;/script&gt;
+&lt;/body&gt;
+&lt;/html&gt;</code></pre><div class="n">viewport meta is mandatory for responsive/mobile. Put &lt;script&gt; at end of body (or use defer).</div></div><div class="item"><div class="l">Semantic layout elements</div><pre><code>&lt;header&gt;, &lt;nav&gt;, &lt;main&gt;, &lt;section&gt;,
+&lt;article&gt;, &lt;aside&gt;, &lt;footer&gt;</code></pre><div class="n">Use these over generic &lt;div&gt; — better a11y + SEO. One &lt;main&gt; per page.</div></div><div class="item"><div class="l">Headings &amp; text</div><pre><code>&lt;h1&gt;..&lt;h6&gt;  &lt;p&gt;  &lt;strong&gt;  &lt;em&gt;
+&lt;br&gt;  &lt;hr&gt;  &lt;span&gt;</code></pre><div class="n">Exactly one &lt;h1&gt; per page; don't skip heading levels for styling.</div></div><div class="item"><div class="l">Links &amp; images</div><pre><code>&lt;a href="https://x.com" target="_blank" rel="noopener"&gt;Link&lt;/a&gt;
+&lt;img src="pic.jpg" alt="describe it" width="300"&gt;</code></pre><div class="n">alt is required for a11y. target=_blank needs rel=noopener for security.</div></div><div class="item"><div class="l">Lists</div><pre><code>&lt;ul&gt;&lt;li&gt;item&lt;/li&gt;&lt;/ul&gt;      &lt;!-- unordered --&gt;
+&lt;ol&gt;&lt;li&gt;step&lt;/li&gt;&lt;/ol&gt;      &lt;!-- ordered --&gt;</code></pre></div><h2>HTML — Forms &amp; Inputs</h2><div class="item"><div class="l">Form skeleton</div><pre><code>&lt;form action="/submit" method="POST"&gt;
+  &lt;label for="email"&gt;Email&lt;/label&gt;
+  &lt;input type="email" id="email" name="email" required&gt;
+  &lt;button type="submit"&gt;Send&lt;/button&gt;
+&lt;/form&gt;</code></pre><div class="n">name is the key sent to the server. Match label for= to input id= for a11y + click-to-focus.</div></div><div class="item"><div class="l">Input types</div><pre><code>type="text | email | password | number"
+type="checkbox | radio | date | file"
+&lt;textarea&gt;&lt;/textarea&gt;
+&lt;select&gt;&lt;option value="1"&gt;One&lt;/option&gt;&lt;/select&gt;</code></pre><div class="n">Radios sharing the same name= act as one group.</div></div><div class="item"><div class="l">Validation attributes</div><pre><code>required  minlength="3"  maxlength="20"
+min="0"  max="100"  pattern="[0-9]+"
+placeholder="hint"</code></pre></div><h2>CSS — Selectors &amp; Box Model</h2><div class="item"><div class="l">Attach CSS</div><pre><code>&lt;link rel="stylesheet" href="style.css"&gt;  &lt;!-- external, preferred --&gt;
+&lt;style&gt; p { color: red; } &lt;/style&gt;       &lt;!-- internal --&gt;
+&lt;p style="color:red"&gt;                    &lt;!-- inline, avoid --&gt;</code></pre></div><div class="item"><div class="l">Selectors</div><pre><code>*            /* all */
+tag          /* p, div */
+.class       /* .btn */
+#id          /* #nav */
+.a .b        /* descendant */
+.a &gt; .b      /* direct child */
+a:hover      /* pseudo-class */
+input:focus</code></pre></div><div class="item"><div class="l">Specificity (who wins)</div><pre><code>inline &gt; #id &gt; .class &gt; tag &gt; *</code></pre><div class="n">!important overrides all — avoid it; it's a debugging trap. More specific selector wins ties by source order (last one applies).</div></div><div class="item"><div class="l">Box model — always reset</div><pre><code>* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}</code></pre><div class="n">border-box makes width include padding+border — sane sizing. Default content-box adds them on top.</div></div><div class="item"><div class="l">Units</div><pre><code>px    /* fixed */
+rem   /* relative to root font-size (16px) */
+em    /* relative to parent font-size */
+%     /* relative to parent */
+vw/vh /* viewport width/height */</code></pre><div class="n">Use rem for font-size/spacing so it scales; px for borders.</div></div><h2>CSS — Flexbox (1D layout)</h2><div class="item"><div class="l">Enable flex on the container</div><pre><code>.container {
+  display: flex;
+  flex-direction: row;   /* or column */
+  gap: 16px;
+}</code></pre></div><div class="item"><div class="l">Align along main + cross axis</div><pre><code>.container {
+  justify-content: center;   /* main axis: start|center|space-between|space-around */
+  align-items: center;       /* cross axis: start|center|stretch */
+}</code></pre><div class="n">justify-content follows flex-direction. Swap to column and the axes flip.</div></div><div class="item"><div class="l">Common centering (both axes)</div><pre><code>display: flex;
+justify-content: center;
+align-items: center;</code></pre><div class="n">The classic "center a div" — 3 lines.</div></div><div class="item"><div class="l">Item growth &amp; wrapping</div><pre><code>.item { flex: 1; }        /* grow to fill equally */
+.container { flex-wrap: wrap; }</code></pre></div><h2>CSS — Grid, Positioning &amp; Responsive</h2><div class="item"><div class="l">Grid (2D layout)</div><pre><code>.grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}</code></pre><div class="n">1fr = 1 fraction of free space. Use grid for 2D (rows+cols), flex for 1D.</div></div><div class="item"><div class="l">Auto-responsive grid (no media query)</div><pre><code>grid-template-columns:
+  repeat(auto-fit, minmax(200px, 1fr));</code></pre><div class="n">Cards auto-reflow: as many 200px+ columns as fit.</div></div><div class="item"><div class="l">position</div><pre><code>position: relative;  /* anchor for children */
+position: absolute;  /* vs nearest positioned ancestor */
+position: fixed;     /* vs viewport (sticky navbar) */
+position: sticky; top: 0;</code></pre><div class="n">absolute needs a relative ancestor or it anchors to &lt;body&gt;.</div></div><div class="item"><div class="l">Media query (mobile-friendly)</div><pre><code>@media (max-width: 768px) {
+  .container { flex-direction: column; }
+}</code></pre><div class="n">Prefer mobile-first with min-width. Requires the viewport meta tag in HTML.</div></div><div class="item"><div class="l">Colors &amp; background</div><pre><code>color: #333;
+background: #f5f5f5;
+color: rgb(255 0 0 / 0.5);   /* alpha */</code></pre></div>
+<h2>Quick tips &amp; gotchas</h2><ul class="tips"><li>Consistency beats intensity: short daily sessions avoid the 'spike then quit' trap that kills most cohort learners.</li><li>Type every snippet by hand and rebuild from scratch — watching lessons without coding retains almost nothing.</li><li>Skip to your real level. If you know HTML/CSS/JS already, don't re-watch fundamentals; start where it's new.</li><li>Always add box-sizing: border-box on * and reset margin/padding — the #1 source of unexpected layout width.</li><li>Set the &lt;meta name="viewport"&gt; tag or media queries and responsive layouts silently do nothing on mobile.</li><li>Flexbox = one dimension (row OR column), Grid = two dimensions (rows AND cols). Pick by the problem, not habit.</li><li>Never fight specificity with !important — write a more specific selector instead; !important compounds into unmaintainable CSS.</li><li>Use Live Server (auto-reload) + Prettier format-on-save from day one so you focus on code, not manual refresh/formatting.</li></ul>
+</div></body></html>

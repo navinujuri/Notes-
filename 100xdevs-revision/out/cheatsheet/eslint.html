@@ -1,0 +1,123 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Cheat Sheet · ESLint, Prettier and Pre-commit hooks</title><style>:root{--bg:#fff;--fg:#1a1a1a;--muted:#6b7280;--line:#e5e7eb;--accent:#0d9488;--card:#f9fafb;--code:#f3f4f6;--codefg:#111}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1115;--fg:#e6e6e6;--muted:#9aa0aa;--line:#242833;--accent:#2dd4bf;--card:#171a21;--code:#0b0e13;--codefg:#e6e6e6}}
+*{box-sizing:border-box}body{margin:0;font:16px/1.6 system-ui,Segoe UI,sans-serif;background:var(--bg);color:var(--fg)}
+.wrap{max-width:860px;margin:0 auto;padding:1.2rem}
+a.back{color:var(--accent);text-decoration:none;font-size:.9rem}
+h1{font-size:1.5rem;margin:.6rem 0 .2rem}.sub{color:var(--muted);margin:0 0 1.4rem}
+h2{font-size:1.1rem;margin:1.6rem 0 .5rem;color:var(--accent)}
+.item{border:1px solid var(--line);border-radius:10px;background:var(--card);padding:.6rem .8rem;margin:.5rem 0}
+.item .l{font-weight:700}
+.item .n{color:var(--muted);font-size:.92rem;margin-top:.2rem}
+pre{margin:.45rem 0 0;background:var(--code);color:var(--codefg);border:1px solid var(--line);border-radius:8px;padding:.6rem .8rem;overflow-x:auto}
+code,pre{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:.86rem}
+.tips{border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:10px;background:var(--card);padding:.6rem 1rem}
+.tips li{margin:.35rem 0}
+@media print{.back{display:none}}</style></head><body><div class="wrap">
+<a class="back" href="../revision.html">← Back to revision index</a>
+<h1>ESLint, Prettier and Pre-commit hooks — Cheat Sheet</h1>
+<p class="sub">Cohort 2.0 · 9 lessons · quick reference</p>
+<h2>Linting 101 &amp; ESLint setup</h2><div class="item"><div class="l">Linting = static analysis that flags bugs, bad patterns &amp; style before runtime (unused vars, no-undef, ==). Formatting = whitespace/quotes/semicolons (Prettier's job).</div><div class="n">Lint = correctness; format = cosmetics. Keep them separate.</div></div><div class="item"><div class="l">Install + scaffold config</div><pre><code>npm i -D eslint
+npm init @eslint/config@latest   # interactive; writes eslint.config.js</code></pre></div><div class="item"><div class="l">Run</div><pre><code>npx eslint .            # lint cwd
+npx eslint . --fix      # auto-fix fixable rules
+npx eslint src --max-warnings=0   # CI: fail on any warning</code></pre></div><div class="item"><div class="l">package.json scripts</div><pre><code>"scripts": {
+  "lint": "eslint .",
+  "lint:fix": "eslint . --fix"
+}</code></pre></div><h2>Flat config (eslint.config.js — ESLint v9+ default)</h2><div class="item"><div class="l">Base JS config — array of config objects, first-match-wins merge</div><pre><code>// eslint.config.js
+import js from "@eslint/js";
+import globals from "globals";
+
+export default [
+  js.configs.recommended,
+  {
+    files: ["**/*.{js,mjs,cjs}"],
+    languageOptions: {
+      ecmaVersion: "latest",
+      sourceType: "module",
+      globals: { ...globals.browser, ...globals.node },
+    },
+    rules: {
+      "no-unused-vars": "warn",
+      eqeqeq: ["error", "always"],
+    },
+  },
+];</code></pre></div><div class="item"><div class="l">Global ignore = an object with ONLY an `ignores` key</div><pre><code>{ ignores: ["dist/**", "coverage/**", "**/*.min.js"] }</code></pre><div class="n">.eslintignore is gone in flat config — ignores live here. node_modules &amp; dotfiles ignored by default.</div></div><div class="item"><div class="l">Legacy .eslintrc (v8 / opt-in)</div><pre><code>// .eslintrc.json
+{
+  "root": true,
+  "extends": ["eslint:recommended"],
+  "parserOptions": { "ecmaVersion": "latest", "sourceType": "module" },
+  "env": { "browser": true, "node": true }
+}</code></pre><div class="n">Force legacy in v9: ESLINT_USE_FLAT_CONFIG=false. Removed entirely in v10.</div></div><h2>Rules, severity &amp; disabling</h2><div class="item"><div class="l">Severity: "off"/0, "warn"/1, "error"/2 (nonzero exit)</div><pre><code>rules: {
+  "no-console": "off",
+  "no-debugger": "warn",
+  "prefer-const": "error",
+  quotes: ["error", "single"],   // rule + options tuple
+}</code></pre></div><div class="item"><div class="l">Disable inline</div><pre><code>// eslint-disable-next-line no-console
+console.log(x);
+alert(1); // eslint-disable-line no-alert
+
+/* eslint-disable no-unused-vars */
+// ...block...
+/* eslint-enable no-unused-vars */</code></pre></div><div class="item"><div class="l">File-level directive</div><pre><code>/* eslint-disable */          // whole file
+/* eslint no-console: "error" */  // override one rule for file</code></pre></div><div class="item"><div class="l">Report unused disables (catch stale suppressions)</div><pre><code>npx eslint . --report-unused-disable-directives</code></pre></div><h2>React &amp; TypeScript</h2><div class="item"><div class="l">TypeScript via typescript-eslint helper</div><pre><code>npm i -D typescript-eslint
+
+// eslint.config.js
+import tseslint from "typescript-eslint";
+export default tseslint.config(
+  js.configs.recommended,
+  ...tseslint.configs.recommended,
+);</code></pre><div class="n">Type-aware rules need languageOptions.parserOptions.projectService: true (slower).</div></div><div class="item"><div class="l">React + hooks (flat)</div><pre><code>import react from "eslint-plugin-react";
+import hooks from "eslint-plugin-react-hooks";
+
+{
+  files: ["**/*.{jsx,tsx}"],
+  plugins: { react, "react-hooks": hooks },
+  settings: { react: { version: "detect" } },
+  languageOptions: { parserOptions: { ecmaFeatures: { jsx: true } } },
+  rules: {
+    ...react.configs.flat.recommended.rules,
+    ...hooks.configs.recommended.rules,
+    "react/react-in-jsx-scope": "off",
+    "react/prop-types": "off",
+  },
+}</code></pre><div class="n">react-in-jsx-scope off for React 17+ new JSX transform. Vite adds eslint-plugin-react-refresh.</div></div><h2>Next.js</h2><div class="item"><div class="l">create-next-app installs eslint-config-next automatically</div><pre><code>npx next lint        # deprecated in Next 16 — call eslint directly instead</code></pre></div><div class="item"><div class="l">Flat config with FlatCompat (Next 15 default)</div><pre><code>// eslint.config.mjs
+import { FlatCompat } from "@eslint/eslintrc";
+const compat = new FlatCompat({ baseDirectory: import.meta.dirname });
+export default [
+  ...compat.extends("next/core-web-vitals", "next/typescript"),
+];</code></pre><div class="n">core-web-vitals = stricter perf rules; next/typescript adds TS rules.</div></div><h2>Prettier + ESLint integration</h2><div class="item"><div class="l">Install &amp; run</div><pre><code>npm i -D prettier
+npx prettier --write .    # format in place
+npx prettier --check .    # CI: fail if unformatted</code></pre></div><div class="item"><div class="l">.prettierrc.json + .prettierignore</div><pre><code>{
+  "semi": true,
+  "singleQuote": true,
+  "trailingComma": "all",
+  "printWidth": 80,
+  "tabWidth": 2
+}</code></pre><div class="n">.prettierignore mirrors .gitignore syntax (dist, build, *.md).</div></div><div class="item"><div class="l">eslint-config-prettier — turns OFF ESLint rules that fight Prettier</div><pre><code>npm i -D eslint-config-prettier
+
+// eslint.config.js — MUST be LAST
+import prettier from "eslint-config-prettier";
+export default [ js.configs.recommended, /* ... */, prettier ];</code></pre><div class="n">Recommended approach: ESLint lints, Prettier formats, config-prettier keeps them from overlapping.</div></div><div class="item"><div class="l">eslint-plugin-prettier — runs Prettier AS a lint rule (optional)</div><pre><code>// reports formatting as "prettier/prettier" errors
+rules: { "prettier/prettier": "error" }</code></pre><div class="n">Convenient but slower &amp; noisier; large repos usually run prettier standalone instead.</div></div><h2>VSCode &amp; popular shared configs</h2><div class="item"><div class="l">Extensions</div><pre><code>dbaeumer.vscode-eslint
+esbenp.prettier-vscode</code></pre></div><div class="item"><div class="l">.vscode/settings.json — format + fix on save</div><pre><code>{
+  "editor.defaultFormatter": "esbenp.prettier-vscode",
+  "editor.formatOnSave": true,
+  "editor.codeActionsOnSave": {
+    "source.fixAll.eslint": "explicit"
+  }
+}</code></pre><div class="n">"explicit" replaced the old boolean true in recent VSCode ESLint versions.</div></div><div class="item"><div class="l">Airbnb config</div><pre><code>npx install-peerdeps --dev eslint-config-airbnb
+// extends: "airbnb", "airbnb/hooks"</code></pre><div class="n">Very opinionated. Flat-config support lags — use eslint-config-airbnb-extended for v9.</div></div><div class="item"><div class="l">Standard / others</div><pre><code>npm i -D eslint-config-standard   // no-semi, 2-space
+// or Biome — single fast Rust tool replacing ESLint+Prettier
+npx @biomejs/biome check --write .</code></pre></div><h2>Pre-commit hooks (Husky + lint-staged)</h2><div class="item"><div class="l">Install &amp; init Husky v9</div><pre><code>npm i -D husky lint-staged
+npx husky init   # adds "prepare":"husky" + creates .husky/pre-commit</code></pre><div class="n">prepare script auto-installs hooks on npm install for teammates.</div></div><div class="item"><div class="l">.husky/pre-commit (v9 — no shebang/husky.sh needed)</div><pre><code>npx lint-staged</code></pre></div><div class="item"><div class="l">lint-staged config (package.json) — runs only on STAGED files</div><pre><code>"lint-staged": {
+  "*.{js,jsx,ts,tsx}": ["eslint --fix", "prettier --write"],
+  "*.{json,md,css,html}": ["prettier --write"]
+}</code></pre><div class="n">lint-staged appends staged filenames to each command — don't pass your own globs (would re-lint the whole repo).</div></div><div class="item"><div class="l">Alternative: Lefthook (fast, parallel, language-agnostic)</div><pre><code># lefthook.yml
+pre-commit:
+  parallel: true
+  commands:
+    lint:
+      glob: "*.{js,ts,jsx,tsx}"
+      run: npx eslint {staged_files} --fix
+      stage_fixed: true</code></pre></div><div class="item"><div class="l">Bypass a hook (emergencies only)</div><pre><code>git commit --no-verify -m "wip"</code></pre></div>
+<h2>Quick tips &amp; gotchas</h2><ul class="tips"><li>ESLint v9 defaults to flat config (eslint.config.js). .eslintrc + .eslintignore are deprecated and dropped in v10 — migrate or pin v8.</li><li>Order matters: put eslint-config-prettier (and any *-config-prettier) LAST in the flat array so it can disable earlier formatting rules.</li><li>A flat-config object with ONLY `ignores` is a global ignore; ignores alongside other keys only scopes THAT block.</li><li>Lint vs format: let Prettier own whitespace/quotes/commas and ESLint own logic. Avoid eslint-plugin-prettier on big repos — run `prettier --write` separately for speed.</li><li>React 17+ new JSX transform → turn off react/react-in-jsx-scope and react/jsx-uses-react (false positives otherwise).</li><li>Type-aware TS rules require parserOptions.projectService/project; they're much slower, so scope them to source files only.</li><li>In CI use `eslint --max-warnings=0` and `prettier --check .` so warnings and unformatted code fail the build.</li><li>Husky v9 hook files are plain scripts — the old `#!/bin/sh` + `. "$(dirname)/_/husky.sh"` header is gone; `next lint` is deprecated in Next 16, call eslint directly.</li></ul>
+</div></body></html>

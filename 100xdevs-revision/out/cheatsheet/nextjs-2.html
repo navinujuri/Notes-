@@ -1,0 +1,131 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Cheat Sheet · NextJS (Server side)</title><style>:root{--bg:#fff;--fg:#1a1a1a;--muted:#6b7280;--line:#e5e7eb;--accent:#0d9488;--card:#f9fafb;--code:#f3f4f6;--codefg:#111}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1115;--fg:#e6e6e6;--muted:#9aa0aa;--line:#242833;--accent:#2dd4bf;--card:#171a21;--code:#0b0e13;--codefg:#e6e6e6}}
+*{box-sizing:border-box}body{margin:0;font:16px/1.6 system-ui,Segoe UI,sans-serif;background:var(--bg);color:var(--fg)}
+.wrap{max-width:860px;margin:0 auto;padding:1.2rem}
+a.back{color:var(--accent);text-decoration:none;font-size:.9rem}
+h1{font-size:1.5rem;margin:.6rem 0 .2rem}.sub{color:var(--muted);margin:0 0 1.4rem}
+h2{font-size:1.1rem;margin:1.6rem 0 .5rem;color:var(--accent)}
+.item{border:1px solid var(--line);border-radius:10px;background:var(--card);padding:.6rem .8rem;margin:.5rem 0}
+.item .l{font-weight:700}
+.item .n{color:var(--muted);font-size:.92rem;margin-top:.2rem}
+pre{margin:.45rem 0 0;background:var(--code);color:var(--codefg);border:1px solid var(--line);border-radius:8px;padding:.6rem .8rem;overflow-x:auto}
+code,pre{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:.86rem}
+.tips{border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:10px;background:var(--card);padding:.6rem 1rem}
+.tips li{margin:.35rem 0}
+@media print{.back{display:none}}</style></head><body><div class="wrap">
+<a class="back" href="../revision.html">← Back to revision index</a>
+<h1>NextJS (Server side) — Cheat Sheet</h1>
+<p class="sub">Cohort 2.0 · 12 lessons · quick reference</p>
+<h2>Data Fetching: Server Components &amp; Loaders</h2><div class="item"><div class="l">Server Component (default) — fetch directly, no useEffect</div><pre><code>// app/users/page.tsx  (Server Component by default)
+export default async function Page() {
+  const res = await fetch("https://api.example.com/users", { cache: "no-store" });
+  const users = await res.json();
+  return &lt;div&gt;{users.map((u:any) =&gt; &lt;p key={u.id}&gt;{u.name}&lt;/p&gt;)}&lt;/div&gt;;
+}</code></pre><div class="n">async components run on the server; secrets/DB calls stay off the client. No loading state needed — it streams.</div></div><div class="item"><div class="l">React recap — client fetch needs useEffect + state</div><pre><code>"use client";
+import { useEffect, useState } from "react";
+export default function Users() {
+  const [data, setData] = useState&lt;any[]&gt;([]);
+  useEffect(() =&gt; { fetch("/api/users").then(r=&gt;r.json()).then(setData); }, []);
+  return &lt;&gt;{data.map(u =&gt; &lt;p key={u.id}&gt;{u.name}&lt;/p&gt;)}&lt;/&gt;;
+}</code></pre><div class="n">Runs after mount → waterfall + spinner flash. Prefer server fetch when possible.</div></div><div class="item"><div class="l">fetch cache control (App Router extends fetch)</div><pre><code>fetch(url)                              // cached (default, SSG-like)
+fetch(url, { cache: "no-store" })       // never cache (SSR every req)
+fetch(url, { next: { revalidate: 60 }})// ISR: revalidate every 60s
+fetch(url, { next: { tags: ["users"] }})// tag → revalidateTag("users")</code></pre><div class="n">Next 15 default changed to uncached (no-store) unless you opt in.</div></div><div class="item"><div class="l">loading.tsx — automatic route-level loader</div><pre><code>// app/users/loading.tsx
+export default function Loading() {
+  return &lt;p&gt;Loading users...&lt;/p&gt;;
+}</code></pre><div class="n">Rendered instantly while the async page resolves — wraps the segment in a Suspense boundary for you.</div></div><div class="item"><div class="l">Granular loading with &lt;Suspense&gt;</div><pre><code>import { Suspense } from "react";
+&lt;Suspense fallback={&lt;Spinner/&gt;}&gt;
+  &lt;SlowServerComponent /&gt;
+&lt;/Suspense&gt;</code></pre><div class="n">Stream part of the page while the rest loads. fallback shows until the child's await resolves.</div></div><div class="item"><div class="l">Parallel vs sequential fetches</div><pre><code>// sequential (slow): await a; await b;
+// parallel (fast):
+const [a, b] = await Promise.all([getUser(), getPosts()]);</code></pre></div><h2>API Routes (Route Handlers)</h2><div class="item"><div class="l">File convention — one route.ts per path</div><pre><code>app/api/users/route.ts        // -&gt; /api/users
+app/api/users/[id]/route.ts   // -&gt; /api/users/:id</code></pre><div class="n">Export named functions per HTTP verb: GET, POST, PUT, PATCH, DELETE.</div></div><div class="item"><div class="l">GET handler + NextResponse</div><pre><code>import { NextResponse } from "next/server";
+export async function GET() {
+  return NextResponse.json({ users: [] }, { status: 200 });
+}</code></pre></div><div class="item"><div class="l">POST — read JSON body</div><pre><code>export async function POST(req: Request) {
+  const body = await req.json();          // { username, password }
+  // ...validate &amp; persist
+  return NextResponse.json({ id: 1 }, { status: 201 });
+}</code></pre><div class="n">req is the standard Web Request. Use req.formData() for form posts.</div></div><div class="item"><div class="l">Dynamic params (Next 15: params is a Promise)</div><pre><code>export async function GET(req: Request,
+  { params }: { params: Promise&lt;{ id: string }&gt; }) {
+  const { id } = await params;
+  return NextResponse.json({ id });
+}</code></pre><div class="n">Next 14: params is a plain object (no await). Next 15 made it async.</div></div><div class="item"><div class="l">Query / search params</div><pre><code>export async function GET(req: Request) {
+  const { searchParams } = new URL(req.url);
+  const q = searchParams.get("q");
+}</code></pre></div><div class="item"><div class="l">Reading cookies / headers</div><pre><code>import { cookies, headers } from "next/headers";
+const token = (await cookies()).get("token")?.value; // async in Next 15</code></pre><div class="n">cookies()/headers() are async in Next 15, sync in 14.</div></div><h2>Sign-up Flow (Frontend + Backend in one app)</h2><div class="item"><div class="l">Why co-locate — no CORS, call /api/* directly</div><div class="n">Moving the backend into the Next app means same-origin requests; no separate Express server, no CORS config.</div></div><div class="item"><div class="l">Frontend form (client component)</div><pre><code>"use client";
+import { useState } from "react";
+import axios from "axios";
+export default function Signup() {
+  const [username, setU] = useState("");
+  const [password, setP] = useState("");
+  async function submit() {
+    await axios.post("/api/signup", { username, password });
+  }
+  return (&lt;div&gt;
+    &lt;input onChange={e=&gt;setU(e.target.value)} placeholder="email"/&gt;
+    &lt;input type="password" onChange={e=&gt;setP(e.target.value)}/&gt;
+    &lt;button onClick={submit}&gt;Sign up&lt;/button&gt;
+  &lt;/div&gt;);
+}</code></pre><div class="n">Any component with onClick/useState/hooks must start with "use client".</div></div><div class="item"><div class="l">Backend signup handler</div><pre><code>// app/api/signup/route.ts
+import { NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
+export async function POST(req: Request) {
+  const { username, password } = await req.json();
+  const user = await prisma.user.create({
+    data: { username, password }   // hash in real apps (bcrypt)!
+  });
+  return NextResponse.json({ id: user.id });
+}</code></pre><div class="n">Never store plaintext passwords in production — bcrypt.hash before create.</div></div><h2>Databases with Prisma</h2><div class="item"><div class="l">Install &amp; init</div><pre><code>npm install prisma --save-dev
+npm install @prisma/client
+npx prisma init        # creates prisma/schema.prisma + .env</code></pre></div><div class="item"><div class="l">schema.prisma — datasource + model</div><pre><code>datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+generator client { provider = "prisma-client-js" }
+
+model User {
+  id       Int    @id @default(autoincrement())
+  username String @unique
+  password String
+}</code></pre></div><div class="item"><div class="l">Migrate &amp; generate client</div><pre><code>npx prisma migrate dev --name init   # create + apply migration, regen client
+npx prisma generate                  # regen client only
+npx prisma studio                    # GUI to browse data</code></pre><div class="n">Use `migrate deploy` in production/CI (non-interactive).</div></div><div class="item"><div class="l">CRUD queries</div><pre><code>await prisma.user.create({ data: { username, password } });
+await prisma.user.findUnique({ where: { username } });
+await prisma.user.findMany();
+await prisma.user.update({ where: { id }, data: { password } });
+await prisma.user.delete({ where: { id } });</code></pre></div><div class="item"><div class="l">.env — connection string</div><pre><code>DATABASE_URL="postgresql://user:pass@host:5432/db"</code></pre><div class="n">Never commit .env. Prefix client-exposed vars with NEXT_PUBLIC_ (never for secrets).</div></div><h2>Singleton Prisma Client</h2><div class="item"><div class="l">Problem — dev hot-reload spawns many clients</div><div class="n">Next.js hot-reloads modules; `new PrismaClient()` per import exhausts DB connections ("too many clients").</div></div><div class="item"><div class="l">Fix — cache on globalThis</div><pre><code>// lib/prisma.ts
+import { PrismaClient } from "@prisma/client";
+const globalForPrisma = globalThis as unknown as {
+  prisma?: PrismaClient;
+};
+export const prisma =
+  globalForPrisma.prisma ?? new PrismaClient();
+if (process.env.NODE_ENV !== "production")
+  globalForPrisma.prisma = prisma;</code></pre><div class="n">Import { prisma } everywhere. In prod one instance per lambda; the global guard only matters in dev.</div></div><h2>Server Actions</h2><div class="item"><div class="l">"use server" — run server code from a form, no API route</div><pre><code>// app/actions.ts
+"use server";
+import { prisma } from "@/lib/prisma";
+export async function signup(formData: FormData) {
+  const username = formData.get("username") as string;
+  await prisma.user.create({ data: { username, password: "..." } });
+}</code></pre><div class="n">Directive at top of file (or inline in an async fn). Args/return are serialized over the wire.</div></div><div class="item"><div class="l">Wire to a form (works without JS)</div><pre><code>import { signup } from "./actions";
+export default function Page() {
+  return (&lt;form action={signup}&gt;
+    &lt;input name="username"/&gt;
+    &lt;button type="submit"&gt;Go&lt;/button&gt;
+  &lt;/form&gt;);
+}</code></pre><div class="n">action={fn} passes FormData automatically — progressive enhancement.</div></div><div class="item"><div class="l">Call from a client component</div><pre><code>"use client";
+import { signup } from "./actions";
+&lt;button onClick={() =&gt; signup(fd)}&gt;Save&lt;/button&gt;</code></pre><div class="n">You can import a server action into a client component and await it like a function.</div></div><div class="item"><div class="l">Pending state with useFormStatus</div><pre><code>"use client";
+import { useFormStatus } from "react-dom";
+function Submit() {
+  const { pending } = useFormStatus();
+  return &lt;button disabled={pending}&gt;{pending?"...":"Submit"}&lt;/button&gt;;
+}</code></pre></div><div class="item"><div class="l">Revalidate / redirect after mutation</div><pre><code>import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
+// inside the action:
+revalidatePath("/users");   // refresh cached data
+redirect("/dashboard");     // navigate after success</code></pre></div>
+<h2>Quick tips &amp; gotchas</h2><ul class="tips"><li>Server Components can't use hooks/state/onClick — add "use client" the moment you need interactivity or browser APIs.</li><li>Next 15 breaking changes: cookies(), headers(), params, and searchParams are now async (await them); fetch defaults to uncached.</li><li>Never expose secrets to the client: DB calls, API keys, and password hashing belong in Server Components, route handlers, or server actions — only NEXT_PUBLIC_* vars reach the browser.</li><li>Always use the singleton Prisma client from lib/prisma — importing `new PrismaClient()` per module crashes dev with connection-limit errors.</li><li>route.ts and page.tsx can't coexist in the same folder — a segment is either a page or an API route.</li><li>Server actions are the lightweight alternative to writing an /api route for form mutations — but return only serializable data and call revalidatePath to refresh stale caches.</li><li>Prefer fetching in Server Components over useEffect: it avoids client waterfalls, ships less JS, and needs no loading spinner (use loading.tsx / Suspense instead).</li><li>Hash passwords with bcrypt before storing — the raw-password examples are for learning only, never production.</li></ul>
+</div></body></html>

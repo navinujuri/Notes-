@@ -1,0 +1,93 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Cheat Sheet · Asynchronous Javascript, Callbacks and more</title><style>:root{--bg:#fff;--fg:#1a1a1a;--muted:#6b7280;--line:#e5e7eb;--accent:#0d9488;--card:#f9fafb;--code:#f3f4f6;--codefg:#111}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1115;--fg:#e6e6e6;--muted:#9aa0aa;--line:#242833;--accent:#2dd4bf;--card:#171a21;--code:#0b0e13;--codefg:#e6e6e6}}
+*{box-sizing:border-box}body{margin:0;font:16px/1.6 system-ui,Segoe UI,sans-serif;background:var(--bg);color:var(--fg)}
+.wrap{max-width:860px;margin:0 auto;padding:1.2rem}
+a.back{color:var(--accent);text-decoration:none;font-size:.9rem}
+h1{font-size:1.5rem;margin:.6rem 0 .2rem}.sub{color:var(--muted);margin:0 0 1.4rem}
+h2{font-size:1.1rem;margin:1.6rem 0 .5rem;color:var(--accent)}
+.item{border:1px solid var(--line);border-radius:10px;background:var(--card);padding:.6rem .8rem;margin:.5rem 0}
+.item .l{font-weight:700}
+.item .n{color:var(--muted);font-size:.92rem;margin-top:.2rem}
+pre{margin:.45rem 0 0;background:var(--code);color:var(--codefg);border:1px solid var(--line);border-radius:8px;padding:.6rem .8rem;overflow-x:auto}
+code,pre{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:.86rem}
+.tips{border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:10px;background:var(--card);padding:.6rem 1rem}
+.tips li{margin:.35rem 0}
+@media print{.back{display:none}}</style></head><body><div class="wrap">
+<a class="back" href="../revision.html">← Back to revision index</a>
+<h1>Asynchronous Javascript, Callbacks and more — Cheat Sheet</h1>
+<p class="sub">Cohort 2.0 · 9 lessons · quick reference</p>
+<h2>Functions in JS (declaration, expression, arrow)</h2><div class="item"><div class="l">Function declaration (hoisted)</div><pre><code>function add(a, b) {
+  return a + b;
+}
+add(2, 3); // 5</code></pre><div class="n">Hoisted to top of scope — callable before its line.</div></div><div class="item"><div class="l">Function expression (not hoisted)</div><pre><code>const add = function (a, b) {
+  return a + b;
+};</code></pre><div class="n">The const binding is TDZ; calling before definition throws.</div></div><div class="item"><div class="l">Arrow function</div><pre><code>const add = (a, b) =&gt; a + b;
+const sq = x =&gt; x * x;      // single arg, no parens needed
+const noop = () =&gt; {};      // empty body</code></pre><div class="n">No own `this`/`arguments`; inherits from enclosing scope. Can't be a constructor.</div></div><div class="item"><div class="l">Functions are first-class values</div><pre><code>const fns = [add, sq];
+const m = { op: add };
+fn = add; // pass around, store, return</code></pre><div class="n">Functions are objects — assign, store in arrays/objects, return them.</div></div><h2>Synchronous / blocking code</h2><div class="item"><div class="l">Sync = runs top-to-bottom, one line blocks the next</div><pre><code>console.log(1);
+const x = heavyCompute(); // everything waits here
+console.log(2);           // runs only after heavyCompute returns</code></pre><div class="n">Single-threaded: while a sync call runs, nothing else executes.</div></div><div class="item"><div class="l">Blocking the main thread (bad)</div><pre><code>function sleepBlock(ms) {
+  const end = Date.now() + ms;
+  while (Date.now() &lt; end) {} // spins CPU, freezes everything
+}</code></pre><div class="n">Busy-wait blocks the event loop; UI/other requests stall.</div></div><div class="item"><div class="l">Synchronous file read (blocks)</div><pre><code>const fs = require('fs');
+const data = fs.readFileSync('a.txt', 'utf8');
+console.log(data); // nothing else runs until read completes</code></pre><div class="n">`*Sync` APIs block the whole process — fine for CLI startup, bad in servers.</div></div><h2>I/O-bound vs CPU-bound</h2><div class="item"><div class="l">I/O-bound task</div><pre><code>// waiting on disk / network / DB
+fs.readFile(...)
+fetch('https://api...')
+db.query('SELECT ...')</code></pre><div class="n">Bottleneck is external wait, not the CPU — async wins here.</div></div><div class="item"><div class="l">CPU-bound task</div><pre><code>// heavy pure computation
+hash(bigBuffer);
+sortMillionItems(arr);
+for (…) { crunch(); }</code></pre><div class="n">Bottleneck is the processor; async doesn't help — offload to Worker threads / child processes.</div></div><div class="item"><div class="l">Why async matters for I/O</div><div class="n">During I/O the thread would otherwise sit idle; async lets it serve other work while the OS handles the wait.</div></div><div class="item"><div class="l">Handling CPU-bound work off the main thread</div><pre><code>const { Worker } = require('worker_threads');
+new Worker('./crunch.js');</code></pre><div class="n">Callbacks/promises don't parallelize CPU work — you need real threads/processes.</div></div><h2>I/O in the real world (Node fs)</h2><div class="item"><div class="l">Async read with callback (non-blocking)</div><pre><code>const fs = require('fs');
+fs.readFile('a.txt', 'utf8', (err, data) =&gt; {
+  if (err) throw err;
+  console.log(data);
+});
+console.log('runs FIRST'); // logs before file contents</code></pre><div class="n">Node convention: callback signature is (err, result) — error first.</div></div><div class="item"><div class="l">Async write</div><pre><code>fs.writeFile('out.txt', 'hi', (err) =&gt; {
+  if (err) return console.error(err);
+  console.log('written');
+});</code></pre></div><div class="item"><div class="l">Sync variant for comparison</div><pre><code>try {
+  const d = fs.readFileSync('a.txt', 'utf8');
+} catch (err) {
+  console.error(err);
+}</code></pre><div class="n">Sync uses try/catch; async passes err into the callback.</div></div><div class="item"><div class="l">setTimeout — the canonical async primitive</div><pre><code>setTimeout(() =&gt; console.log('later'), 1000);
+console.log('now'); // 'now' then 'later'</code></pre><div class="n">Delay is a minimum, not a guarantee — callback runs after the stack clears AND the timer fires.</div></div><h2>Functions as arguments (callbacks)</h2><div class="item"><div class="l">Pass a function into another function</div><pre><code>function withLogging(fn, a, b) {
+  console.log('calling');
+  return fn(a, b);
+}
+withLogging(add, 2, 3); // 5</code></pre><div class="n">A callback is just a function passed as an argument to be invoked later.</div></div><div class="item"><div class="l">Named vs inline callback</div><pre><code>arr.forEach(function (x) { console.log(x); }); // inline
+function log(x) { console.log(x); }
+arr.forEach(log);                              // named ref</code></pre><div class="n">Pass the reference `log`, not `log()` — the latter calls it immediately.</div></div><div class="item"><div class="l">Higher-order array methods</div><pre><code>[1,2,3].map(x =&gt; x * 2);        // [2,4,6]
+[1,2,3].filter(x =&gt; x % 2);     // [1,3]
+[1,2,3].reduce((a, x) =&gt; a + x, 0); // 6</code></pre></div><div class="item"><div class="l">Callback that takes its own args</div><pre><code>function repeat(n, cb) {
+  for (let i = 0; i &lt; n; i++) cb(i);
+}
+repeat(3, i =&gt; console.log(i)); // 0 1 2</code></pre></div><h2>Async code &amp; callbacks</h2><div class="item"><div class="l">Deferred execution via callback</div><pre><code>function fetchUser(id, cb) {
+  setTimeout(() =&gt; cb(null, { id, name: 'Alice' }), 500);
+}
+fetchUser(1, (err, user) =&gt; {
+  if (err) return console.error(err);
+  console.log(user.name);
+});</code></pre><div class="n">Result isn't returned — it's delivered later through the callback.</div></div><div class="item"><div class="l">Sequencing dependent async ops (nesting)</div><pre><code>fetchUser(1, (e, u) =&gt; {
+  fetchPosts(u.id, (e, posts) =&gt; {
+    fetchComments(posts[0], (e, c) =&gt; {
+      // ...callback hell
+    });
+  });
+});</code></pre><div class="n">Nested callbacks = 'pyramid of doom'; promises/async-await flatten this.</div></div><div class="item"><div class="l">Error-first pattern (Node standard)</div><pre><code>function op(cb) {
+  const err = null;
+  const result = 42;
+  cb(err, result);
+}</code></pre><div class="n">Always check `err` first before touching the result.</div></div><div class="item"><div class="l">You cannot `return` an async result</div><pre><code>function bad() {
+  let v;
+  setTimeout(() =&gt; { v = 1; }, 0);
+  return v; // undefined — timer hasn't fired yet
+}</code></pre><div class="n">The function returns before the callback runs. Use the callback (or a promise) to get the value out.</div></div><h2>JS async architecture (event loop)</h2><div class="item"><div class="l">The moving parts</div><div class="n">Call Stack (runs sync code) + Web/Node APIs (handle timers, I/O off-thread) + Callback/Task Queue + Event Loop (moves queued callbacks onto the stack when it's empty).</div></div><div class="item"><div class="l">How a callback gets executed</div><pre><code>console.log('A');
+setTimeout(() =&gt; console.log('B'), 0);
+console.log('C');
+// Output: A, C, B</code></pre><div class="n">Even with 0ms, B waits until the stack is empty — the loop drains sync code first.</div></div><div class="item"><div class="l">Microtasks run before macrotasks</div><pre><code>setTimeout(() =&gt; console.log('timeout'), 0); // macrotask
+Promise.resolve().then(() =&gt; console.log('promise')); // microtask
+// Output: promise, then timeout</code></pre><div class="n">Promise `.then`/`await` continuations (microtasks) drain fully before the next timer/I/O callback.</div></div><div class="item"><div class="l">Single-threaded, non-blocking</div><div class="n">One call stack. Concurrency comes from offloading waits to the runtime (libuv/browser), not from parallel JS execution.</div></div>
+<h2>Quick tips &amp; gotchas</h2><ul class="tips"><li>Node callbacks are error-first: `(err, result) =&gt; {}` — handle `err` before using `result`.</li><li>Pass a function reference (`cb`) not a call (`cb()`); the latter executes it right away and passes the return value.</li><li>`setTimeout(fn, 0)` does NOT run immediately — it defers `fn` until the current stack clears.</li><li>Async doesn't speed up CPU-bound work; it only helps you not block during I/O waits. Use Worker threads for heavy compute.</li><li>You can't `return` a value produced inside an async callback — the outer function has already returned. Deliver it via the callback.</li><li>Deeply nested callbacks (callback hell) are hard to read and error-handle — reach for Promises / async-await for sequential async.</li><li>Microtasks (Promises) always drain before the next macrotask (timers, I/O), regardless of delay.</li><li>Prefer async `fs.readFile` over `fs.readFileSync` in servers — the Sync version blocks every other request.</li></ul>
+</div></body></html>

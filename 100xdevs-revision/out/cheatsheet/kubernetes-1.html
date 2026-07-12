@@ -1,0 +1,115 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Cheat Sheet · Kubernetes Part 1</title><style>:root{--bg:#fff;--fg:#1a1a1a;--muted:#6b7280;--line:#e5e7eb;--accent:#0d9488;--card:#f9fafb;--code:#f3f4f6;--codefg:#111}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1115;--fg:#e6e6e6;--muted:#9aa0aa;--line:#242833;--accent:#2dd4bf;--card:#171a21;--code:#0b0e13;--codefg:#e6e6e6}}
+*{box-sizing:border-box}body{margin:0;font:16px/1.6 system-ui,Segoe UI,sans-serif;background:var(--bg);color:var(--fg)}
+.wrap{max-width:860px;margin:0 auto;padding:1.2rem}
+a.back{color:var(--accent);text-decoration:none;font-size:.9rem}
+h1{font-size:1.5rem;margin:.6rem 0 .2rem}.sub{color:var(--muted);margin:0 0 1.4rem}
+h2{font-size:1.1rem;margin:1.6rem 0 .5rem;color:var(--accent)}
+.item{border:1px solid var(--line);border-radius:10px;background:var(--card);padding:.6rem .8rem;margin:.5rem 0}
+.item .l{font-weight:700}
+.item .n{color:var(--muted);font-size:.92rem;margin-top:.2rem}
+pre{margin:.45rem 0 0;background:var(--code);color:var(--codefg);border:1px solid var(--line);border-radius:8px;padding:.6rem .8rem;overflow-x:auto}
+code,pre{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:.86rem}
+.tips{border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:10px;background:var(--card);padding:.6rem 1rem}
+.tips li{margin:.35rem 0}
+@media print{.back{display:none}}</style></head><body><div class="wrap">
+<a class="back" href="../revision.html">← Back to revision index</a>
+<h1>Kubernetes Part 1 — Cheat Sheet</h1>
+<p class="sub">Cohort 2.0 · 20 lessons · quick reference</p>
+<h2>Why k8s (before vs after)</h2><div class="item"><div class="l">Before k8s: manual ops</div><div class="n">SSH into VMs, run containers by hand, manual scaling, manual restart on crash, load balancer configured by hand. No self-healing, drift between machines.</div></div><div class="item"><div class="l">After k8s: declarative + self-healing</div><div class="n">You declare desired state (YAML); the control loop continuously reconciles actual→desired. Auto-restart, auto-reschedule on node death, rolling updates, service discovery, horizontal scaling.</div></div><div class="item"><div class="l">Cluster = control plane + worker nodes</div><div class="n">Control plane: api-server (front door), etcd (state store), scheduler (picks node), controller-manager (runs reconcile loops). Workers run kubelet + container runtime + kube-proxy.</div></div><div class="item"><div class="l">Smallest deployable unit = Pod, not container</div><div class="n">A Pod wraps 1+ containers sharing network (same IP/localhost) and volumes. You rarely create Pods directly — a Deployment manages them.</div></div><h2>Create a cluster (local)</h2><div class="item"><div class="l">kind (k8s in Docker) — fast local</div><pre><code>kind create cluster --name dev
+kind get clusters
+kind delete cluster --name dev</code></pre></div><div class="item"><div class="l">minikube — single-node VM/driver</div><pre><code>minikube start --nodes 1
+minikube status
+minikube stop &amp;&amp; minikube delete</code></pre></div><div class="item"><div class="l">k3d (lightweight k3s in Docker)</div><pre><code>k3d cluster create dev --agents 2</code></pre></div><div class="item"><div class="l">Check the cluster is up</div><pre><code>kubectl cluster-info
+kubectl get nodes -o wide</code></pre></div><div class="item"><div class="l">kubeconfig / contexts</div><pre><code>kubectl config get-contexts
+kubectl config use-context kind-dev
+kubectl config current-context</code></pre><div class="n">Default kubeconfig: ~/.kube/config (Windows: %USERPROFILE%\.kube\config). KUBECONFIG env var can point elsewhere.</div></div><h2>Kubernetes API &amp; kubectl basics</h2><div class="item"><div class="l">kubectl is a REST client to the API server</div><div class="n">Everything is an API object. kubectl get pods == GET /api/v1/namespaces/default/pods. See raw calls with -v=8.</div></div><div class="item"><div class="l">Discover API resources / versions</div><pre><code>kubectl api-resources          # kinds, shortnames, apiGroup
+kubectl api-versions           # served group/versions
+kubectl explain deployment.spec  # field docs</code></pre></div><div class="item"><div class="l">apiVersion cheat: core vs apps</div><div class="n">Pod/Service/ConfigMap → apiVersion: v1 (core group). Deployment/ReplicaSet → apps/v1.</div></div><div class="item"><div class="l">Read-only inspection</div><pre><code>kubectl get pods -A -o wide
+kubectl describe pod &lt;name&gt;
+kubectl logs &lt;pod&gt; -f --tail=100
+kubectl logs &lt;pod&gt; -c &lt;container&gt;   # multi-container</code></pre></div><div class="item"><div class="l">Exec / debug into a pod</div><pre><code>kubectl exec -it &lt;pod&gt; -- sh
+kubectl get events --sort-by=.lastTimestamp</code></pre></div><div class="item"><div class="l">Namespaces</div><pre><code>kubectl get ns
+kubectl get pods -n kube-system
+kubectl config set-context --current --namespace=dev</code></pre><div class="n">Objects are namespaced by default; nodes and PVs are cluster-scoped.</div></div><h2>Pods: create, inspect, stop</h2><div class="item"><div class="l">Run a pod imperatively (quick test)</div><pre><code>kubectl run nginx --image=nginx:1.27 --port=80
+kubectl get pod nginx -w</code></pre><div class="n">kubectl run creates a bare Pod (not managed) — deleting it does NOT recreate it.</div></div><div class="item"><div class="l">Pod manifest (declarative)</div><pre><code>apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx
+  labels:
+    app: nginx
+spec:
+  containers:
+  - name: nginx
+    image: nginx:1.27
+    ports:
+    - containerPort: 80</code></pre></div><div class="item"><div class="l">Apply / delete a manifest</div><pre><code>kubectl apply -f pod.yaml
+kubectl delete -f pod.yaml</code></pre></div><div class="item"><div class="l">Stop / delete the pod</div><pre><code>kubectl delete pod nginx
+kubectl delete pod nginx --grace-period=0 --force  # immediate</code></pre><div class="n">A bare Pod stays deleted. A Pod owned by a ReplicaSet/Deployment gets recreated — you must delete the owner instead.</div></div><div class="item"><div class="l">Reach the pod locally (no service yet)</div><pre><code>kubectl port-forward pod/nginx 8080:80
+# then curl localhost:8080</code></pre><div class="n">port-forward is for debugging only, not for real traffic.</div></div><h2>ReplicaSet &amp; Deployment</h2><div class="item"><div class="l">ReplicaSet: keeps N identical pods alive</div><pre><code>apiVersion: apps/v1
+kind: ReplicaSet
+metadata:
+  name: nginx-rs
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: nginx
+  template:
+    metadata:
+      labels:
+        app: nginx
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.27</code></pre><div class="n">selector.matchLabels MUST match template.metadata.labels or apply is rejected. Rarely authored directly — Deployments own ReplicaSets.</div></div><div class="item"><div class="l">Deployment: manages ReplicaSets + rollouts</div><pre><code>apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx-deploy
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: nginx
+  template:
+    metadata:
+      labels:
+        app: nginx
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.27</code></pre></div><div class="item"><div class="l">Create a deployment imperatively</div><pre><code>kubectl create deployment nginx --image=nginx:1.27 --replicas=3
+kubectl get deploy,rs,pods</code></pre></div><div class="item"><div class="l">Scale</div><pre><code>kubectl scale deployment nginx-deploy --replicas=5</code></pre></div><div class="item"><div class="l">Rolling update (change image) + rollback</div><pre><code>kubectl set image deploy/nginx-deploy nginx=nginx:1.28
+kubectl rollout status deploy/nginx-deploy
+kubectl rollout history deploy/nginx-deploy
+kubectl rollout undo deploy/nginx-deploy</code></pre><div class="n">Deployment spins up a new ReplicaSet and shifts pods over gradually — zero-downtime. ReplicaSet alone cannot do rolling updates or rollbacks.</div></div><div class="item"><div class="l">Why Deployment over ReplicaSet?</div><div class="n">Deployment adds versioned rollouts, rollback, and controlled surge/unavailable during updates. Use Deployment for stateless apps; use ReplicaSet almost never on its own.</div></div><h2>Services: expose the app</h2><div class="item"><div class="l">ClusterIP (default) — internal only</div><pre><code>apiVersion: v1
+kind: Service
+metadata:
+  name: nginx-svc
+spec:
+  selector:
+    app: nginx
+  ports:
+  - port: 80
+    targetPort: 80</code></pre><div class="n">Stable virtual IP + DNS (nginx-svc.&lt;ns&gt;.svc.cluster.local) load-balancing across pods matching the selector. Not reachable from outside.</div></div><div class="item"><div class="l">NodePort — expose on every node's port</div><pre><code>spec:
+  type: NodePort
+  selector:
+    app: nginx
+  ports:
+  - port: 80
+    targetPort: 80
+    nodePort: 30080   # 30000-32767</code></pre><div class="n">Reach via &lt;nodeIP&gt;:30080. Good for local/dev; ugly for prod.</div></div><div class="item"><div class="l">LoadBalancer — external cloud LB</div><pre><code>apiVersion: v1
+kind: Service
+metadata:
+  name: nginx-svc
+spec:
+  type: LoadBalancer
+  selector:
+    app: nginx
+  ports:
+  - port: 80
+    targetPort: 80</code></pre><div class="n">Cloud provider provisions a real external LB and fills EXTERNAL-IP. On bare kind/minikube it stays &lt;pending&gt; unless you run metallb / `minikube tunnel`.</div></div><div class="item"><div class="l">Expose imperatively</div><pre><code>kubectl expose deployment nginx-deploy \
+  --type=LoadBalancer --port=80 --target-port=80
+kubectl get svc nginx-deploy -w</code></pre></div><div class="item"><div class="l">port vs targetPort vs nodePort</div><div class="n">port = the Service's port; targetPort = container port it forwards to; nodePort = port opened on nodes (NodePort/LB only).</div></div><h2>Series of events (reconcile loop)</h2><div class="item"><div class="l">apply Deployment → running pods</div><div class="n">kubectl → api-server validates &amp; writes object to etcd → Deployment controller creates a ReplicaSet → ReplicaSet controller creates Pod objects → scheduler assigns each Pod to a node → kubelet on that node pulls image &amp; starts container → kubelet reports status back to api-server.</div></div><div class="item"><div class="l">Self-healing loop</div><div class="n">If a pod/node dies, actual state &lt; desired (replicas). The ReplicaSet controller notices and creates replacements — no human action needed.</div></div><div class="item"><div class="l">Traffic path with a Service</div><div class="n">Client → Service IP → kube-proxy (iptables/IPVS rules) → one of the pods matching the label selector. Endpoints object is auto-updated as pods come and go.</div></div>
+<h2>Quick tips &amp; gotchas</h2><ul class="tips"><li>Label selectors are the glue: a Service or ReplicaSet finds pods ONLY by matchLabels. A typo in labels = 0 endpoints and silent 'connection refused'.</li><li>Deleting a pod owned by a Deployment/ReplicaSet just triggers a recreate. To actually stop the app, delete or scale the owning Deployment (kubectl scale --replicas=0 / kubectl delete deploy).</li><li>selector.matchLabels is immutable on a Deployment after creation — pick labels carefully; changing them forces a delete+recreate.</li><li>kubectl apply (declarative, merges) vs kubectl create (imperative, fails if exists). Use apply -f for GitOps-style repeatable manifests.</li><li>On kind/minikube, LoadBalancer EXTERNAL-IP stays &lt;pending&gt; forever without metallb; use `minikube tunnel` or NodePort/port-forward for local access.</li><li>Always pin image tags (nginx:1.27), never :latest — :latest breaks rollout history/rollback and makes deploys non-reproducible.</li><li>kubectl describe &lt;obj&gt; and kubectl get events --sort-by=.lastTimestamp are your first stop for 'why is my pod not running' (ImagePullBackOff, CrashLoopBackOff, FailedScheduling).</li><li>Set --namespace once (kubectl config set-context --current --namespace=dev) to stop forgetting -n and 'losing' your resources in the wrong namespace.</li></ul>
+</div></body></html>

@@ -1,0 +1,126 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Cheat Sheet · Bridges</title><style>:root{--bg:#fff;--fg:#1a1a1a;--muted:#6b7280;--line:#e5e7eb;--accent:#0d9488;--card:#f9fafb;--code:#f3f4f6;--codefg:#111}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1115;--fg:#e6e6e6;--muted:#9aa0aa;--line:#242833;--accent:#2dd4bf;--card:#171a21;--code:#0b0e13;--codefg:#e6e6e6}}
+*{box-sizing:border-box}body{margin:0;font:16px/1.6 system-ui,Segoe UI,sans-serif;background:var(--bg);color:var(--fg)}
+.wrap{max-width:860px;margin:0 auto;padding:1.2rem}
+a.back{color:var(--accent);text-decoration:none;font-size:.9rem}
+h1{font-size:1.5rem;margin:.6rem 0 .2rem}.sub{color:var(--muted);margin:0 0 1.4rem}
+h2{font-size:1.1rem;margin:1.6rem 0 .5rem;color:var(--accent)}
+.item{border:1px solid var(--line);border-radius:10px;background:var(--card);padding:.6rem .8rem;margin:.5rem 0}
+.item .l{font-weight:700}
+.item .n{color:var(--muted);font-size:.92rem;margin-top:.2rem}
+pre{margin:.45rem 0 0;background:var(--code);color:var(--codefg);border:1px solid var(--line);border-radius:8px;padding:.6rem .8rem;overflow-x:auto}
+code,pre{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:.86rem}
+.tips{border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:10px;background:var(--card);padding:.6rem 1rem}
+.tips li{margin:.35rem 0}
+@media print{.back{display:none}}</style></head><body><div class="wrap">
+<a class="back" href="../revision.html">← Back to revision index</a>
+<h1>Bridges — Cheat Sheet</h1>
+<p class="sub">Cohort 3.0 · 9 lessons · quick reference</p>
+<h2>Mental model &amp; setup</h2><div class="item"><div class="l">What a bridge actually is</div><div class="n">Chains are isolated state machines — no chain can read another. A bridge = lock/burn on source + off-chain relayer + mint/unlock on destination. The relayer is the trust boundary.</div></div><div class="item"><div class="l">Lock-and-mint invariant</div><div class="n">minted(dest) == locked(source), always 1:1. Break it (double-mint, unbacked mint) and the peg collapses. This is the #1 thing to monitor.</div></div><div class="item"><div class="l">One-way bridge scope</div><div class="n">Value flows source→dest only (lock→mint). No burn→unlock reverse leg. Halves attack surface and state to track.</div></div><div class="item"><div class="l">Init Hardhat project</div><pre><code>npm init -y
+npm i -D hardhat @nomicfoundation/hardhat-toolbox dotenv
+npm i @openzeppelin/contracts
+npx hardhat init   # choose "JS project"</code></pre></div><h2>Source vault — lock the ERC-20</h2><div class="item"><div class="l">Vault that custodies tokens + emits event with nonce</div><pre><code>// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+
+contract Vault {
+    using SafeERC20 for IERC20;
+    IERC20 public immutable token;
+    uint256 public nonce;                     // monotonically increasing
+    event Locked(address indexed from, uint256 amount, address indexed to, uint256 nonce);
+
+    constructor(address _token) { token = IERC20(_token); }
+
+    function deposit(uint256 amount, address to) external {
+        token.safeTransferFrom(msg.sender, address(this), amount); // pull
+        emit Locked(msg.sender, amount, to, nonce++);              // then emit
+    }
+}</code></pre><div class="n">safeTransferFrom, not transferFrom — handles non-standard (USDT-like) tokens that don't return bool.</div></div><div class="item"><div class="l">Why approve + transferFrom (not raw transfer)</div><pre><code>token.approve(vaultAddr, amount);   // tx 1 (from user's wallet)
+vault.deposit(amount, l2Addr);      // tx 2 -&gt; runs transferFrom</code></pre><div class="n">A plain transfer to the contract gives no execution hook — can't emit the structured event the relayer needs, funds can be stranded. EIP-2612 permit collapses the two txs into one.</div></div><h2>Destination — mint contract</h2><div class="item"><div class="l">Wrapped ERC-20 with restricted mint + replay guard</div><pre><code>// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+
+contract WrappedToken is ERC20, Ownable {
+    address public relayer;
+    mapping(uint256 =&gt; bool) public processed;   // nonce =&gt; minted?
+
+    modifier onlyRelayer() { require(msg.sender == relayer, "not relayer"); _; }
+
+    constructor(address _relayer)
+        ERC20("Wrapped GEM", "wGEM") Ownable(msg.sender) { relayer = _relayer; }
+
+    function mint(address to, uint256 amount, uint256 nonce) external onlyRelayer {
+        require(!processed[nonce], "replayed");   // check
+        processed[nonce] = true;                  // effect
+        _mint(to, amount);                        // interaction
+    }
+}</code></pre><div class="n">mint signature mirrors the Locked event args (to, amount, nonce). Checks-effects-interactions: set processed BEFORE _mint.</div></div><div class="item"><div class="l">Access control = the crown jewel</div><div class="n">Whoever holds relayer/owner key can mint arbitrarily. Ronin (~$625M) = stolen validator keys. Production: multisig relayer set + rate limits + pausable circuit breaker.</div></div><h2>Off-chain relayer</h2><div class="item"><div class="l">Watch source event, submit mint on destination (ethers v6)</div><pre><code>const vault = new ethers.Contract(VAULT, vaultAbi, srcProvider);
+const wrapped = new ethers.Contract(WGEM, wgemAbi, relayerWallet); // signer
+
+vault.on("Locked", async (from, amount, to, nonce, ev) =&gt; {
+  await ev.log.getTransactionReceipt();            // ensure mined
+  const tx = await wrapped.mint(to, amount, nonce);
+  await tx.wait();
+  console.log(`minted for nonce ${nonce}`);
+});</code></pre></div><div class="item"><div class="l">Wait for finality before minting</div><pre><code>const CONFIRMATIONS = 12;
+const rcpt = await srcProvider.getTransactionReceipt(ev.log.transactionHash);
+await rcpt.wait?.(CONFIRMATIONS); // or poll block number</code></pre><div class="n">Reorg risk: if you mint on an event that later gets reorged out, you've minted unbacked tokens. Trade latency for safety.</div></div><div class="item"><div class="l">Backfill missed events on restart</div><pre><code>const logs = await vault.queryFilter("Locked", fromBlock, "latest");
+for (const l of logs) { /* re-submit; processed[nonce] dedupes */ }</code></pre><div class="n">Messaging is at-least-once — relayer WILL crash and re-send. The nonce mapping makes minting exactly-once.</div></div><h2>Nonces &amp; replay protection</h2><div class="item"><div class="l">The core defense</div><div class="n">Each deposit gets a unique, monotonically increasing nonce. Destination stores mapping(uint256=&gt;bool) processed, set on first mint, checked on every mint. Enforces exactly-once over an at-least-once layer.</div></div><div class="item"><div class="l">Attack it prevents</div><div class="n">Without it, one legit deposit → relayer replays / attacker resubmits the same mint → unbacked supply printed. Classic double-mint exploit.</div></div><div class="item"><div class="l">Source nonce++ is the sole issuer</div><pre><code>emit Locked(msg.sender, amount, to, nonce++); // post-increment: emits current, then bumps</code></pre><div class="n">Two-way bridge needs a SEPARATE nonce space for the burn/unlock leg — don't share counters across directions.</div></div><h2>Deploy &amp; config</h2><div class="item"><div class="l">hardhat.config.js network + keys</div><pre><code>require("@nomicfoundation/hardhat-toolbox");
+require("dotenv").config();
+module.exports = {
+  solidity: "0.8.24",
+  networks: {
+    sepolia: {
+      url: process.env.RPC_URL,
+      accounts: [process.env.PRIVATE_KEY],
+    },
+  },
+  etherscan: { apiKey: process.env.ETHERSCAN_KEY },
+};</code></pre><div class="n">.env only — NEVER commit a private key. Add .env to .gitignore.</div></div><div class="item"><div class="l">Deploy script</div><pre><code>const { ethers } = require("hardhat");
+async function main() {
+  const Vault = await ethers.getContractFactory("Vault");
+  const vault = await Vault.deploy(process.env.TOKEN_ADDR);
+  await vault.waitForDeployment();
+  console.log("Vault:", await vault.getAddress());
+}
+main().catch((e) =&gt; { console.error(e); process.exit(1); });</code></pre></div><div class="item"><div class="l">Run deploy + verify</div><pre><code>npx hardhat run scripts/deploy.js --network sepolia
+npx hardhat verify --network sepolia &lt;VAULT_ADDR&gt; &lt;TOKEN_ADDR&gt;</code></pre><div class="n">Deployed address is immutable — upgradeability needs a proxy pattern chosen up front.</div></div><h2>Testing the one-way bridge</h2><div class="item"><div class="l">Setup: mock token + both contracts in one EVM</div><pre><code>const { expect } = require("chai");
+const { ethers } = require("hardhat");
+
+describe("One-way bridge", () =&gt; {
+  let token, vault, wrapped, owner, user, relayer;
+  const AMT = ethers.parseEther("100");
+  beforeEach(async () =&gt; {
+    [owner, user, relayer] = await ethers.getSigners();
+    token = await (await ethers.getContractFactory("MockERC20"))
+      .deploy("GEM", "GEM", ethers.parseEther("1000"));
+    vault = await (await ethers.getContractFactory("Vault"))
+      .deploy(await token.getAddress());
+    wrapped = await (await ethers.getContractFactory("WrappedToken"))
+      .connect(owner).deploy(relayer.address);
+  });</code></pre><div class="n">Simulate cross-chain in ONE chain: run lock, read emitted args, then call mint with those exact args as the relayer signer.</div></div><div class="item"><div class="l">Happy path: lock emits event, relayer mints 1:1</div><pre><code>it("locks and mints", async () =&gt; {
+  await token.transfer(user.address, AMT);
+  await token.connect(user).approve(await vault.getAddress(), AMT);
+  await expect(vault.connect(user).deposit(AMT, user.address))
+    .to.emit(vault, "Locked").withArgs(user.address, AMT, user.address, 0n);
+  expect(await token.balanceOf(await vault.getAddress())).to.equal(AMT);
+  await wrapped.connect(relayer).mint(user.address, AMT, 0);
+  expect(await wrapped.balanceOf(user.address)).to.equal(AMT);
+});</code></pre></div><div class="item"><div class="l">Negative tests (the high-value ones)</div><pre><code>it("rejects replayed nonce", async () =&gt; {
+  await wrapped.connect(relayer).mint(user.address, AMT, 0);
+  await expect(wrapped.connect(relayer).mint(user.address, AMT, 0))
+    .to.be.revertedWith("replayed");
+});
+it("rejects non-relayer mint", async () =&gt; {
+  await expect(wrapped.connect(user).mint(user.address, AMT, 0))
+    .to.be.revertedWith("not relayer");
+});
+it("reverts deposit without approval", async () =&gt; {
+  await expect(vault.connect(user).deposit(AMT, user.address))
+    .to.be.reverted;
+});</code></pre><div class="n">Replay reverts, non-relayer mint reverts, deposit-without-approve reverts. Bugs hide in the failure paths, not the happy path.</div></div><div class="item"><div class="l">Run tests</div><pre><code>npx hardhat test
+npx hardhat coverage   # if solidity-coverage installed</code></pre></div>
+<h2>Quick tips &amp; gotchas</h2><ul class="tips"><li>Follow checks-effects-interactions in mint(): set processed[nonce]=true BEFORE _mint to kill reentrancy, even though _mint itself is safe.</li><li>Wait for confirmations/finality before minting — minting on a soon-to-be-reorged block creates unbacked tokens on the destination.</li><li>Nonces enforce exactly-once minting over an at-least-once relayer. Assume the relayer will crash and re-send; the processed mapping is what saves you.</li><li>Never commit private keys. Use .env + dotenv, add .env to .gitignore, and treat the relayer/owner key as the single biggest risk (Ronin, Wormhole both key/validation failures).</li><li>Use SafeERC20 — tokens like USDT don't return a bool from transfer/transferFrom and will silently break a naive vault.</li><li>approve + transferFrom, not a raw transfer to the vault: only the pull pattern lets you atomically record sender/dest/nonce and emit the event the relayer consumes.</li><li>In prod, monitor the invariant minted(dest) == locked(source) and add a pausable circuit breaker — pause minting the instant it diverges.</li><li>Extending to two-way? The unlock/withdraw path releases REAL collateral — give it its own nonce space and its own access control; most real exploits target the withdraw leg.</li></ul>
+</div></body></html>

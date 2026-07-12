@@ -1,0 +1,132 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Cheat Sheet · CI/CD</title><style>:root{--bg:#fff;--fg:#1a1a1a;--muted:#6b7280;--line:#e5e7eb;--accent:#0d9488;--card:#f9fafb;--code:#f3f4f6;--codefg:#111}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1115;--fg:#e6e6e6;--muted:#9aa0aa;--line:#242833;--accent:#2dd4bf;--card:#171a21;--code:#0b0e13;--codefg:#e6e6e6}}
+*{box-sizing:border-box}body{margin:0;font:16px/1.6 system-ui,Segoe UI,sans-serif;background:var(--bg);color:var(--fg)}
+.wrap{max-width:860px;margin:0 auto;padding:1.2rem}
+a.back{color:var(--accent);text-decoration:none;font-size:.9rem}
+h1{font-size:1.5rem;margin:.6rem 0 .2rem}.sub{color:var(--muted);margin:0 0 1.4rem}
+h2{font-size:1.1rem;margin:1.6rem 0 .5rem;color:var(--accent)}
+.item{border:1px solid var(--line);border-radius:10px;background:var(--card);padding:.6rem .8rem;margin:.5rem 0}
+.item .l{font-weight:700}
+.item .n{color:var(--muted);font-size:.92rem;margin-top:.2rem}
+pre{margin:.45rem 0 0;background:var(--code);color:var(--codefg);border:1px solid var(--line);border-radius:8px;padding:.6rem .8rem;overflow-x:auto}
+code,pre{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:.86rem}
+.tips{border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:10px;background:var(--card);padding:.6rem 1rem}
+.tips li{margin:.35rem 0}
+@media print{.back{display:none}}</style></head><body><div class="wrap">
+<a class="back" href="../revision.html">← Back to revision index</a>
+<h1>CI/CD — Cheat Sheet</h1>
+<p class="sub">Cohort 2.0 · 8 lessons · quick reference</p>
+<h2>CI vs CD — concepts</h2><div class="item"><div class="l">CI (Continuous Integration)</div><div class="n">Every push/PR auto-runs lint + tests + build so broken code is caught before merge. Keep branches short-lived, merge often.</div></div><div class="item"><div class="l">CD — Delivery vs Deployment</div><div class="n">Continuous DELIVERY = every green build is release-ready but a human clicks deploy. Continuous DEPLOYMENT = green build ships to prod automatically, no gate.</div></div><div class="item"><div class="l">Typical pipeline stages</div><pre><code>checkout -&gt; install -&gt; lint -&gt; test -&gt; build -&gt; dockerize -&gt; push -&gt; deploy -&gt; pull &amp; run</code></pre></div><div class="item"><div class="l">Where it runs</div><div class="n">GitHub Actions spins up an ephemeral VM (ubuntu-latest) per job; filesystem/env do NOT persist across jobs unless you use artifacts/cache.</div></div><div class="item"><div class="l">Trigger-on-merge model</div><div class="n">CI on PRs (push to feature branch), CD on push to main. Gate prod behind branch protection + required checks.</div></div><h2>GitHub Actions anatomy</h2><div class="item"><div class="l">File location</div><pre><code>.github/workflows/ci.yml   # any *.yml under this dir is auto-detected</code></pre><div class="n">Repo must have Actions enabled. One file = one workflow.</div></div><div class="item"><div class="l">Minimal workflow skeleton</div><pre><code>name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4</code></pre></div><div class="item"><div class="l">Trigger events (on:)</div><pre><code>on:
+  push: { branches: [main] }
+  pull_request:
+  workflow_dispatch:        # manual 'Run workflow' button
+  schedule: [{ cron: '0 2 * * *' }]</code></pre></div><div class="item"><div class="l">Checkout the repo (required first step)</div><pre><code>- uses: actions/checkout@v4</code></pre><div class="n">Without this the runner has no source code. fetch-depth: 0 for full history/tags.</div></div><div class="item"><div class="l">Setup a language runtime</div><pre><code>- uses: actions/setup-node@v4
+  with:
+    node-version: 20
+    cache: npm            # caches ~/.npm keyed on lockfile</code></pre></div><div class="item"><div class="l">Run a shell step</div><pre><code>- name: Install
+  run: npm ci             # ci = clean, lockfile-exact, deletes node_modules</code></pre></div><div class="item"><div class="l">job dependencies</div><pre><code>jobs:
+  test: { runs-on: ubuntu-latest, steps: [...] }
+  deploy:
+    needs: test           # deploy waits for test to pass
+    runs-on: ubuntu-latest</code></pre></div><h2>Step 1 — the CI pipeline (lint/test/build)</h2><div class="item"><div class="l">Standard CI job</div><pre><code>jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20, cache: npm }
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run build
+      - run: npm test</code></pre></div><div class="item"><div class="l">npm ci vs npm install</div><div class="n">Use npm ci in CI: fails if package-lock.json is out of sync, reproducible, faster. Never npm install in pipelines.</div></div><div class="item"><div class="l">Matrix (test across versions)</div><pre><code>strategy:
+  matrix:
+    node: [18, 20, 22]
+steps:
+  - uses: actions/setup-node@v4
+    with: { node-version: ${{ matrix.node }} }</code></pre></div><div class="item"><div class="l">Fail fast / continue</div><pre><code>strategy:
+  fail-fast: false        # let all matrix legs finish</code></pre><div class="n">Default fail-fast: true cancels siblings on first failure.</div></div><div class="item"><div class="l">Manual cache (non-node)</div><pre><code>- uses: actions/cache@v4
+  with:
+    path: ~/.cache
+    key: ${{ runner.os }}-${{ hashFiles('**/lockfile') }}</code></pre></div><h2>Monorepo — build only what changed</h2><div class="item"><div class="l">Path filter — skip unaffected apps</div><pre><code>on:
+  push:
+    paths:
+      - 'apps/web/**'
+      - 'packages/ui/**'
+      - '.github/workflows/**'</code></pre><div class="n">Workflow only fires when matching files change — avoids rebuilding the whole monorepo.</div></div><div class="item"><div class="l">Run in a subdir</div><pre><code>- name: Build web
+  working-directory: apps/web
+  run: npm ci &amp;&amp; npm run build</code></pre><div class="n">Or set defaults.run.working-directory at job level.</div></div><div class="item"><div class="l">Matrix over packages</div><pre><code>strategy:
+  matrix:
+    app: [web, admin, api]
+steps:
+  - run: npm run build --workspace=apps/${{ matrix.app }}</code></pre></div><div class="item"><div class="l">Turborepo / affected builds</div><pre><code>- run: npx turbo run build --filter=...[origin/main]</code></pre><div class="n">Turbo/Nx compute the dependency graph and build only affected + downstream packages; caches unchanged ones.</div></div><div class="item"><div class="l">npm workspaces</div><pre><code>npm ci                          # installs ALL workspaces from root lockfile
+npm run build -w apps/web       # target one workspace</code></pre></div><h2>Build &amp; push the Docker image</h2><div class="item"><div class="l">Dockerfile (multi-stage, monorepo app)</div><pre><code>FROM node:20-alpine AS build
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci
+COPY . .
+RUN npm run build
+
+FROM node:20-alpine
+WORKDIR /app
+COPY --from=build /app/dist ./dist
+COPY package*.json ./
+RUN npm ci --omit=dev
+CMD ["node", "dist/index.js"]</code></pre></div><div class="item"><div class="l">Login to registry (Docker Hub)</div><pre><code>- uses: docker/login-action@v3
+  with:
+    username: ${{ secrets.DOCKERHUB_USERNAME }}
+    password: ${{ secrets.DOCKERHUB_TOKEN }}</code></pre></div><div class="item"><div class="l">Build &amp; push in one step</div><pre><code>- uses: docker/build-push-action@v6
+  with:
+    context: .
+    file: ./apps/web/Dockerfile
+    push: true
+    tags: |
+      myuser/web:latest
+      myuser/web:${{ github.sha }}</code></pre><div class="n">Tag with the commit SHA for immutable, rollback-able deploys; latest is a moving pointer.</div></div><div class="item"><div class="l">Buildx + layer cache</div><pre><code>- uses: docker/setup-buildx-action@v3
+- uses: docker/build-push-action@v6
+  with:
+    cache-from: type=gha
+    cache-to: type=gha,mode=max</code></pre></div><div class="item"><div class="l">Push to GHCR instead</div><pre><code>- uses: docker/login-action@v3
+  with:
+    registry: ghcr.io
+    username: ${{ github.actor }}
+    password: ${{ secrets.GITHUB_TOKEN }}
+# tags: ghcr.io/owner/web:${{ github.sha }}</code></pre><div class="n">GITHUB_TOKEN is auto-provided; add permissions: { packages: write } to the job.</div></div><h2>Deploy step — SSH to server &amp; pull the image</h2><div class="item"><div class="l">Deploy job (gated on CI)</div><pre><code>deploy:
+  needs: build
+  runs-on: ubuntu-latest
+  if: github.ref == 'refs/heads/main'
+  steps:
+    - uses: appleboy/ssh-action@v1
+      with:
+        host: ${{ secrets.SSH_HOST }}
+        username: ${{ secrets.SSH_USER }}
+        key: ${{ secrets.SSH_KEY }}
+        script: |
+          docker pull myuser/web:latest
+          docker stop web || true
+          docker rm web || true
+          docker run -d --name web -p 80:3000 --restart unless-stopped myuser/web:latest</code></pre></div><div class="item"><div class="l">Pull the image on the box</div><pre><code>docker pull myuser/web:latest</code></pre><div class="n">Server must be logged in (docker login) if the repo is private.</div></div><div class="item"><div class="l">Zero-ish downtime swap</div><pre><code>docker pull myuser/web:${SHA}
+docker stop web || true &amp;&amp; docker rm web || true
+docker run -d --name web -p 80:3000 myuser/web:${SHA}</code></pre><div class="n">|| true so the run doesn't fail on first deploy when no container exists yet.</div></div><div class="item"><div class="l">Prune old images</div><pre><code>docker image prune -f</code></pre><div class="n">Servers fill up fast pulling every SHA tag — prune or cron it.</div></div><div class="item"><div class="l">Compose-based deploy</div><pre><code>docker compose pull &amp;&amp; docker compose up -d</code></pre><div class="n">Pulls new images referenced in compose.yml and recreates changed services only.</div></div><h2>Secrets, permissions &amp; config</h2><div class="item"><div class="l">Reference a secret</div><pre><code>${{ secrets.DOCKERHUB_TOKEN }}</code></pre><div class="n">Masked in logs. NEVER echo raw secrets. Repo/org level or per-environment.</div></div><div class="item"><div class="l">Add secrets via gh CLI</div><pre><code>gh secret set DOCKERHUB_TOKEN
+gh secret set SSH_KEY &lt; ~/.ssh/id_ed25519
+gh secret list</code></pre></div><div class="item"><div class="l">Built-in GITHUB_TOKEN</div><pre><code>permissions:
+  contents: read
+  packages: write</code></pre><div class="n">Auto-generated per run, scoped to the repo; grant least privilege explicitly.</div></div><div class="item"><div class="l">Contexts / expressions</div><pre><code>${{ github.sha }}      # commit
+${{ github.ref }}      # refs/heads/main
+${{ github.actor }}    # who triggered
+${{ env.MY_VAR }}</code></pre></div><div class="item"><div class="l">Environment-scoped deploys</div><pre><code>jobs:
+  deploy:
+    environment: production   # enables required reviewers / protection rules</code></pre><div class="n">Adds a manual approval gate — turns continuous delivery into deployment-with-a-gate.</div></div><div class="item"><div class="l">Job-level env</div><pre><code>env:
+  NODE_ENV: production
+  API_URL: ${{ secrets.API_URL }}</code></pre></div>
+<h2>Quick tips &amp; gotchas</h2><ul class="tips"><li>Tag Docker images with ${{ github.sha }}, not just latest — you get immutable builds and can roll back to any commit instantly.</li><li>Use npm ci (never npm install) in pipelines: it's reproducible, respects the lockfile, and fails loudly on drift.</li><li>In monorepos, gate workflows with on.push.paths so touching apps/web doesn't rebuild apps/api — huge CI-time savings.</li><li>needs: creates the dependency graph; without it jobs run in parallel and a deploy can race ahead of its tests.</li><li>|| true after docker stop/rm so the deploy script survives the first run when the container doesn't exist yet.</li><li>Cache aggressively: cache: npm in setup-node and type=gha for Docker layers cut minutes off every run.</li><li>Guard deploy with if: github.ref == 'refs/heads/main' so PR builds test but never ship to prod.</li><li>Runners are ephemeral — nothing persists between jobs. Pass data via actions/upload-artifact / download-artifact.</li></ul>
+</div></body></html>

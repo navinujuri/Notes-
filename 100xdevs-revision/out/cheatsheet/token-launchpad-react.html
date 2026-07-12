@@ -1,0 +1,100 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Cheat Sheet · Token Launchpad in React</title><style>:root{--bg:#fff;--fg:#1a1a1a;--muted:#6b7280;--line:#e5e7eb;--accent:#0d9488;--card:#f9fafb;--code:#f3f4f6;--codefg:#111}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1115;--fg:#e6e6e6;--muted:#9aa0aa;--line:#242833;--accent:#2dd4bf;--card:#171a21;--code:#0b0e13;--codefg:#e6e6e6}}
+*{box-sizing:border-box}body{margin:0;font:16px/1.6 system-ui,Segoe UI,sans-serif;background:var(--bg);color:var(--fg)}
+.wrap{max-width:860px;margin:0 auto;padding:1.2rem}
+a.back{color:var(--accent);text-decoration:none;font-size:.9rem}
+h1{font-size:1.5rem;margin:.6rem 0 .2rem}.sub{color:var(--muted);margin:0 0 1.4rem}
+h2{font-size:1.1rem;margin:1.6rem 0 .5rem;color:var(--accent)}
+.item{border:1px solid var(--line);border-radius:10px;background:var(--card);padding:.6rem .8rem;margin:.5rem 0}
+.item .l{font-weight:700}
+.item .n{color:var(--muted);font-size:.92rem;margin-top:.2rem}
+pre{margin:.45rem 0 0;background:var(--code);color:var(--codefg);border:1px solid var(--line);border-radius:8px;padding:.6rem .8rem;overflow-x:auto}
+code,pre{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:.86rem}
+.tips{border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:10px;background:var(--card);padding:.6rem 1rem}
+.tips li{margin:.35rem 0}
+@media print{.back{display:none}}</style></head><body><div class="wrap">
+<a class="back" href="../revision.html">← Back to revision index</a>
+<h1>Token Launchpad in React — Cheat Sheet</h1>
+<p class="sub">Cohort 3.0 · 10 lessons · quick reference</p>
+<h2>Core Concepts: Instructions vs Transactions</h2><div class="item"><div class="l">Instruction</div><div class="n">Single operation aimed at one program: { programId, keys (accounts), data }. Does nothing on its own.</div></div><div class="item"><div class="l">Transaction</div><div class="n">Atomic bundle of 1+ instructions. All-or-nothing: if any instruction fails, the whole tx reverts.</div></div><div class="item"><div class="l">Required tx fields</div><pre><code>tx.feePayer = wallet.publicKey;
+tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;</code></pre><div class="n">Without feePayer + recentBlockhash the tx can't be signed/sent.</div></div><div class="item"><div class="l">Signers</div><div class="n">Wallet signs as feePayer via sendTransaction; any NEW account (e.g. mint Keypair) must partialSign the tx before sending.</div></div><div class="item"><div class="l">Why bundle instructions</div><div class="n">createAccount + initMint + initMetadata in ONE tx = mint is never left half-initialized.</div></div><h2>Init Project + Dependencies</h2><div class="item"><div class="l">Scaffold Vite + React</div><pre><code>npm create vite@latest token-launchpad -- --template react
+cd token-launchpad &amp;&amp; npm install</code></pre></div><div class="item"><div class="l">Wallet adapter packages</div><pre><code>npm i @solana/wallet-adapter-react \
+  @solana/wallet-adapter-react-ui \
+  @solana/wallet-adapter-base</code></pre></div><div class="item"><div class="l">Web3 + SPL token</div><pre><code>npm i @solana/web3.js @solana/spl-token @solana/spl-token-metadata</code></pre></div><div class="item"><div class="l">Run dev server</div><pre><code>npm run dev</code></pre></div><h2>Node Polyfill (Vite)</h2><div class="item"><div class="l">Install plugin</div><pre><code>npm i -D vite-plugin-node-polyfills</code></pre><div class="n">Browser lacks Buffer/process/global that @solana/web3.js expects. Without this you get 'Buffer is not defined'.</div></div><div class="item"><div class="l">vite.config.js</div><pre><code>import { defineConfig } from 'vite'
+import react from '@vitejs/plugin-react'
+import { nodePolyfills } from 'vite-plugin-node-polyfills'
+
+export default defineConfig({
+  plugins: [react(), nodePolyfills()],
+})</code></pre></div><div class="item"><div class="l">Manual alternative</div><div class="n">Some setups just alias global-&gt;globalThis and inject window.Buffer = Buffer from 'buffer'; the plugin is cleaner.</div></div><h2>Wallet Adapter Context (Providers)</h2><div class="item"><div class="l">Import UI styles once</div><pre><code>import '@solana/wallet-adapter-react-ui/styles.css';</code></pre><div class="n">Skipping this leaves the wallet modal/button unstyled.</div></div><div class="item"><div class="l">Wrap app in providers</div><pre><code>import { ConnectionProvider, WalletProvider } from '@solana/wallet-adapter-react';
+import { WalletModalProvider } from '@solana/wallet-adapter-react-ui';
+
+&lt;ConnectionProvider endpoint={'https://api.devnet.solana.com'}&gt;
+  &lt;WalletProvider wallets={[]} autoConnect&gt;
+    &lt;WalletModalProvider&gt;
+      &lt;TokenLaunchpad /&gt;
+    &lt;/WalletModalProvider&gt;
+  &lt;/WalletProvider&gt;
+&lt;/ConnectionProvider&gt;</code></pre><div class="n">Order matters: Connection &gt; Wallet &gt; WalletModal. wallets={[]} works because standard wallets (Phantom etc.) auto-register.</div></div><div class="item"><div class="l">Connect / disconnect buttons</div><pre><code>import { WalletMultiButton, WalletDisconnectButton }
+  from '@solana/wallet-adapter-react-ui';
+&lt;WalletMultiButton /&gt;
+&lt;WalletDisconnectButton /&gt;</code></pre></div><div class="item"><div class="l">Access connection + wallet</div><pre><code>import { useConnection, useWallet } from '@solana/wallet-adapter-react';
+const { connection } = useConnection();
+const wallet = useWallet(); // wallet.publicKey, wallet.sendTransaction</code></pre><div class="n">Hooks only work inside the providers. Guard on wallet.publicKey before acting.</div></div><h2>Inspecting createMint / Why go manual</h2><div class="item"><div class="l">Server-style helper (needs a Keypair)</div><pre><code>import { createMint } from '@solana/spl-token';
+const mint = await createMint(
+  connection, payer /* Keypair */, mintAuthority, freezeAuthority, 9
+);</code></pre><div class="n">createMint requires a payer Keypair to sign — browser wallets never expose a secret key, so this can't run client-side.</div></div><div class="item"><div class="l">Client pattern instead</div><div class="n">Build the raw instructions (createAccount + initMint) yourself and sign via wallet.sendTransaction. That's what the launchpad does.</div></div><div class="item"><div class="l">Token program choice</div><pre><code>import { TOKEN_2022_PROGRAM_ID } from '@solana/spl-token';</code></pre><div class="n">Use Token-2022 for built-in on-chain metadata (metadata pointer extension). Legacy TOKEN_PROGRAM_ID needs Metaplex for metadata.</div></div><h2>Creating the Mint (Token-2022 + Metadata)</h2><div class="item"><div class="l">Imports</div><pre><code>import { Keypair, SystemProgram, Transaction } from '@solana/web3.js';
+import {
+  TOKEN_2022_PROGRAM_ID, ExtensionType, getMintLen,
+  createInitializeMetadataPointerInstruction,
+  createInitializeMintInstruction, TYPE_SIZE, LENGTH_SIZE
+} from '@solana/spl-token';
+import { createInitializeInstruction, pack } from '@solana/spl-token-metadata';</code></pre></div><div class="item"><div class="l">Generate mint keypair + metadata</div><pre><code>const mintKeypair = Keypair.generate();
+const metadata = {
+  mint: mintKeypair.publicKey,
+  name: 'KIRA', symbol: 'KIR',
+  uri: 'https://cdn.100xdevs.com/metadata.json',
+  additionalMetadata: [],
+};</code></pre></div><div class="item"><div class="l">Size + rent (mint space + metadata)</div><pre><code>const mintLen = getMintLen([ExtensionType.MetadataPointer]);
+const metadataLen = TYPE_SIZE + LENGTH_SIZE + pack(metadata).length;
+const lamports = await connection
+  .getMinimumBalanceForRentExemption(mintLen + metadataLen);</code></pre><div class="n">createAccount space is ONLY mintLen; but fund rent for mintLen + metadataLen (metadata realloc's the account later).</div></div><div class="item"><div class="l">Build + partial-sign tx</div><pre><code>const tx = new Transaction().add(
+  SystemProgram.createAccount({
+    fromPubkey: wallet.publicKey,
+    newAccountPubkey: mintKeypair.publicKey,
+    space: mintLen, lamports, programId: TOKEN_2022_PROGRAM_ID,
+  }),
+  createInitializeMetadataPointerInstruction(
+    mintKeypair.publicKey, wallet.publicKey,
+    mintKeypair.publicKey, TOKEN_2022_PROGRAM_ID),
+  createInitializeMintInstruction(
+    mintKeypair.publicKey, 9, wallet.publicKey, null,
+    TOKEN_2022_PROGRAM_ID),
+  createInitializeInstruction({
+    programId: TOKEN_2022_PROGRAM_ID,
+    mint: mintKeypair.publicKey, metadata: mintKeypair.publicKey,
+    name: metadata.name, symbol: metadata.symbol, uri: metadata.uri,
+    mintAuthority: wallet.publicKey, updateAuthority: wallet.publicKey,
+  }),
+);
+tx.feePayer = wallet.publicKey;
+tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
+tx.partialSign(mintKeypair);
+await wallet.sendTransaction(tx, connection);</code></pre><div class="n">Metadata pointer points the mint at ITSELF, so metadata: mintKeypair.publicKey. initMint must run before initMetadata.</div></div><h2>Create ATA + Actually Mint Tokens</h2><div class="item"><div class="l">Derive Associated Token Account</div><pre><code>import { getAssociatedTokenAddressSync } from '@solana/spl-token';
+const ata = getAssociatedTokenAddressSync(
+  mintKeypair.publicKey, wallet.publicKey, false, TOKEN_2022_PROGRAM_ID
+);</code></pre><div class="n">Pass TOKEN_2022_PROGRAM_ID — omitting it derives the wrong (legacy) ATA address.</div></div><div class="item"><div class="l">Create the ATA</div><pre><code>import { createAssociatedTokenAccountInstruction } from '@solana/spl-token';
+const tx2 = new Transaction().add(
+  createAssociatedTokenAccountInstruction(
+    wallet.publicKey, ata, wallet.publicKey,
+    mintKeypair.publicKey, TOKEN_2022_PROGRAM_ID)
+);
+await wallet.sendTransaction(tx2, connection);</code></pre><div class="n">ATA is the account that actually holds a user's balance for this mint.</div></div><div class="item"><div class="l">Mint supply into the ATA</div><pre><code>import { createMintToInstruction } from '@solana/spl-token';
+const tx3 = new Transaction().add(
+  createMintToInstruction(
+    mintKeypair.publicKey, ata, wallet.publicKey,
+    1_000_000_000, [], TOKEN_2022_PROGRAM_ID)
+);
+await wallet.sendTransaction(tx3, connection);</code></pre><div class="n">Amount is in base units: 1 token at 9 decimals = 1e9. Signer/authority = wallet (the mint authority set above).</div></div>
+<h2>Quick tips &amp; gotchas</h2><ul class="tips"><li>Use devnet (https://api.devnet.solana.com) and airdrop SOL first — creating a mint + ATA costs rent + fees.</li><li>'Buffer is not defined' / 'global is not defined' =&gt; the node-polyfills plugin isn't wired into vite.config.js.</li><li>Any freshly generated account (the mint Keypair) MUST partialSign the tx; the wallet only signs as feePayer.</li><li>Instruction order is load-bearing: createAccount -&gt; initMetadataPointer -&gt; initMint -&gt; initMetadata. initMetadata fails if the mint isn't initialized yet.</li><li>Fund rent for mintLen + metadataLen but set createAccount space = mintLen only; Token-2022 reallocs when metadata is written.</li><li>Mint amounts are in base units — multiply human amount by 10^decimals or you'll mint 1e-9 of a token.</li><li>Match the program ID everywhere (mint, ATA derivation, mintTo). Mixing TOKEN_PROGRAM_ID with TOKEN_2022 gives 'incorrect program id' / wrong ATA.</li><li>Guard every handler on wallet.publicKey (and connected) so hooks don't throw before a wallet is connected.</li></ul>
+</div></body></html>

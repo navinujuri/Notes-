@@ -1,0 +1,112 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Cheat Sheet · OpenAPI Spec</title><style>:root{--bg:#fff;--fg:#1a1a1a;--muted:#6b7280;--line:#e5e7eb;--accent:#0d9488;--card:#f9fafb;--code:#f3f4f6;--codefg:#111}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1115;--fg:#e6e6e6;--muted:#9aa0aa;--line:#242833;--accent:#2dd4bf;--card:#171a21;--code:#0b0e13;--codefg:#e6e6e6}}
+*{box-sizing:border-box}body{margin:0;font:16px/1.6 system-ui,Segoe UI,sans-serif;background:var(--bg);color:var(--fg)}
+.wrap{max-width:860px;margin:0 auto;padding:1.2rem}
+a.back{color:var(--accent);text-decoration:none;font-size:.9rem}
+h1{font-size:1.5rem;margin:.6rem 0 .2rem}.sub{color:var(--muted);margin:0 0 1.4rem}
+h2{font-size:1.1rem;margin:1.6rem 0 .5rem;color:var(--accent)}
+.item{border:1px solid var(--line);border-radius:10px;background:var(--card);padding:.6rem .8rem;margin:.5rem 0}
+.item .l{font-weight:700}
+.item .n{color:var(--muted);font-size:.92rem;margin-top:.2rem}
+pre{margin:.45rem 0 0;background:var(--code);color:var(--codefg);border:1px solid var(--line);border-radius:8px;padding:.6rem .8rem;overflow-x:auto}
+code,pre{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:.86rem}
+.tips{border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:10px;background:var(--card);padding:.6rem 1rem}
+.tips li{margin:.35rem 0}
+@media print{.back{display:none}}</style></head><body><div class="wrap">
+<a class="back" href="../revision.html">← Back to revision index</a>
+<h1>OpenAPI Spec — Cheat Sheet</h1>
+<p class="sub">Cohort 2.0 · 7 lessons · quick reference</p>
+<h2>Why &amp; What</h2><div class="item"><div class="l">OpenAPI = language-agnostic contract for HTTP APIs</div><div class="n">Single source of truth for endpoints, params, schemas, auth. Formerly 'Swagger' (spec renamed at 3.0).</div></div><div class="item"><div class="l">What it buys you</div><div class="n">Auto docs (Swagger UI / Redoc), typed client + server codegen, request/response validation, mock servers, contract testing.</div></div><div class="item"><div class="l">Format: YAML or JSON</div><div class="n">Both equivalent; YAML is the human-authored default. Versions: Swagger 2.0 (legacy) vs OpenAPI 3.0.x / 3.1.x (3.1 is a strict JSON Schema superset).</div></div><div class="item"><div class="l">Design-first vs code-first</div><div class="n">Design-first: write spec, generate stubs. Code-first: annotate code (e.g. Zod), emit spec. Hono+Zod is code-first.</div></div><h2>Spec File Anatomy</h2><div class="item"><div class="l">Top-level skeleton</div><pre><code>openapi: 3.0.3
+info:
+  title: Notes API
+  version: 1.0.0
+servers:
+  - url: https://api.example.com/v1
+paths: {}
+components: {}</code></pre><div class="n">openapi, info, paths are effectively required. servers replaces 2.0's host/basePath/schemes.</div></div><div class="item"><div class="l">info — metadata</div><div class="n">title + version mandatory. Add description, license, contact for good docs.</div></div><div class="item"><div class="l">paths — the endpoints</div><div class="n">Keyed by URL template, then by HTTP method (get/post/put/delete/patch).</div></div><div class="item"><div class="l">components — reusable definitions</div><div class="n">Holds schemas, parameters, responses, requestBodies, securitySchemes. Reference with $ref.</div></div><div class="item"><div class="l">$ref — reuse anything</div><pre><code>schema:
+  $ref: '#/components/schemas/Note'</code></pre><div class="n">Avoids duplication; can point to external files too ('./models.yaml#/Note').</div></div><h2>Writing Paths, Schemas &amp; Params</h2><div class="item"><div class="l">An operation with a JSON body + 201</div><pre><code>paths:
+  /notes:
+    post:
+      operationId: createNote
+      summary: Create a note
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NewNote'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Note'</code></pre><div class="n">operationId must be unique — codegen uses it for function names.</div></div><div class="item"><div class="l">Reusable schema in components</div><pre><code>components:
+  schemas:
+    Note:
+      type: object
+      required: [id, title]
+      properties:
+        id: { type: string, format: uuid }
+        title: { type: string, maxLength: 200 }
+        done: { type: boolean, default: false }</code></pre><div class="n">format (uuid/date-time/email) is a hint; required is an array of prop names, not per-field.</div></div><div class="item"><div class="l">Path / query params</div><pre><code>    get:
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 20 }</code></pre><div class="n">in: path params are always required: true.</div></div><div class="item"><div class="l">Security scheme + apply</div><pre><code>components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+security:
+  - bearerAuth: []</code></pre><div class="n">Top-level security = global default; override per-operation. Empty [] = no scopes.</div></div><h2>Hono + Zod + OpenAPI (code-first)</h2><div class="item"><div class="l">Install</div><pre><code>npm i hono @hono/zod-openapi @hono/swagger-ui</code></pre><div class="n">@hono/zod-openapi re-exports a patched `z` — import z from it, not from 'zod'.</div></div><div class="item"><div class="l">Define schema, name it for components</div><pre><code>import { z } from '@hono/zod-openapi'
+
+const Note = z.object({
+  id: z.string().uuid().openapi({ example: 'a1b2' }),
+  title: z.string().openapi({ example: 'Buy milk' }),
+}).openapi('Note')</code></pre><div class="n">.openapi('Note') registers it under components/schemas so $ref reuse works.</div></div><div class="item"><div class="l">createRoute — the typed contract</div><pre><code>import { createRoute } from '@hono/zod-openapi'
+
+const getNote = createRoute({
+  method: 'get',
+  path: '/notes/{id}',
+  request: {
+    params: z.object({
+      id: z.string().openapi({ param: { name: 'id', in: 'path' } }),
+    }),
+  },
+  responses: {
+    200: { content: { 'application/json': { schema: Note } },
+           description: 'A note' },
+  },
+})</code></pre><div class="n">Path uses {id} (OpenAPI style), not :id. Response keys are numeric status codes.</div></div><div class="item"><div class="l">Wire handler with validated input</div><pre><code>import { OpenAPIHono } from '@hono/zod-openapi'
+
+const app = new OpenAPIHono()
+
+app.openapi(getNote, (c) =&gt; {
+  const { id } = c.req.valid('param')   // fully typed
+  return c.json({ id, title: 'Buy milk' }, 200)
+})</code></pre><div class="n">c.req.valid('param'|'query'|'json') returns parsed+typed data. 400 auto-returned on validation failure.</div></div><div class="item"><div class="l">Register a security scheme</div><pre><code>app.openAPIRegistry.registerComponent('securitySchemes', 'bearerAuth', {
+  type: 'http', scheme: 'bearer',
+})</code></pre><div class="n">Then add `security: [{ bearerAuth: [] }]` inside createRoute.</div></div><h2>Serve the Spec &amp; Swagger Page</h2><div class="item"><div class="l">Expose the generated JSON doc</div><pre><code>app.doc('/doc', {
+  openapi: '3.0.0',
+  info: { version: '1.0.0', title: 'Notes API' },
+})</code></pre><div class="n">GET /doc returns the full spec assembled from all createRoute definitions.</div></div><div class="item"><div class="l">Mount Swagger UI</div><pre><code>import { swaggerUI } from '@hono/swagger-ui'
+
+app.get('/ui', swaggerUI({ url: '/doc' }))</code></pre><div class="n">url must point at the served spec route. Visit /ui for interactive 'try it out' docs.</div></div><div class="item"><div class="l">Redoc alternative (static HTML)</div><pre><code>&lt;script src="https://cdn.redoc.ly/redoc/latest/bundles/redoc.standalone.js"&gt;&lt;/script&gt;
+&lt;redoc spec-url="/doc"&gt;&lt;/redoc&gt;</code></pre><div class="n">Redoc = read-only, cleaner docs; Swagger UI = interactive testing.</div></div><div class="item"><div class="l">Handle servers behind a proxy</div><div class="n">Set servers[].url in app.doc so 'try it out' hits the right base URL, not localhost.</div></div><h2>Auto-Generated Clients</h2><div class="item"><div class="l">openapi-typescript — types only (lightweight)</div><pre><code>npx openapi-typescript http://localhost:3000/doc -o ./src/api.d.ts</code></pre><div class="n">Emits TS types, no runtime. Pair with openapi-fetch for a typed fetch wrapper.</div></div><div class="item"><div class="l">openapi-fetch — typed runtime client</div><pre><code>import createClient from 'openapi-fetch'
+import type { paths } from './api'
+
+const client = createClient&lt;paths&gt;({ baseUrl: '/v1' })
+const { data, error } = await client.GET('/notes/{id}', {
+  params: { path: { id: 'a1b2' } },
+})</code></pre><div class="n">~2kb, no codegen of methods — types drive path/param autocomplete.</div></div><div class="item"><div class="l">Hono RPC (no external gen)</div><pre><code>import { hc } from 'hono/client'
+const client = hc&lt;typeof app&gt;('http://localhost:3000')
+const res = await client.notes[':id'].$get({ param: { id: 'a1b2' } })</code></pre><div class="n">End-to-end types straight from the app type — skips OpenAPI entirely for Hono-to-Hono.</div></div><div class="item"><div class="l">orval — full client + React Query hooks</div><pre><code>npx orval --input ./doc.json --output ./src/gen/api.ts</code></pre><div class="n">Generates hooks/axios/fetch + MSW mocks. Config via orval.config.ts.</div></div><div class="item"><div class="l">openapi-generator-cli — polyglot</div><pre><code>npx @openapitools/openapi-generator-cli generate \
+  -i doc.yaml -g typescript-axios -o ./client</code></pre><div class="n">~7 generators (typescript-axios, python, go, java...). Heavy but language-agnostic.</div></div>
+<h2>Quick tips &amp; gotchas</h2><ul class="tips"><li>Import `z` from '@hono/zod-openapi', never from 'zod' directly — only the patched instance carries the `.openapi()` method.</li><li>Give every operation a unique operationId: client generators derive function names from it; duplicates or missing ones produce ugly/colliding names.</li><li>OpenAPI path templates use {braces} ({id}); Hono's own router uses :colons (:id). In createRoute always use the brace form.</li><li>3.1 aligns with JSON Schema (nullable via `type: [string, null]`); 3.0 uses `nullable: true`. Generators differ in support — pin your target version.</li><li>Name your Zod schemas with `.openapi('Name')` so they land in components/schemas and get $ref'd instead of inlined — cleaner docs and smaller generated clients.</li><li>`required` at the object level is a list of property names, not a per-property flag; forgetting it makes every field optional in generated types.</li><li>Regenerate clients in CI from the live /doc endpoint (or a committed spec) so drift between server and client is caught, not shipped.</li><li>Swagger UI 'Try it out' calls the servers[].url — set it explicitly for staging/prod, or requests silently hit localhost.</li></ul>
+</div></body></html>

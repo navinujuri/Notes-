@@ -1,0 +1,77 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Cheat Sheet · MongoDB, Zod, Error handling and Input validation</title><style>:root{--bg:#fff;--fg:#1a1a1a;--muted:#6b7280;--line:#e5e7eb;--accent:#0d9488;--card:#f9fafb;--code:#f3f4f6;--codefg:#111}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1115;--fg:#e6e6e6;--muted:#9aa0aa;--line:#242833;--accent:#2dd4bf;--card:#171a21;--code:#0b0e13;--codefg:#e6e6e6}}
+*{box-sizing:border-box}body{margin:0;font:16px/1.6 system-ui,Segoe UI,sans-serif;background:var(--bg);color:var(--fg)}
+.wrap{max-width:860px;margin:0 auto;padding:1.2rem}
+a.back{color:var(--accent);text-decoration:none;font-size:.9rem}
+h1{font-size:1.5rem;margin:.6rem 0 .2rem}.sub{color:var(--muted);margin:0 0 1.4rem}
+h2{font-size:1.1rem;margin:1.6rem 0 .5rem;color:var(--accent)}
+.item{border:1px solid var(--line);border-radius:10px;background:var(--card);padding:.6rem .8rem;margin:.5rem 0}
+.item .l{font-weight:700}
+.item .n{color:var(--muted);font-size:.92rem;margin-top:.2rem}
+pre{margin:.45rem 0 0;background:var(--code);color:var(--codefg);border:1px solid var(--line);border-radius:8px;padding:.6rem .8rem;overflow-x:auto}
+code,pre{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:.86rem}
+.tips{border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:10px;background:var(--card);padding:.6rem 1rem}
+.tips li{margin:.35rem 0}
+@media print{.back{display:none}}</style></head><body><div class="wrap">
+<a class="back" href="../revision.html">← Back to revision index</a>
+<h1>MongoDB, Zod, Error handling and Input validation — Cheat Sheet</h1>
+<p class="sub">Cohort 3.0 · 13 lessons · quick reference</p>
+<h2>Setup &amp; Atlas Connection</h2><div class="item"><div class="l">Install stack (Express + Mongoose + Zod + bcrypt + JWT)</div><pre><code>npm install express mongoose zod bcrypt jsonwebtoken</code></pre></div><div class="item"><div class="l">Connect to MongoDB Atlas (call before app.listen)</div><pre><code>const mongoose = require("mongoose");
+await mongoose.connect(process.env.MONGO_URL);
+app.listen(3000);</code></pre><div class="n">await/catch the connect — never hardcode creds; keep the URI in .env.</div></div><div class="item"><div class="l">Atlas SRV connection string format</div><pre><code>mongodb+srv://&lt;user&gt;:&lt;pass&gt;@cluster0.xxxxx.mongodb.net/todo-app</code></pre><div class="n">The path segment after .net/ is the DB name — omit it and you write to `test`. URL-encode special chars in the password.</div></div><div class="item"><div class="l">Atlas free tier checklist</div><div class="n">Create M0 cluster -&gt; Database Access (add user/pass) -&gt; Network Access (allow 0.0.0.0/0 for dev) -&gt; Connect -&gt; copy driver URI.</div></div><h2>Schema &amp; Model (Mongoose)</h2><div class="item"><div class="l">Define schema + model</div><pre><code>const { Schema, model } = require("mongoose");
+const UserSchema = new Schema({
+  email:    { type: String, required: true, unique: true },
+  password: { type: String, required: true },
+  name:     String
+});
+const User = model("User", UserSchema);</code></pre><div class="n">Collection name is pluralized+lowercased automatically: `User` -&gt; `users`.</div></div><div class="item"><div class="l">Common field options</div><pre><code>age: { type: Number, min: 0, default: 0 }
+role: { type: String, enum: ["user","admin"], default: "user" }
+createdAt: { type: Date, default: Date.now }</code></pre><div class="n">`unique: true` builds an index — it is NOT a validator; duplicate insert throws E11000.</div></div><div class="item"><div class="l">Auto timestamps</div><pre><code>new Schema({ ... }, { timestamps: true });</code></pre><div class="n">Adds managed `createdAt` / `updatedAt` fields.</div></div><h2>CRUD Operations</h2><div class="item"><div class="l">Create</div><pre><code>await User.create({ email, password });
+// bulk seed
+await Todo.insertMany([{ title: "a" }, { title: "b" }]);</code></pre></div><div class="item"><div class="l">Read</div><pre><code>await User.find({ role: "admin" });      // array
+await User.findOne({ email });            // one or null
+await User.findById(id);                  // by _id
+await Todo.find({}).select("title done"); // projection</code></pre><div class="n">Queries are thenables — always `await` (or `.exec()`). No match returns [] / null, not an error.</div></div><div class="item"><div class="l">Update</div><pre><code>await Todo.updateOne({ _id: id }, { $set: { done: true } });
+await Todo.findByIdAndUpdate(id, { title }, { new: true });</code></pre><div class="n">`{ new: true }` returns the updated doc (default returns the pre-update one).</div></div><div class="item"><div class="l">Delete</div><pre><code>await Todo.deleteOne({ _id: id });
+await Todo.deleteMany({ userId: uid });</code></pre></div><div class="item"><div class="l">Query operators</div><pre><code>await Todo.find({ priority: { $gt: 3 } });
+await Todo.find({ status: { $in: ["open","wip"] } });
+await Todo.find({ $or: [{ a: 1 }, { b: 2 }] });</code></pre></div><h2>Input Validation (Zod)</h2><div class="item"><div class="l">Define a schema</div><pre><code>const { z } = require("zod");
+const SignupSchema = z.object({
+  email:    z.string().email(),
+  password: z.string().min(6),
+  name:     z.string().optional()
+});</code></pre></div><div class="item"><div class="l">safeParse — no throw (preferred in routes)</div><pre><code>const parsed = SignupSchema.safeParse(req.body);
+if (!parsed.success) {
+  return res.status(400).json({ errors: parsed.error.format() });
+}
+const { email, password } = parsed.data;</code></pre><div class="n">Use parsed.data (coerced/typed) downstream — do not re-read req.body.</div></div><div class="item"><div class="l">parse — throws ZodError (let error middleware catch it)</div><pre><code>const data = SignupSchema.parse(req.body);</code></pre></div><div class="item"><div class="l">Handy validators</div><pre><code>z.number().int().positive()
+z.string().min(3).max(20)
+z.enum(["user","admin"])
+z.array(z.string())
+z.string().datetime()
+z.coerce.number()  // "5" -&gt; 5 (query params)</code></pre><div class="n">Validate as reusable middleware: `(schema) =&gt; (req,res,next) =&gt; {...}` to keep routes clean.</div></div><h2>Password Hashing (bcrypt)</h2><div class="item"><div class="l">Hash on signup</div><pre><code>const bcrypt = require("bcrypt");
+const hash = await bcrypt.hash(password, 10); // 10 = salt rounds
+await User.create({ email, password: hash });</code></pre><div class="n">Never store plaintext. Salt rounds ~10-12; higher = slower = safer.</div></div><div class="item"><div class="l">Verify on signin</div><pre><code>const user = await User.findOne({ email });
+const ok = user &amp;&amp; await bcrypt.compare(password, user.password);
+if (!ok) return res.status(403).json({ msg: "Invalid creds" });</code></pre><div class="n">Return the same generic message for bad email AND bad password (avoid user enumeration).</div></div><div class="item"><div class="l">Issue JWT after auth</div><pre><code>const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET);</code></pre></div><h2>Error Handling (Express)</h2><div class="item"><div class="l">try/catch per async route</div><pre><code>app.post("/todo", async (req, res) =&gt; {
+  try {
+    const todo = await Todo.create(req.body);
+    res.json(todo);
+  } catch (e) { res.status(500).json({ msg: "Server error" }); }
+});</code></pre><div class="n">Un-awaited/unhandled rejections in async handlers do NOT auto-reach error middleware in Express 4.</div></div><div class="item"><div class="l">Global error middleware (4 args, register LAST)</div><pre><code>app.use((err, req, res, next) =&gt; {
+  if (err instanceof z.ZodError)
+    return res.status(400).json({ errors: err.format() });
+  if (err.code === 11000)
+    return res.status(409).json({ msg: "Duplicate" });
+  console.error(err);
+  res.status(500).json({ msg: "Something broke" });
+});</code></pre><div class="n">Must have exactly 4 params or Express treats it as a normal handler.</div></div><div class="item"><div class="l">Async wrapper (forward errors to middleware)</div><pre><code>const wrap = fn =&gt; (req, res, next) =&gt;
+  Promise.resolve(fn(req, res, next)).catch(next);
+app.post("/todo", wrap(async (req, res) =&gt; { ... }));</code></pre></div><div class="item"><div class="l">404 fallback</div><pre><code>app.use((req, res) =&gt; res.status(404).json({ msg: "Not found" }));</code></pre></div><h2>Relationships in Mongo</h2><div class="item"><div class="l">Referenced (normalized) — store ObjectId + ref</div><pre><code>const TodoSchema = new Schema({
+  title:  String,
+  userId: { type: Schema.Types.ObjectId, ref: "User" }
+});</code></pre><div class="n">`ref` string must match the model name passed to model("User").</div></div><div class="item"><div class="l">populate — join the referenced doc</div><pre><code>await Todo.find({ userId }).populate("userId", "email name");</code></pre><div class="n">2nd arg = field projection on the joined doc. Adds a query round-trip.</div></div><div class="item"><div class="l">Embedded (denormalized) — subdocuments</div><pre><code>const UserSchema = new Schema({
+  addresses: [{ city: String, zip: String }]
+});</code></pre><div class="n">Embed for data read together &amp; bounded in size; reference for shared/unbounded/large relations.</div></div><div class="item"><div class="l">Filter by owner (auth scoping)</div><pre><code>await Todo.find({ userId: req.userId });</code></pre><div class="n">Always scope queries to the authenticated user — never trust an id from the request body.</div></div>
+<h2>Quick tips &amp; gotchas</h2><ul class="tips"><li>MongoDB is schema-less at the DB level — Mongoose schemas + Zod are what actually enforce structure. Validate at the edge (Zod) and at the model (Mongoose).</li><li>`unique: true` is an index, not validation: it only errors on write (E11000 code 11000), and only after the index is built. Handle that error code explicitly.</li><li>Every Mongoose query returns a thenable but does nothing until awaited — a forgotten `await` gives you a Query object, not data.</li><li>Never return raw Mongo/Zod errors to clients — they leak schema and internals. Map to clean status codes (400/403/409/500) in error middleware.</li><li>Hash passwords with bcrypt BEFORE saving and strip `password` from any response (`.select('-password')`).</li><li>Store secrets (MONGO_URL, JWT_SECRET) in .env + process.env; add .env to .gitignore. A leaked Atlas URI = full DB access.</li><li>`findByIdAndUpdate` returns the OLD doc unless you pass `{ new: true }`; validators don't run on updates unless `{ runValidators: true }`.</li><li>Prefer `safeParse` in request handlers (branch on `.success`) and reserve throwing `parse` for code paths funneled through global error middleware.</li></ul>
+</div></body></html>

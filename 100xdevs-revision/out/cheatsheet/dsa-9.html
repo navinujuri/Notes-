@@ -1,0 +1,113 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Cheat Sheet · Binary search, two sum and strings</title><style>:root{--bg:#fff;--fg:#1a1a1a;--muted:#6b7280;--line:#e5e7eb;--accent:#0d9488;--card:#f9fafb;--code:#f3f4f6;--codefg:#111}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1115;--fg:#e6e6e6;--muted:#9aa0aa;--line:#242833;--accent:#2dd4bf;--card:#171a21;--code:#0b0e13;--codefg:#e6e6e6}}
+*{box-sizing:border-box}body{margin:0;font:16px/1.6 system-ui,Segoe UI,sans-serif;background:var(--bg);color:var(--fg)}
+.wrap{max-width:860px;margin:0 auto;padding:1.2rem}
+a.back{color:var(--accent);text-decoration:none;font-size:.9rem}
+h1{font-size:1.5rem;margin:.6rem 0 .2rem}.sub{color:var(--muted);margin:0 0 1.4rem}
+h2{font-size:1.1rem;margin:1.6rem 0 .5rem;color:var(--accent)}
+.item{border:1px solid var(--line);border-radius:10px;background:var(--card);padding:.6rem .8rem;margin:.5rem 0}
+.item .l{font-weight:700}
+.item .n{color:var(--muted);font-size:.92rem;margin-top:.2rem}
+pre{margin:.45rem 0 0;background:var(--code);color:var(--codefg);border:1px solid var(--line);border-radius:8px;padding:.6rem .8rem;overflow-x:auto}
+code,pre{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:.86rem}
+.tips{border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:10px;background:var(--card);padding:.6rem 1rem}
+.tips li{margin:.35rem 0}
+@media print{.back{display:none}}</style></head><body><div class="wrap">
+<a class="back" href="../revision.html">← Back to revision index</a>
+<h1>Binary search, two sum and strings — Cheat Sheet</h1>
+<p class="sub">Cohort 2.0 · 9 lessons · quick reference</p>
+<h2>Binary Search — core template</h2><div class="item"><div class="l">Iterative search (returns index or -1)</div><pre><code>function bsearch(a, t) {
+  let lo = 0, hi = a.length - 1;
+  while (lo &lt;= hi) {
+    const mid = lo + ((hi - lo) &gt;&gt; 1); // avoids overflow
+    if (a[mid] === t) return mid;
+    if (a[mid] &lt; t) lo = mid + 1;
+    else hi = mid - 1;
+  }
+  return -1;
+}</code></pre><div class="n">Array MUST be sorted. O(log n) time, O(1) space. Use `lo + (hi-lo)/2`, never `(lo+hi)/2`.</div></div><div class="item"><div class="l">Loop invariant choice</div><div class="n">`while (lo &lt;= hi)` with `hi = mid-1`/`lo = mid+1` for exact-match. Use `while (lo &lt; hi)` with `hi = mid` for boundary/bound searches (see below).</div></div><div class="item"><div class="l">Recursive form</div><pre><code>const bs = (a, t, lo=0, hi=a.length-1) =&gt;
+  lo &gt; hi ? -1
+  : a[(lo+hi)&gt;&gt;1] === t ? (lo+hi)&gt;&gt;1
+  : a[(lo+hi)&gt;&gt;1] &lt; t ? bs(a,t,((lo+hi)&gt;&gt;1)+1,hi)
+  : bs(a,t,lo,((lo+hi)&gt;&gt;1)-1);</code></pre><div class="n">O(log n) stack depth. Iterative is preferred to avoid call overhead.</div></div><div class="item"><div class="l">Infinite-loop trap</div><div class="n">If you write `while(lo&lt;hi)` and set `lo = mid` (not mid+1), you loop forever when hi=lo+1. Always advance one side past mid.</div></div><h2>lower / upper bound &amp; first-last occurrence</h2><div class="item"><div class="l">lower_bound — first index with a[i] &gt;= t</div><pre><code>function lowerBound(a, t) {
+  let lo = 0, hi = a.length; // hi = length, NOT length-1
+  while (lo &lt; hi) {
+    const mid = lo + ((hi - lo) &gt;&gt; 1);
+    if (a[mid] &lt; t) lo = mid + 1;
+    else hi = mid;
+  }
+  return lo; // insertion point; == a.length if all &lt; t
+}</code></pre><div class="n">This is the C++ std::lower_bound. Returns count of elements &lt; t.</div></div><div class="item"><div class="l">upper_bound — first index with a[i] &gt; t</div><pre><code>// same loop, flip the comparison:
+if (a[mid] &lt;= t) lo = mid + 1;
+else hi = mid;</code></pre><div class="n">count of t in range = upperBound(t) - lowerBound(t).</div></div><div class="item"><div class="l">First &amp; last occurrence of t</div><pre><code>const first = lowerBound(a, t);          // a[first] === t if present
+const last  = upperBound(a, t) - 1;      // last index equal to t
+const exists = first &lt; a.length &amp;&amp; a[first] === t;</code></pre></div><div class="item"><div class="l">JS has no built-in lower_bound</div><div class="n">There is no std lib binary search in JS. `Array.indexOf` is O(n). Roll your own or reuse the templates above.</div></div><h2>Binary Search on the Answer (monotonic predicate)</h2><div class="item"><div class="l">When to use</div><div class="n">Answer space is monotone: if x works, everything &gt;= x works (or &lt;=). Binary search the value, not an index. Classics: min ship capacity, Koko eating bananas, sqrt, allocate books.</div></div><div class="item"><div class="l">Generic 'minimum feasible' template</div><pre><code>let lo = MIN_ANS, hi = MAX_ANS;
+while (lo &lt; hi) {
+  const mid = lo + ((hi - lo) &gt;&gt; 1);
+  if (feasible(mid)) hi = mid;   // shrink toward smaller answers
+  else lo = mid + 1;
+}
+return lo; // smallest value that satisfies feasible()</code></pre><div class="n">For 'maximum feasible', use mid = lo+((hi-lo+1)&gt;&gt;1) (upper mid) and lo=mid / hi=mid-1.</div></div><div class="item"><div class="l">Integer sqrt</div><pre><code>function isqrt(n) {
+  let lo = 0, hi = n;
+  while (lo &lt; hi) {
+    const mid = lo + ((hi - lo + 1) &gt;&gt; 1);
+    if (mid * mid &lt;= n) lo = mid; else hi = mid - 1;
+  }
+  return lo;
+}</code></pre><div class="n">Upper-mid variant prevents infinite loop when setting lo = mid.</div></div><div class="item"><div class="l">Float answer (precision loop)</div><pre><code>let lo = 0, hi = X;
+for (let it = 0; it &lt; 100; it++) { // fixed iterations, no while
+  const mid = (lo + hi) / 2;
+  if (feasible(mid)) hi = mid; else lo = mid;
+}
+return lo;</code></pre><div class="n">For reals loop a fixed count (~100) or until hi-lo &lt; eps.</div></div><h2>Two Sum patterns</h2><div class="item"><div class="l">Unsorted array → hash map, O(n)</div><pre><code>function twoSum(nums, target) {
+  const seen = new Map(); // value -&gt; index
+  for (let i = 0; i &lt; nums.length; i++) {
+    const need = target - nums[i];
+    if (seen.has(need)) return [seen.get(need), i];
+    seen.set(nums[i], i);
+  }
+  return [];
+}</code></pre><div class="n">Check `need` BEFORE inserting nums[i] so you don't pair an element with itself.</div></div><div class="item"><div class="l">Sorted array → two pointers, O(n) / O(1)</div><pre><code>let l = 0, r = a.length - 1;
+while (l &lt; r) {
+  const s = a[l] + a[r];
+  if (s === target) return [l, r];
+  if (s &lt; target) l++; else r--;
+}
+return [];</code></pre><div class="n">Only works on sorted input. If you must sort first it becomes O(n log n) and you lose original indices.</div></div><div class="item"><div class="l">Two-sum via binary search</div><pre><code>for (let i = 0; i &lt; n; i++) {
+  const j = lowerBound(a, target - a[i]);
+  if (j &lt; n &amp;&amp; j !== i &amp;&amp; a[j] === target - a[i]) return [i, j];
+}</code></pre><div class="n">O(n log n). Two-pointer is strictly better on sorted data; BS variant matters when array is pre-sorted and you query many targets.</div></div><div class="item"><div class="l">Count pairs / all pairs</div><div class="n">Sorted + two pointers naturally extends: on match, move both and skip duplicates for distinct pairs (3Sum builds on this).</div></div><h2>String toolkit (JS)</h2><div class="item"><div class="l">Char &lt;-&gt; code</div><pre><code>'a'.charCodeAt(0)        // 97
+String.fromCharCode(97)  // 'a'
+s[i].charCodeAt(0) - 97  // 0..25 index for lowercase</code></pre><div class="n">Strings are immutable in JS — `s[i] = 'x'` silently does nothing. Convert with `s.split('')` to mutate.</div></div><div class="item"><div class="l">Frequency array (lowercase)</div><pre><code>const f = new Array(26).fill(0);
+for (const ch of s) f[ch.charCodeAt(0) - 97]++;</code></pre><div class="n">O(1) space vs a Map. Use a Map for unicode / arbitrary charsets.</div></div><div class="item"><div class="l">Common ops</div><pre><code>s.slice(i, j)      // substring [i, j)
+s.split('').reverse().join('')  // reverse
+s.includes('ab')   // substring test
+[...s].sort().join('')          // sort chars</code></pre><div class="n">`slice` accepts negatives; `substring` does not and swaps args if start&gt;end.</div></div><div class="item"><div class="l">Anagram check</div><pre><code>const key = s =&gt; [...s].sort().join('');
+key(a) === key(b);   // O(n log n)
+// or compare 26-length freq arrays for O(n)</code></pre></div><h2>Sliding window — Q: Vasya and String</h2><div class="item"><div class="l">Problem</div><div class="n">String of 'a'/'b', you may flip &lt;= k chars. Find longest substring of a single letter. Answer = max over 'keep a' and 'keep b' windows.</div></div><div class="item"><div class="l">Solution — two-pass sliding window</div><pre><code>function maxBeauty(s, k) {
+  const run = (keep) =&gt; {
+    let l = 0, flips = 0, best = 0;
+    for (let r = 0; r &lt; s.length; r++) {
+      if (s[r] !== keep) flips++;        // must flip this char
+      while (flips &gt; k) {                 // shrink from left
+        if (s[l] !== keep) flips--;
+        l++;
+      }
+      best = Math.max(best, r - l + 1);
+    }
+    return best;
+  };
+  return Math.max(run('a'), run('b'));
+}</code></pre><div class="n">O(n) time, O(1) space. `flips` = count of the OTHER char inside the window; keep it &lt;= k.</div></div><div class="item"><div class="l">Variable-size window recipe</div><pre><code>let l = 0;
+for (let r = 0; r &lt; n; r++) {
+  add(a[r]);
+  while (!valid()) { remove(a[l]); l++; }
+  best = Math.max(best, r - l + 1);
+}</code></pre><div class="n">Grow right, shrink left while invalid, record window size. Generalizes 'longest substring with &lt;= k of X'.</div></div><div class="item"><div class="l">Related: longest substring without repeats</div><pre><code>const last = new Map(); let l = 0, best = 0;
+for (let r = 0; r &lt; s.length; r++) {
+  if (last.has(s[r]) &amp;&amp; last.get(s[r]) &gt;= l) l = last.get(s[r]) + 1;
+  last.set(s[r], r);
+  best = Math.max(best, r - l + 1);
+}</code></pre></div>
+<h2>Quick tips &amp; gotchas</h2><ul class="tips"><li>Precondition #1 for binary search: the array is SORTED (or the predicate is monotonic). If it isn't, sort first or you'll get garbage.</li><li>Use `lo + ((hi - lo) &gt;&gt; 1)` for mid. `(lo + hi) / 2` overflows in fixed-width languages and `/2` on non-integers needs a floor in JS.</li><li>Pick ONE template style and memorize it: `[lo, hi]` closed with `&lt;=` for exact match; `[lo, hi)` half-open with `&lt;` for lower/upper bound. Mixing them causes off-by-one and infinite loops.</li><li>'Binary search on the answer' is the highest-leverage pattern — whenever the answer is monotone (feasible past a threshold), search the value space in O(log(range)).</li><li>Two Sum: hash map for unsorted (O(n)), two pointers for sorted (O(n), O(1) space). Sorting just to two-pointer costs O(n log n) and destroys original indices.</li><li>JS strings are immutable and there is no built-in binary search — carry your own lowerBound/upperBound helpers into contests.</li><li>Sliding window replaces an O(n^2) substring scan with O(n): expand right, contract left while the window is invalid. Vasya-style 'flip &lt;= k' problems track the count of the minority char.</li><li>Off-by-one sanity check: run your BS on arrays of size 0, 1, 2 and with target smaller than all / larger than all elements before trusting it.</li></ul>
+</div></body></html>

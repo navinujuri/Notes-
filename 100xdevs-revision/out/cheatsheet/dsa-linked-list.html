@@ -1,0 +1,149 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Cheat Sheet · Linked List</title><style>:root{--bg:#fff;--fg:#1a1a1a;--muted:#6b7280;--line:#e5e7eb;--accent:#0d9488;--card:#f9fafb;--code:#f3f4f6;--codefg:#111}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1115;--fg:#e6e6e6;--muted:#9aa0aa;--line:#242833;--accent:#2dd4bf;--card:#171a21;--code:#0b0e13;--codefg:#e6e6e6}}
+*{box-sizing:border-box}body{margin:0;font:16px/1.6 system-ui,Segoe UI,sans-serif;background:var(--bg);color:var(--fg)}
+.wrap{max-width:860px;margin:0 auto;padding:1.2rem}
+a.back{color:var(--accent);text-decoration:none;font-size:.9rem}
+h1{font-size:1.5rem;margin:.6rem 0 .2rem}.sub{color:var(--muted);margin:0 0 1.4rem}
+h2{font-size:1.1rem;margin:1.6rem 0 .5rem;color:var(--accent)}
+.item{border:1px solid var(--line);border-radius:10px;background:var(--card);padding:.6rem .8rem;margin:.5rem 0}
+.item .l{font-weight:700}
+.item .n{color:var(--muted);font-size:.92rem;margin-top:.2rem}
+pre{margin:.45rem 0 0;background:var(--code);color:var(--codefg);border:1px solid var(--line);border-radius:8px;padding:.6rem .8rem;overflow-x:auto}
+code,pre{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:.86rem}
+.tips{border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:10px;background:var(--card);padding:.6rem 1rem}
+.tips li{margin:.35rem 0}
+@media print{.back{display:none}}</style></head><body><div class="wrap">
+<a class="back" href="../revision.html">← Back to revision index</a>
+<h1>Linked List — Cheat Sheet</h1>
+<p class="sub">Cohort 2.0 · 6 lessons · quick reference</p>
+<h2>Node &amp; List Setup (Singly)</h2><div class="item"><div class="l">Node structure</div><pre><code>class Node {
+  constructor(val, next = null) {
+    this.val = val;
+    this.next = next;
+  }
+}</code></pre><div class="n">A list is just a chain of nodes; you hold a reference to head. Empty list = head is null.</div></div><div class="item"><div class="l">List wrapper (track head/tail/size)</div><pre><code>class LinkedList {
+  constructor() {
+    this.head = null;
+    this.tail = null;
+    this.size = 0;
+  }
+}</code></pre><div class="n">Keeping a tail pointer makes append O(1) instead of O(n).</div></div><div class="item"><div class="l">Build from array</div><pre><code>function fromArray(arr) {
+  const dummy = new Node(0);
+  let cur = dummy;
+  for (const x of arr) { cur.next = new Node(x); cur = cur.next; }
+  return dummy.next; // head
+}</code></pre></div><div class="item"><div class="l">Traverse / print</div><pre><code>let cur = head, out = [];
+while (cur) { out.push(cur.val); cur = cur.next; }
+console.log(out.join(' -&gt; '));</code></pre><div class="n">Loop condition is `while (cur)`, not `cur.next` — the latter skips the last node.</div></div><div class="item"><div class="l">Dummy (sentinel) head trick</div><pre><code>const dummy = new Node(0, head);
+// ...operate on dummy.next...
+return dummy.next;</code></pre><div class="n">Eliminates edge cases when the head itself may be inserted/deleted.</div></div><h2>Core Operations &amp; Complexity</h2><div class="item"><div class="l">Prepend (push front) — O(1)</div><pre><code>head = new Node(val, head);</code></pre></div><div class="item"><div class="l">Append (push back) — O(1) with tail, else O(n)</div><pre><code>const node = new Node(val);
+if (!this.head) this.head = this.tail = node;
+else { this.tail.next = node; this.tail = node; }
+this.size++;</code></pre></div><div class="item"><div class="l">Insert at index i</div><pre><code>if (i === 0) { head = new Node(val, head); return; }
+let prev = head;
+for (let k = 0; k &lt; i - 1; k++) prev = prev.next;
+prev.next = new Node(val, prev.next);</code></pre><div class="n">Link the new node's next BEFORE reassigning prev.next, or you lose the tail.</div></div><div class="item"><div class="l">Delete by value</div><pre><code>const dummy = new Node(0, head);
+let cur = dummy;
+while (cur.next &amp;&amp; cur.next.val !== val) cur = cur.next;
+if (cur.next) cur.next = cur.next.next;
+return dummy.next;</code></pre></div><div class="item"><div class="l">Search / get at index</div><pre><code>let cur = head, i = 0;
+while (cur &amp;&amp; i &lt; idx) { cur = cur.next; i++; }
+return cur ? cur.val : null;</code></pre><div class="n">Access is O(n) — no random indexing like arrays.</div></div><div class="item"><div class="l">Complexity cheat</div><div class="n">Prepend O(1) | Append O(1)*/O(n) | Insert/Delete at pos O(n) | Search O(n) | Access-by-index O(n). Extra advantage over arrays: O(1) insert/delete once you HOLD the node/prev pointer.</div></div><h2>Reversing a Linked List</h2><div class="item"><div class="l">Iterative — 3 pointers (prev/cur/next)</div><pre><code>function reverse(head) {
+  let prev = null, cur = head;
+  while (cur) {
+    const next = cur.next; // save
+    cur.next = prev;       // flip
+    prev = cur;            // advance
+    cur = next;
+  }
+  return prev; // new head
+}</code></pre><div class="n">O(n) time, O(1) space. Return prev — cur is null at the end.</div></div><div class="item"><div class="l">Recursive</div><pre><code>function reverse(head) {
+  if (!head || !head.next) return head;
+  const newHead = reverse(head.next);
+  head.next.next = head;
+  head.next = null;
+  return newHead;
+}</code></pre><div class="n">O(n) stack space. `head.next.next = head` flips the pointer coming back up.</div></div><div class="item"><div class="l">Reverse sublist [L, R]</div><pre><code>const dummy = new Node(0, head);
+let prev = dummy;
+for (let i = 1; i &lt; L; i++) prev = prev.next;
+let cur = prev.next;
+for (let i = 0; i &lt; R - L; i++) {
+  const t = cur.next;
+  cur.next = t.next;
+  t.next = prev.next;
+  prev.next = t;
+}
+return dummy.next;</code></pre><div class="n">Head-insertion (LeetCode 92). Positions are 1-indexed.</div></div><h2>Cycle Detection (Floyd's Tortoise &amp; Hare)</h2><div class="item"><div class="l">Has cycle? (bool)</div><pre><code>function hasCycle(head) {
+  let slow = head, fast = head;
+  while (fast &amp;&amp; fast.next) {
+    slow = slow.next;
+    fast = fast.next.next;
+    if (slow === fast) return true;
+  }
+  return false;
+}</code></pre><div class="n">Guard both fast &amp;&amp; fast.next before double-hop or you deref null.</div></div><div class="item"><div class="l">Find cycle START node</div><pre><code>let slow = head, fast = head;
+while (fast &amp;&amp; fast.next) {
+  slow = slow.next; fast = fast.next.next;
+  if (slow === fast) {
+    let p = head;
+    while (p !== slow) { p = p.next; slow = slow.next; }
+    return p; // entry of the loop
+  }
+}
+return null;</code></pre><div class="n">After meeting, reset one pointer to head; they meet again at the cycle entry (math: 2(F+a)=F+a+nC).</div></div><div class="item"><div class="l">Cycle length</div><pre><code>// after slow === fast:
+let len = 1, p = slow.next;
+while (p !== slow) { p = p.next; len++; }
+return len;</code></pre></div><div class="item"><div class="l">HashSet alternative — O(n) space</div><pre><code>const seen = new Set();
+let cur = head;
+while (cur) { if (seen.has(cur)) return cur; seen.add(cur); cur = cur.next; }
+return null;</code></pre><div class="n">Simpler but uses extra memory; Floyd's is O(1) space and preferred in interviews.</div></div><h2>Add Two Numbers (LeetCode 2)</h2><div class="item"><div class="l">Digits stored in REVERSE order</div><pre><code>function addTwoNumbers(l1, l2) {
+  const dummy = new Node(0);
+  let cur = dummy, carry = 0;
+  while (l1 || l2 || carry) {
+    const sum = (l1?.val ?? 0) + (l2?.val ?? 0) + carry;
+    carry = Math.floor(sum / 10);
+    cur.next = new Node(sum % 10);
+    cur = cur.next;
+    l1 = l1?.next;
+    l2 = l2?.next;
+  }
+  return dummy.next;
+}</code></pre><div class="n">Loop while EITHER list has nodes OR carry != 0 — a final carry (e.g. 5+5) needs an extra node.</div></div><div class="item"><div class="l">Forward order variant (LeetCode 445)</div><div class="n">Reverse both lists first (or push vals onto stacks), add, then reverse the result — or build result by prepending.</div></div><h2>Doubly Linked List (DLL)</h2><div class="item"><div class="l">Node with prev + next</div><pre><code>class DNode {
+  constructor(val) {
+    this.val = val;
+    this.prev = null;
+    this.next = null;
+  }
+}</code></pre></div><div class="item"><div class="l">Push front</div><pre><code>const node = new DNode(val);
+if (!this.head) { this.head = this.tail = node; }
+else { node.next = this.head; this.head.prev = node; this.head = node; }</code></pre></div><div class="item"><div class="l">Push back</div><pre><code>const node = new DNode(val);
+if (!this.tail) { this.head = this.tail = node; }
+else { node.prev = this.tail; this.tail.next = node; this.tail = node; }</code></pre></div><div class="item"><div class="l">Delete a node in O(1) (given the node)</div><pre><code>if (node.prev) node.prev.next = node.next;
+else this.head = node.next;      // node was head
+if (node.next) node.next.prev = node.prev;
+else this.tail = node.prev;      // node was tail</code></pre><div class="n">DLL's superpower: delete without a prev-search. Basis for LRU cache.</div></div><div class="item"><div class="l">Traverse backward</div><pre><code>let cur = this.tail;
+while (cur) { console.log(cur.val); cur = cur.prev; }</code></pre><div class="n">Extra prev pointer = 2x pointer bookkeeping; every insert/delete must fix BOTH directions.</div></div><h2>Classic Two-Pointer Patterns</h2><div class="item"><div class="l">Find middle (slow/fast)</div><pre><code>let slow = head, fast = head;
+while (fast &amp;&amp; fast.next) { slow = slow.next; fast = fast.next.next; }
+return slow;</code></pre><div class="n">For even length this returns the SECOND middle. Start fast at head.next for the first middle.</div></div><div class="item"><div class="l">Nth node from end (remove)</div><pre><code>const dummy = new Node(0, head);
+let fast = dummy, slow = dummy;
+for (let i = 0; i &lt; n; i++) fast = fast.next;
+while (fast.next) { fast = fast.next; slow = slow.next; }
+slow.next = slow.next.next;
+return dummy.next;</code></pre><div class="n">Advance fast by n first, then move both — gap of n locates the node before target.</div></div><div class="item"><div class="l">Merge two sorted lists</div><pre><code>function merge(a, b) {
+  const dummy = new Node(0);
+  let tail = dummy;
+  while (a &amp;&amp; b) {
+    if (a.val &lt;= b.val) { tail.next = a; a = a.next; }
+    else { tail.next = b; b = b.next; }
+    tail = tail.next;
+  }
+  tail.next = a || b; // attach remainder
+  return dummy.next;
+}</code></pre></div><div class="item"><div class="l">Remove duplicates from SORTED list</div><pre><code>let cur = head;
+while (cur &amp;&amp; cur.next) {
+  if (cur.val === cur.next.val) cur.next = cur.next.next;
+  else cur = cur.next;
+}
+return head;</code></pre><div class="n">Only advance cur when NOT deleting, else you skip runs of 3+ dupes.</div></div><div class="item"><div class="l">Palindrome check</div><div class="n">Find middle -&gt; reverse second half -&gt; compare both halves node by node. O(n) time, O(1) space.</div></div>
+<h2>Quick tips &amp; gotchas</h2><ul class="tips"><li>Always save `cur.next` in a temp before reassigning it during reversal/insertion — otherwise you orphan the rest of the list.</li><li>Use a dummy/sentinel node whenever the head might be deleted or inserted (delete-by-value, remove-nth, merge, add-two-numbers) to kill head edge cases.</li><li>For fast pointer double-hops, guard `while (fast &amp;&amp; fast.next)` — checking only `fast` throws on `fast.next.next`.</li><li>Loop traversal uses `while (cur)`, not `while (cur.next)` — the latter drops the last node.</li><li>Reversal returns `prev` (the last non-null node), not `cur` (which ends up null).</li><li>In Add Two Numbers, keep looping while `carry` is nonzero even after both lists end (e.g. 5+5 -&gt; extra '1' node).</li><li>DLL insert/delete must update BOTH prev and next on both neighbors, plus head/tail when touching the ends.</li><li>Floyd's cycle detection is O(1) space; reserve the HashSet version for when you also need to return the exact node quickly or the list is short.</li></ul>
+</div></body></html>

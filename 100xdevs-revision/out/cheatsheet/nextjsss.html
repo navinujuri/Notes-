@@ -1,0 +1,93 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Cheat Sheet · NextJS Part 3</title><style>:root{--bg:#fff;--fg:#1a1a1a;--muted:#6b7280;--line:#e5e7eb;--accent:#0d9488;--card:#f9fafb;--code:#f3f4f6;--codefg:#111}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1115;--fg:#e6e6e6;--muted:#9aa0aa;--line:#242833;--accent:#2dd4bf;--card:#171a21;--code:#0b0e13;--codefg:#e6e6e6}}
+*{box-sizing:border-box}body{margin:0;font:16px/1.6 system-ui,Segoe UI,sans-serif;background:var(--bg);color:var(--fg)}
+.wrap{max-width:860px;margin:0 auto;padding:1.2rem}
+a.back{color:var(--accent);text-decoration:none;font-size:.9rem}
+h1{font-size:1.5rem;margin:.6rem 0 .2rem}.sub{color:var(--muted);margin:0 0 1.4rem}
+h2{font-size:1.1rem;margin:1.6rem 0 .5rem;color:var(--accent)}
+.item{border:1px solid var(--line);border-radius:10px;background:var(--card);padding:.6rem .8rem;margin:.5rem 0}
+.item .l{font-weight:700}
+.item .n{color:var(--muted);font-size:.92rem;margin-top:.2rem}
+pre{margin:.45rem 0 0;background:var(--code);color:var(--codefg);border:1px solid var(--line);border-radius:8px;padding:.6rem .8rem;overflow-x:auto}
+code,pre{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:.86rem}
+.tips{border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:10px;background:var(--card);padding:.6rem 1rem}
+.tips li{margin:.35rem 0}
+@media print{.back{display:none}}</style></head><body><div class="wrap">
+<a class="back" href="../revision.html">← Back to revision index</a>
+<h1>NextJS Part 3 — Cheat Sheet</h1>
+<p class="sub">Cohort 3.0 · 9 lessons · quick reference</p>
+<h2>Recap &amp; Routing Model</h2><div class="item"><div class="l">App Router file conventions</div><pre><code>app/
+  layout.tsx     // shared shell (required at root)
+  page.tsx       // route UI
+  loading.tsx    // Suspense fallback
+  error.tsx      // 'use client' error boundary
+  not-found.tsx  // 404 UI
+  route.ts       // API endpoint (GET/POST...)</code></pre><div class="n">Folders = URL segments. Only page.tsx / route.ts make a segment routable.</div></div><div class="item"><div class="l">Server vs Client Components</div><pre><code>// default = Server Component (RSC)
+// opt into client with directive at top of file:
+'use client';</code></pre><div class="n">RSC: no hooks/state/browser APIs; can be async. 'use client' is contagious to children imports.</div></div><div class="item"><div class="l">Special file segment types (this part)</div><pre><code>(group)      // route group — no URL segment
+[id]         // dynamic segment
+[...slug]    // catch-all
+[[...slug]]  // optional catch-all
+_folder      // private (excluded from routing)</code></pre></div><h2>Route Groups ( )</h2><div class="item"><div class="l">Organize without touching URL</div><pre><code>app/(marketing)/about/page.tsx   -&gt; /about
+app/(shop)/cart/page.tsx         -&gt; /cart</code></pre><div class="n">Parens are stripped from the path — purely for grouping + scoped layouts.</div></div><div class="item"><div class="l">Scoped layout per group</div><pre><code>app/(marketing)/layout.tsx  // wraps only marketing pages
+app/(app)/layout.tsx        // separate shell for the app</code></pre></div><div class="item"><div class="l">Multiple root layouts</div><pre><code>app/(marketing)/layout.tsx  // each has its own &lt;html&gt;&lt;body&gt;
+app/(app)/layout.tsx</code></pre><div class="n">Delete the top-level app/layout.tsx and give each group a root layout. Navigating between groups = full page reload.</div></div><h2>Dynamic Routes [param]</h2><div class="item"><div class="l">Single dynamic segment</div><pre><code>// app/blog/[slug]/page.tsx  -&gt; /blog/hello
+export default async function Page(
+  { params }: { params: Promise&lt;{ slug: string }&gt; }
+) {
+  const { slug } = await params;
+  return &lt;h1&gt;{slug}&lt;/h1&gt;;
+}</code></pre><div class="n">Next 15+: params &amp; searchParams are Promises — await them (or use React.use() in a client comp).</div></div><div class="item"><div class="l">Multiple segments</div><pre><code>// app/shop/[category]/[id]/page.tsx
+const { category, id } = await params;</code></pre></div><div class="item"><div class="l">Read params in a Client Component</div><pre><code>'use client';
+import { useParams } from 'next/navigation';
+const { slug } = useParams();</code></pre></div><div class="item"><div class="l">searchParams (query string)</div><pre><code>export default async function Page(
+  { searchParams }: { searchParams: Promise&lt;{ q?: string }&gt; }
+) {
+  const { q } = await searchParams;
+}</code></pre><div class="n">Accessing searchParams opts the page into dynamic rendering.</div></div><h2>Catch-all [...] &amp; Optional [[...]]</h2><div class="item"><div class="l">Catch-all — one or more segments</div><pre><code>// app/docs/[...slug]/page.tsx
+// matches /docs/a, /docs/a/b/c   (NOT /docs)
+const { slug } = await params; // slug: string[]  e.g. ['a','b','c']</code></pre></div><div class="item"><div class="l">Optional catch-all — also matches parent</div><pre><code>// app/docs/[[...slug]]/page.tsx
+// matches /docs  AND  /docs/a/b
+const { slug } = await params; // string[] | undefined</code></pre><div class="n">The extra brackets make the whole segment optional — slug is undefined at /docs.</div></div><div class="item"><div class="l">Typical use</div><div class="n">Docs sites, file-tree browsers, i18n prefixes, CMS pages with arbitrary nesting.</div></div><h2>Static Site Generation (SSG / ISR)</h2><div class="item"><div class="l">Pre-render dynamic pages at build time</div><pre><code>// app/blog/[slug]/page.tsx
+export async function generateStaticParams() {
+  const posts = await fetch('https://api/posts').then(r =&gt; r.json());
+  return posts.map((p) =&gt; ({ slug: p.slug }));
+}</code></pre><div class="n">Returned params are baked to static HTML at build. Runs on the server at build time.</div></div><div class="item"><div class="l">Control unknown params</div><pre><code>export const dynamicParams = true;  // default: render on-demand + cache
+// dynamicParams = false -&gt; 404 for any slug not in generateStaticParams</code></pre><div class="n">false = fully static allowlist; true = SSG for known + SSR/ISR for the rest.</div></div><div class="item"><div class="l">Incremental Static Regeneration (ISR)</div><pre><code>export const revalidate = 3600; // seconds — rebuild page in background
+// or per-fetch:
+fetch(url, { next: { revalidate: 60 } });</code></pre></div><div class="item"><div class="l">Force static / dynamic</div><pre><code>export const dynamic = 'force-static';  // or 'force-dynamic'
+fetch(url, { cache: 'no-store' });      // opt a page into dynamic</code></pre><div class="n">In RSC, fetch is cached by default; cookies()/headers()/searchParams flip a page to dynamic.</div></div><h2>Hydration &amp; RSC</h2><div class="item"><div class="l">What hydration is</div><div class="n">Server sends static HTML; React attaches event listeners on the client to make it interactive. Server output must match the first client render.</div></div><div class="item"><div class="l">Client Component (needs state/effects/events)</div><pre><code>'use client';
+import { useState } from 'react';
+export default function Counter() {
+  const [n, setN] = useState(0);
+  return &lt;button onClick={() =&gt; setN(n + 1)}&gt;{n}&lt;/button&gt;;
+}</code></pre></div><div class="item"><div class="l">Common hydration-mismatch causes</div><pre><code>// BAD in initial render:
+&lt;p&gt;{Date.now()}&lt;/p&gt;
+&lt;p&gt;{Math.random()}&lt;/p&gt;
+{typeof window !== 'undefined' &amp;&amp; &lt;X/&gt;}
+new Date().toLocaleString() // locale/timezone differs</code></pre><div class="n">Move client-only values into useEffect, or gate with a mounted flag.</div></div><div class="item"><div class="l">Escape hatches</div><pre><code>&lt;time suppressHydrationWarning&gt;{Date.now()}&lt;/time&gt;
+// or dynamic import with no SSR:
+const Chart = dynamic(() =&gt; import('./Chart'), { ssr: false });</code></pre></div><h2>Middleware</h2><div class="item"><div class="l">File location &amp; signature</div><pre><code>// middleware.ts  (project root, sibling of app/)
+import { NextResponse } from 'next/server';
+import type { NextRequest } from 'next/server';
+
+export function middleware(req: NextRequest) {
+  return NextResponse.next();
+}</code></pre><div class="n">One middleware file per project. Runs BEFORE the request completes, on every matched route.</div></div><div class="item"><div class="l">Redirect / rewrite / block</div><pre><code>const token = req.cookies.get('token')?.value;
+if (!token) {
+  return NextResponse.redirect(new URL('/login', req.url));
+}
+// rewrite (URL unchanged in browser):
+return NextResponse.rewrite(new URL('/proxy', req.url));</code></pre></div><div class="item"><div class="l">Matcher config (scope it!)</div><pre><code>export const config = {
+  matcher: ['/dashboard/:path*', '/api/:path*'],
+};
+// exclude static assets:
+// matcher: ['/((?!_next/static|_next/image|favicon.ico).*)']</code></pre></div><div class="item"><div class="l">Set headers / cookies on response</div><pre><code>const res = NextResponse.next();
+res.cookies.set('visited', '1');
+res.headers.set('x-custom', 'value');
+return res;</code></pre><div class="n">Runs on the Edge runtime by default — no Node APIs (fs, native modules). Keep it fast.</div></div><h2>Assignment / Project</h2><div class="item"><div class="l">Build a docs/blog site</div><div class="n">Route group (marketing) for landing, [slug] for posts, [[...slug]] for nested docs, generateStaticParams for SSG.</div></div><div class="item"><div class="l">Auth-gated dashboard</div><pre><code>// middleware.ts guarding /dashboard
+export const config = { matcher: ['/dashboard/:path*'] };
+// redirect unauthenticated users to /signin</code></pre><div class="n">Combine route groups (auth) / (app) with middleware for a clean protected area.</div></div><div class="item"><div class="l">Verify SSG output</div><pre><code>next build   // watch the route table: ○ (Static)  ● (SSG)  ƒ (Dynamic)
+next start</code></pre><div class="n">Confirm dynamic pages show as SSG and that unknown slugs behave per your dynamicParams setting.</div></div>
+<h2>Quick tips &amp; gotchas</h2><ul class="tips"><li>Route groups (folder) never appear in the URL — use them only for organization and scoped/multiple layouts. Navigating between different root layouts triggers a full reload.</li><li>Next 15+: params and searchParams are Promises. await them in Server Components or unwrap with React.use() in Client Components — forgetting this is the #1 upgrade bug.</li><li>[...slug] does NOT match the base path; [[...slug]] does (slug is undefined there). Pick optional catch-all when the parent route needs to render.</li><li>generateStaticParams runs at build. dynamicParams=false makes it a strict allowlist (404 otherwise); true (default) renders unknown params on-demand and caches them.</li><li>In RSC, fetch is cached by default = static. cookies(), headers(), searchParams, or cache:'no-store' flip a route to dynamic — know which one you tripped.</li><li>Hydration errors come from non-deterministic first renders: Date.now(), Math.random(), typeof window checks, locale/timezone formatting, and browser extensions injecting DOM.</li><li>Middleware runs on the Edge runtime by default — no fs/Node native modules. Always set a matcher so it doesn't run on _next static assets and images.</li><li>Use NextResponse.rewrite to change what renders without changing the browser URL; redirect changes the URL. Set cookies/headers on the response you return, not the request.</li></ul>
+</div></body></html>

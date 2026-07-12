@@ -1,0 +1,98 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Cheat Sheet · Intro to HTTP</title><style>:root{--bg:#fff;--fg:#1a1a1a;--muted:#6b7280;--line:#e5e7eb;--accent:#0d9488;--card:#f9fafb;--code:#f3f4f6;--codefg:#111}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1115;--fg:#e6e6e6;--muted:#9aa0aa;--line:#242833;--accent:#2dd4bf;--card:#171a21;--code:#0b0e13;--codefg:#e6e6e6}}
+*{box-sizing:border-box}body{margin:0;font:16px/1.6 system-ui,Segoe UI,sans-serif;background:var(--bg);color:var(--fg)}
+.wrap{max-width:860px;margin:0 auto;padding:1.2rem}
+a.back{color:var(--accent);text-decoration:none;font-size:.9rem}
+h1{font-size:1.5rem;margin:.6rem 0 .2rem}.sub{color:var(--muted);margin:0 0 1.4rem}
+h2{font-size:1.1rem;margin:1.6rem 0 .5rem;color:var(--accent)}
+.item{border:1px solid var(--line);border-radius:10px;background:var(--card);padding:.6rem .8rem;margin:.5rem 0}
+.item .l{font-weight:700}
+.item .n{color:var(--muted);font-size:.92rem;margin-top:.2rem}
+pre{margin:.45rem 0 0;background:var(--code);color:var(--codefg);border:1px solid var(--line);border-radius:8px;padding:.6rem .8rem;overflow-x:auto}
+code,pre{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:.86rem}
+.tips{border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:10px;background:var(--card);padding:.6rem 1rem}
+.tips li{margin:.35rem 0}
+@media print{.back{display:none}}</style></head><body><div class="wrap">
+<a class="back" href="../revision.html">← Back to revision index</a>
+<h1>Intro to HTTP — Cheat Sheet</h1>
+<p class="sub">Cohort 3.0 · 14 lessons · quick reference</p>
+<h2>Fundamentals &amp; Request/Response Model</h2><div class="item"><div class="l">What HTTP is</div><div class="n">HyperText Transfer Protocol: stateless, text-based, application-layer protocol (layer 7) riding on TCP. Each request is independent — server keeps no memory between requests (that's why we bolt on cookies/tokens for state).</div></div><div class="item"><div class="l">Why a protocol at all</div><div class="n">A shared contract so any client (browser, curl, mobile app) and any server (Node, Go, nginx) can talk. Defines the exact bytes: method + path + version, headers, blank line, body.</div></div><div class="item"><div class="l">Request/Response cycle</div><pre><code>Client  --- REQUEST  ---&gt;  Server
+        &lt;--- RESPONSE ---</code></pre><div class="n">Client always initiates; server only replies. One request =&gt; exactly one response.</div></div><div class="item"><div class="l">Raw HTTP/1.1 request wire format</div><pre><code>GET /users/42 HTTP/1.1\r\nHost: api.example.com\r\nAccept: application/json\r\n\r\n</code></pre><div class="n">Request line, headers, blank line (CRLF CRLF), then optional body. Blank line separates headers from body.</div></div><div class="item"><div class="l">Raw HTTP response wire format</div><pre><code>HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: 27\r\n\r\n{"id":42,"name":"Alice"}</code></pre><div class="n">Status line, headers, blank line, body.</div></div><div class="item"><div class="l">URL anatomy</div><pre><code>https://api.example.com:443/users?id=42#top
+  |      |               |    |      |     |
+scheme  host           port  path  query  fragment</code></pre><div class="n">Fragment (#top) is client-only — never sent to the server.</div></div><h2>Domain, IP &amp; Ports</h2><div class="item"><div class="l">Domain -&gt; IP (DNS)</div><pre><code>nslookup example.com
+dig +short example.com</code></pre><div class="n">Humans use names (example.com); machines route by IP (93.184.x.x). DNS resolves name -&gt; IP before the TCP connection opens.</div></div><div class="item"><div class="l">localhost / loopback</div><pre><code>127.0.0.1  ==  localhost  ==  ::1 (IPv6)</code></pre><div class="n">Traffic never leaves your machine.</div></div><div class="item"><div class="l">Ports = which process on the host</div><div class="n">IP finds the machine; port finds the app on it. 0-65535; &lt;1024 are privileged/well-known.</div></div><div class="item"><div class="l">Common ports</div><pre><code>80    HTTP
+443   HTTPS
+3000  Node/React dev (convention)
+5432  Postgres
+27017 MongoDB
+6379  Redis</code></pre><div class="n">80 and 443 are implied by http:// and https:// so you rarely type them.</div></div><div class="item"><div class="l">Check / free a port (Windows)</div><pre><code>netstat -ano | findstr :3000
+taskkill /PID &lt;pid&gt; /F</code></pre><div class="n">macOS/Linux: lsof -i :3000  then  kill -9 &lt;pid&gt;.</div></div><h2>HTTP Methods (Verbs)</h2><div class="item"><div class="l">GET — read, no body</div><pre><code>curl https://api.example.com/users</code></pre><div class="n">Safe + idempotent. Params go in the query string, not the body. Cacheable.</div></div><div class="item"><div class="l">POST — create / non-idempotent action</div><pre><code>curl -X POST -H 'Content-Type: application/json' -d '{"name":"Alice"}' https://api.example.com/users</code></pre><div class="n">Sends a body. Calling twice creates two resources.</div></div><div class="item"><div class="l">PUT — replace/upsert (idempotent)</div><pre><code>curl -X PUT -d '{"name":"Bob"}' https://api.example.com/users/42</code></pre><div class="n">Full replacement of the resource. Same call N times = same end state.</div></div><div class="item"><div class="l">PATCH — partial update</div><pre><code>curl -X PATCH -d '{"name":"Bob"}' https://api.example.com/users/42</code></pre><div class="n">Only send the fields you change.</div></div><div class="item"><div class="l">DELETE — remove</div><pre><code>curl -X DELETE https://api.example.com/users/42</code></pre><div class="n">Idempotent — deleting an already-deleted resource still ends deleted.</div></div><div class="item"><div class="l">OPTIONS — capabilities / CORS preflight</div><div class="n">Browsers auto-fire OPTIONS before non-simple cross-origin requests to check CORS headers. You don't call it by hand.</div></div><div class="item"><div class="l">Idempotency at a glance</div><pre><code>Safe:       GET, HEAD, OPTIONS
+Idempotent: GET, PUT, DELETE, HEAD
+Neither:    POST, PATCH</code></pre><div class="n">The method is a convention — the server must actually enforce the semantics.</div></div><h2>Status Codes</h2><div class="item"><div class="l">Class meanings (first digit)</div><pre><code>1xx  informational
+2xx  success
+3xx  redirect
+4xx  client error (your fault)
+5xx  server error (their fault)</code></pre></div><div class="item"><div class="l">2xx success</div><pre><code>200 OK              GET/PUT/PATCH ok
+201 Created         POST made a resource
+204 No Content      success, empty body (e.g. DELETE)</code></pre></div><div class="item"><div class="l">3xx redirect</div><pre><code>301 Moved Permanently
+302 Found (temp)
+304 Not Modified      cache hit, no re-download</code></pre></div><div class="item"><div class="l">4xx client error</div><pre><code>400 Bad Request       malformed / validation fail
+401 Unauthorized      not authenticated (no/ bad creds)
+403 Forbidden         authed but not allowed
+404 Not Found
+405 Method Not Allowed
+429 Too Many Requests  rate limited</code></pre><div class="n">401 = who are you? 403 = I know you, no.</div></div><div class="item"><div class="l">5xx server error</div><pre><code>500 Internal Server Error   unhandled exception
+502 Bad Gateway             upstream returned garbage
+503 Service Unavailable     down/overloaded
+504 Gateway Timeout</code></pre></div><h2>Headers, Body &amp; Routes</h2><div class="item"><div class="l">What headers are</div><div class="n">Key:value metadata about the request/response — not the payload itself. Case-insensitive keys.</div></div><div class="item"><div class="l">Common request headers</div><pre><code>Host: api.example.com
+Content-Type: application/json
+Accept: application/json
+Authorization: Bearer &lt;token&gt;
+User-Agent: curl/8.4.0
+Cookie: session=abc123</code></pre></div><div class="item"><div class="l">Common response headers</div><pre><code>Content-Type: application/json; charset=utf-8
+Content-Length: 27
+Set-Cookie: session=abc123; HttpOnly
+Cache-Control: max-age=3600
+Location: /users/42   (with 201/3xx)</code></pre></div><div class="item"><div class="l">Body — the actual payload</div><div class="n">Present on POST/PUT/PATCH requests and most responses. Format is declared by Content-Type. GET/DELETE typically have no request body.</div></div><div class="item"><div class="l">Content-Type examples</div><pre><code>application/json
+application/x-www-form-urlencoded
+multipart/form-data      (file uploads)
+text/html</code></pre></div><div class="item"><div class="l">Routes = method + path</div><pre><code>GET    /users        list
+GET    /users/:id    read one
+POST   /users        create
+PUT    /users/:id    replace
+DELETE /users/:id    delete</code></pre><div class="n">Same path, different method = different route. Path params (:id) vs query (?sort=asc) vs body serve different jobs.</div></div><h2>Clients: curl, Postman, Browser</h2><div class="item"><div class="l">curl — verbose, see full exchange</div><pre><code>curl -v https://api.example.com/users</code></pre><div class="n">-v prints request (&gt;) and response (&lt;) lines including headers.</div></div><div class="item"><div class="l">curl — JSON POST with auth</div><pre><code>curl -X POST https://api.example.com/users \
+  -H 'Content-Type: application/json' \
+  -H 'Authorization: Bearer TOKEN' \
+  -d '{"name":"Alice"}'</code></pre></div><div class="item"><div class="l">curl — headers only / status only</div><pre><code>curl -I https://example.com                       # HEAD, headers only
+curl -s -o /dev/null -w '%{http_code}\n' URL      # just the code</code></pre><div class="n">On Windows use  -o NUL  instead of /dev/null.</div></div><div class="item"><div class="l">Browser as a client</div><div class="n">URL bar / links fire GET; &lt;form method="post"&gt; fires POST. Inspect everything in DevTools &gt; Network (see method, status, headers, payload, timing). fetch() from console for ad-hoc calls.</div></div><div class="item"><div class="l">Postman</div><div class="n">GUI client: pick method, set URL, add Headers/Params/Body tabs, save into Collections, use {{variables}} for envs. Great for auth flows and sharing; curl is faster for scripting/CI.</div></div><h2>Writing HTTP in JavaScript</h2><div class="item"><div class="l">Bare Node.js server (no deps)</div><pre><code>import http from 'node:http';
+const server = http.createServer((req, res) =&gt; {
+  if (req.method === 'GET' &amp;&amp; req.url === '/health') {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    return res.end(JSON.stringify({ ok: true }));
+  }
+  res.writeHead(404).end('Not Found');
+});
+server.listen(3000, () =&gt; console.log('http://localhost:3000'));</code></pre><div class="n">req is a readable stream — body arrives in chunks, not as a ready string.</div></div><div class="item"><div class="l">Reading a JSON request body (raw Node)</div><pre><code>let data = '';
+req.on('data', c =&gt; data += c);
+req.on('end', () =&gt; {
+  const body = JSON.parse(data || '{}');
+  // ...use body
+});</code></pre><div class="n">Frameworks/body-parsers do this for you.</div></div><div class="item"><div class="l">Express server (idiomatic)</div><pre><code>import express from 'express';
+const app = express();
+app.use(express.json());              // parse JSON bodies
+
+app.get('/users/:id', (req, res) =&gt; {
+  res.json({ id: req.params.id });     // sets Content-Type + 200
+});
+app.post('/users', (req, res) =&gt; {
+  res.status(201).json(req.body);
+});
+app.listen(3000);</code></pre><div class="n">req.params (path), req.query (?a=b), req.body (parsed). res.json() serializes + sets header. Order of app.use matters.</div></div><div class="item"><div class="l">Client: fetch (browser + Node 18+)</div><pre><code>const res = await fetch('https://api.example.com/users', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ name: 'Alice' }),
+});
+if (!res.ok) throw new Error(`HTTP ${res.status}`);
+const data = await res.json();</code></pre><div class="n">fetch does NOT reject on 4xx/5xx — always check res.ok. body must be a string; JSON.stringify it yourself.</div></div>
+<h2>Quick tips &amp; gotchas</h2><ul class="tips"><li>HTTP is stateless: the server forgets you between requests. State (login) is faked via cookies/tokens sent on every request.</li><li>fetch() only rejects on network failure — a 404 or 500 still resolves. Guard with `if (!res.ok)` before parsing.</li><li>Query string = filtering/sorting/pagination (GET); request body = the resource payload (POST/PUT/PATCH). Don't put secrets in the query string — it lands in logs and history.</li><li>401 vs 403: 401 = not authenticated (login), 403 = authenticated but not permitted. 404 is often used to hide existence of a resource from unauthorized users.</li><li>Set Content-Type correctly or the other side mis-parses the body; a POST with JSON but no `Content-Type: application/json` often arrives as undefined/empty on the server.</li><li>The method (GET/POST/...) is only a convention — the server decides what actually happens. Keep GET side-effect-free and POST non-idempotent to match caches, proxies, and retries.</li><li>Port already in use (EADDRINUSE) = a previous process is still bound. Find and kill it: `netstat -ano | findstr :3000` then `taskkill /PID &lt;pid&gt; /F`.</li><li>CORS is a browser rule, not an HTTP error: cross-origin requests need the server to return Access-Control-* headers. curl/Postman ignore CORS, so 'works in Postman, fails in browser' is almost always CORS.</li></ul>
+</div></body></html>

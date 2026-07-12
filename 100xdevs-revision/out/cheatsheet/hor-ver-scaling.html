@@ -1,0 +1,89 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Cheat Sheet · Horizontal and vertical scaling, Indexes in DBs</title><style>:root{--bg:#fff;--fg:#1a1a1a;--muted:#6b7280;--line:#e5e7eb;--accent:#0d9488;--card:#f9fafb;--code:#f3f4f6;--codefg:#111}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1115;--fg:#e6e6e6;--muted:#9aa0aa;--line:#242833;--accent:#2dd4bf;--card:#171a21;--code:#0b0e13;--codefg:#e6e6e6}}
+*{box-sizing:border-box}body{margin:0;font:16px/1.6 system-ui,Segoe UI,sans-serif;background:var(--bg);color:var(--fg)}
+.wrap{max-width:860px;margin:0 auto;padding:1.2rem}
+a.back{color:var(--accent);text-decoration:none;font-size:.9rem}
+h1{font-size:1.5rem;margin:.6rem 0 .2rem}.sub{color:var(--muted);margin:0 0 1.4rem}
+h2{font-size:1.1rem;margin:1.6rem 0 .5rem;color:var(--accent)}
+.item{border:1px solid var(--line);border-radius:10px;background:var(--card);padding:.6rem .8rem;margin:.5rem 0}
+.item .l{font-weight:700}
+.item .n{color:var(--muted);font-size:.92rem;margin-top:.2rem}
+pre{margin:.45rem 0 0;background:var(--code);color:var(--codefg);border:1px solid var(--line);border-radius:8px;padding:.6rem .8rem;overflow-x:auto}
+code,pre{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:.86rem}
+.tips{border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:10px;background:var(--card);padding:.6rem 1rem}
+.tips li{margin:.35rem 0}
+@media print{.back{display:none}}</style></head><body><div class="wrap">
+<a class="back" href="../revision.html">← Back to revision index</a>
+<h1>Horizontal and vertical scaling, Indexes in DBs — Cheat Sheet</h1>
+<p class="sub">Cohort 2.0 · 11 lessons · quick reference</p>
+<h2>Scaling: Vertical vs Horizontal</h2><div class="item"><div class="l">Vertical (scale up) — add CPU/RAM/disk to one box</div><div class="n">Simplest: no code change, no distributed complexity. Hard ceiling (biggest instance), single point of failure, downtime to resize, cost grows non-linearly.</div></div><div class="item"><div class="l">Horizontal (scale out) — add more machines/instances behind a LB</div><div class="n">Near-infinite headroom + HA/redundancy. Needs stateless app, load balancer, shared state store. Requires the app to NOT keep session/data in local memory.</div></div><div class="item"><div class="l">Rule of thumb</div><div class="n">Scale vertically first (cheap, easy) until you hit a single-node limit or need HA, then go horizontal. DB usually scales up + read-replicas before sharding.</div></div><div class="item"><div class="l">Statelessness is the prerequisite for horizontal</div><pre><code>// BAD: in-memory session -&gt; breaks across instances
+const sessions = {};
+// GOOD: externalize state to Redis/DB
+await redis.set(`sess:${id}`, JSON.stringify(data));</code></pre><div class="n">Move sessions, cache, rate-limit counters, uploads to Redis/DB/S3. Sticky sessions are a crutch, not a fix.</div></div><div class="item"><div class="l">Load balancing strategies</div><div class="n">round-robin (default), least-conn (uneven request cost), ip-hash/sticky (stateful fallback). Health checks evict dead nodes.</div></div><h2>Horizontal Scaling in Node.js</h2><div class="item"><div class="l">cluster module — one worker per CPU core (Node is single-threaded)</div><pre><code>const cluster = require('node:cluster');
+const os = require('node:os');
+if (cluster.isPrimary) {
+  for (let i = 0; i &lt; os.availableParallelism(); i++) cluster.fork();
+  cluster.on('exit', () =&gt; cluster.fork()); // auto-restart
+} else {
+  require('./server'); // each worker binds same port (OS load-balances)
+}</code></pre><div class="n">Uses all cores on ONE box (a form of scale-out within a machine). Workers share the listening socket; no shared memory.</div></div><div class="item"><div class="l">PM2 cluster mode — production process manager</div><pre><code>pm2 start app.js -i max      # one instance per core
+pm2 scale app +3             # add 3 workers
+pm2 reload app               # zero-downtime rolling restart
+pm2 start app.js -i 0        # 0/max = all cores</code></pre><div class="n">`reload` (graceful) vs `restart` (hard). `pm2 startup` + `pm2 save` to survive reboots.</div></div><div class="item"><div class="l">Nginx as reverse-proxy / load balancer across boxes</div><pre><code>upstream app {
+  least_conn;
+  server 10.0.0.1:3000;
+  server 10.0.0.2:3000;
+}
+server {
+  location / { proxy_pass http://app; }
+}</code></pre><div class="n">In front of N machines each running the Node app. Add `proxy_set_header X-Forwarded-For $remote_addr;` and trust proxy in Express.</div></div><div class="item"><div class="l">Trust the proxy in Express (correct client IP / protocol)</div><pre><code>app.set('trust proxy', 1);</code></pre></div><div class="item"><div class="l">Graceful shutdown (drain in-flight before exit)</div><pre><code>process.on('SIGTERM', () =&gt; server.close(() =&gt; process.exit(0)));</code></pre><div class="n">Required so LB/PM2 can rotate instances without dropping requests.</div></div><h2>Capacity Estimation (back-of-envelope)</h2><div class="item"><div class="l">Average RPS from daily traffic</div><pre><code>RPS = daily_requests / 86400   # 86,400 s/day
+# 100M req/day  -&gt;  ~1,157 RPS avg</code></pre><div class="n">Peak ≈ 2–3× average. Size for peak, not average.</div></div><div class="item"><div class="l">Little's Law — concurrency needed</div><pre><code>concurrency = RPS * avg_latency_seconds
+# 1000 RPS * 0.2s  -&gt;  200 concurrent in flight</code></pre><div class="n">Drives worker count, thread/connection pool size, and instance count.</div></div><div class="item"><div class="l">Instances needed</div><pre><code>instances = ceil(peak_RPS / per_instance_RPS)
+# add headroom (~30%) + N+1 for failover</code></pre></div><div class="item"><div class="l">Storage sizing</div><pre><code>storage = rows * bytes_per_row * (1 + index_overhead)
+# 1B rows * 200B * 1.5  -&gt;  ~300 GB</code></pre><div class="n">Account for indexes (often 20–100% of table size), WAL, and growth rate.</div></div><div class="item"><div class="l">DB connection budget</div><div class="n">Postgres default max_connections ~100. Each connection ~5–10MB. Use PgBouncer/pooling; pool size ≈ cores*2, NOT one per app worker × instances.</div></div><div class="item"><div class="l">Handy units</div><div class="n">1 day ≈ 86.4k s; 1M/day ≈ 12 RPS. Read:write ratios drive caching + replica decisions.</div></div><h2>Postgres Indexing — Basics</h2><div class="item"><div class="l">Create / drop a B-tree index (default)</div><pre><code>CREATE INDEX idx_users_email ON users(email);
+DROP INDEX idx_users_email;</code></pre><div class="n">B-tree serves =, &lt;, &gt;, BETWEEN, ORDER BY, IN, LIKE 'prefix%'. Not LIKE '%x'.</div></div><div class="item"><div class="l">Build without locking writes (production)</div><pre><code>CREATE INDEX CONCURRENTLY idx_users_email ON users(email);</code></pre><div class="n">Slower, can't run in a txn; a failed run leaves an INVALID index (DROP + retry). Plain CREATE INDEX takes a write lock on the table.</div></div><div class="item"><div class="l">Unique index / constraint</div><pre><code>CREATE UNIQUE INDEX ON users(email);
+ALTER TABLE users ADD CONSTRAINT uq_email UNIQUE(email);</code></pre><div class="n">PKs and UNIQUE constraints auto-create a backing index. FKs do NOT — index FK columns yourself.</div></div><div class="item"><div class="l">Inspect + verify usage</div><pre><code>EXPLAIN ANALYZE SELECT * FROM users WHERE email='a@b.com';
+\d users        -- list indexes (psql)</code></pre><div class="n">Look for 'Index Scan' vs 'Seq Scan'. Check pg_stat_user_indexes for unused indexes to drop.</div></div><div class="item"><div class="l">Index type cheat sheet</div><pre><code>B-tree  -- default, equality + range + sort
+Hash    -- equality only (=)
+GIN     -- jsonb, arrays, full-text (@&gt;, ?, @@)
+GiST    -- geometric, ranges, nearest-neighbor
+BRIN    -- huge append-only tables (time-series)</code></pre><div class="n">GIN for containment/search; BRIN is tiny + fast on naturally-ordered columns like created_at.</div></div><div class="item"><div class="l">Cost of indexes</div><div class="n">Each index slows INSERT/UPDATE/DELETE and consumes disk. Index for read patterns you actually run; don't index everything.</div></div><h2>Complex / Advanced Postgres Indexes</h2><div class="item"><div class="l">Composite (multi-column) — leftmost-prefix rule</div><pre><code>CREATE INDEX idx ON orders(user_id, created_at);</code></pre><div class="n">Serves WHERE user_id=? , WHERE user_id=? AND created_at&gt;? , and (user_id) alone. Does NOT serve created_at alone. Put the equality/most-selective column first.</div></div><div class="item"><div class="l">Partial index — index a subset of rows</div><pre><code>CREATE INDEX idx_active ON orders(user_id)
+  WHERE status = 'active';</code></pre><div class="n">Smaller + faster. Query's WHERE must match the predicate to use it. Great for soft-deletes / hot subsets.</div></div><div class="item"><div class="l">Expression (functional) index</div><pre><code>CREATE INDEX idx_lower_email ON users(lower(email));
+-- query MUST use the same expression:
+SELECT * FROM users WHERE lower(email)=lower($1);</code></pre><div class="n">Enables case-insensitive / computed lookups. Column-only query won't hit it.</div></div><div class="item"><div class="l">Covering index (INCLUDE) — index-only scan</div><pre><code>CREATE INDEX idx ON orders(user_id) INCLUDE (total, status);</code></pre><div class="n">Payload columns live in the index so the query avoids heap fetches. Needs recent VACUUM (visibility map) for index-only scan.</div></div><div class="item"><div class="l">GIN on JSONB / arrays</div><pre><code>CREATE INDEX ON docs USING GIN (data jsonb_path_ops);
+SELECT * FROM docs WHERE data @&gt; '{"active":true}';</code></pre></div><div class="item"><div class="l">Full-text search</div><pre><code>CREATE INDEX ON posts USING GIN (to_tsvector('english', body));
+SELECT * FROM posts
+ WHERE to_tsvector('english', body) @@ plainto_tsquery('scaling');</code></pre></div><h2>Indexes &amp; Relations in Prisma</h2><div class="item"><div class="l">Single-field id / unique / index</div><pre><code>model User {
+  id    Int    @id @default(autoincrement())
+  email String @unique          // unique index
+  name  String
+  @@index([name])               // non-unique index
+}</code></pre><div class="n">@unique = unique index; @@index = plain index; @id = PK (indexed).</div></div><div class="item"><div class="l">Composite index / composite unique</div><pre><code>model Post {
+  authorId Int
+  slug     String
+  @@index([authorId, createdAt])
+  @@unique([authorId, slug])
+}</code></pre><div class="n">@@unique also gives you a compound lookup key for `where: { authorId_slug: {...} }`.</div></div><div class="item"><div class="l">Apply schema changes</div><pre><code>npx prisma migrate dev --name add_indexes   # dev
+npx prisma migrate deploy                    # prod
+npx prisma generate                          # regen client</code></pre><div class="n">Prisma emits CREATE INDEX in the migration SQL; edit the SQL for CONCURRENTLY on big tables.</div></div><div class="item"><div class="l">Index-type / DB-specific</div><pre><code>@@index([data], type: Gin)          // Postgres GIN
+@@fulltext([title, body])           // MySQL fulltext</code></pre></div><div class="item"><div class="l">1:1 relation</div><pre><code>model User    { id Int @id  profile Profile? }
+model Profile { id Int @id  userId Int @unique
+  user User @relation(fields:[userId], references:[id]) }</code></pre><div class="n">FK column carries @unique to enforce one-to-one.</div></div><div class="item"><div class="l">1:N relation</div><pre><code>model User { id Int @id  posts Post[] }
+model Post { id Int @id  authorId Int
+  author User @relation(fields:[authorId], references:[id]) }</code></pre><div class="n">FK lives on the 'many' side. Prisma does NOT auto-index FKs on Postgres — add @@index([authorId]).</div></div><div class="item"><div class="l">M:N relation (implicit vs explicit)</div><pre><code>// implicit (Prisma manages join table)
+model Post { id Int @id  tags Tag[] }
+model Tag  { id Int @id  posts Post[] }
+
+// explicit (when join table needs extra columns)
+model PostTag {
+  postId Int; tagId Int; addedAt DateTime @default(now())
+  post Post @relation(fields:[postId],references:[id])
+  tag  Tag  @relation(fields:[tagId], references:[id])
+  @@id([postId, tagId])
+}</code></pre></div><h2>Normalization &amp; Relationship Modeling</h2><div class="item"><div class="l">1NF — atomic values, no repeating groups</div><pre><code>-- BAD:  phones = '555-1, 555-2'
+-- GOOD: separate phones table, one row per phone</code></pre><div class="n">Each cell holds a single value; each row is unique (has a key).</div></div><div class="item"><div class="l">2NF — 1NF + no partial dependency on a composite PK</div><div class="n">Every non-key column depends on the WHOLE composite key, not part of it. Split out columns that depend on only one key component.</div></div><div class="item"><div class="l">3NF — 2NF + no transitive dependency</div><pre><code>-- BAD: orders(id, userId, userEmail)  -- email depends on userId, not order
+-- GOOD: orders(id, userId) + users(id, email)</code></pre><div class="n">Non-key columns depend only on the key. Everyday target for OLTP schemas.</div></div><div class="item"><div class="l">Relationship → schema mapping</div><pre><code>1:1  -&gt; FK + UNIQUE on the FK
+1:N  -&gt; FK on the 'many' side
+M:N  -&gt; junction/join table (PK = both FKs)</code></pre></div><div class="item"><div class="l">Always index foreign keys</div><pre><code>CREATE INDEX ON orders(user_id);</code></pre><div class="n">Speeds joins and cascades; without it, deleting a parent does a seq scan of children.</div></div><div class="item"><div class="l">Normalize vs denormalize trade-off</div><div class="n">Normalized = no update anomalies, less storage, more joins. Denormalize (duplicate/cache columns) only for proven read-hot paths; keep copies in sync deliberately.</div></div>
+<h2>Quick tips &amp; gotchas</h2><ul class="tips"><li>Scale vertically first (zero code change); go horizontal when you hit a single-node ceiling or need HA. The blocker is almost always in-memory state, not CPU.</li><li>Horizontal scaling requires stateless app servers: push sessions, cache, rate-limit counters, and uploads to Redis/DB/S3 before adding instances.</li><li>node cluster / PM2 -i max scales across cores on ONE machine; a load balancer (Nginx/ELB) scales across machines. You usually want both layers.</li><li>Composite index obeys the leftmost-prefix rule: (a,b) helps WHERE a and WHERE a AND b, never WHERE b alone. Order columns equality-first, then range/sort.</li><li>Always CREATE INDEX CONCURRENTLY on production tables — the plain form takes a write lock. On failure it leaves an INVALID index you must DROP and rebuild.</li><li>Verify every index with EXPLAIN ANALYZE — an unused index is pure write/disk overhead. Drop indexes with zero scans in pg_stat_user_indexes.</li><li>FKs are NOT auto-indexed in Postgres (or Prisma on Postgres). Add the index yourself or joins, cascades, and parent deletes will seq-scan.</li><li>Expression and partial indexes only fire when the query's WHERE matches exactly — lower(email) index needs WHERE lower(email)=…, and a partial index needs its predicate.</li></ul>
+</div></body></html>

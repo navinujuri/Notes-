@@ -1,0 +1,193 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Cheat Sheet · Paytm Project</title><style>:root{--bg:#fff;--fg:#1a1a1a;--muted:#6b7280;--line:#e5e7eb;--accent:#0d9488;--card:#f9fafb;--code:#f3f4f6;--codefg:#111}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1115;--fg:#e6e6e6;--muted:#9aa0aa;--line:#242833;--accent:#2dd4bf;--card:#171a21;--code:#0b0e13;--codefg:#e6e6e6}}
+*{box-sizing:border-box}body{margin:0;font:16px/1.6 system-ui,Segoe UI,sans-serif;background:var(--bg);color:var(--fg)}
+.wrap{max-width:860px;margin:0 auto;padding:1.2rem}
+a.back{color:var(--accent);text-decoration:none;font-size:.9rem}
+h1{font-size:1.5rem;margin:.6rem 0 .2rem}.sub{color:var(--muted);margin:0 0 1.4rem}
+h2{font-size:1.1rem;margin:1.6rem 0 .5rem;color:var(--accent)}
+.item{border:1px solid var(--line);border-radius:10px;background:var(--card);padding:.6rem .8rem;margin:.5rem 0}
+.item .l{font-weight:700}
+.item .n{color:var(--muted);font-size:.92rem;margin-top:.2rem}
+pre{margin:.45rem 0 0;background:var(--code);color:var(--codefg);border:1px solid var(--line);border-radius:8px;padding:.6rem .8rem;overflow-x:auto}
+code,pre{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:.86rem}
+.tips{border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:10px;background:var(--card);padding:.6rem 1rem}
+.tips li{margin:.35rem 0}
+@media print{.back{display:none}}</style></head><body><div class="wrap">
+<a class="back" href="../revision.html">← Back to revision index</a>
+<h1>Paytm Project — Cheat Sheet</h1>
+<p class="sub">Cohort 2.0 · 20 lessons · quick reference</p>
+<h2>Planning, Architecture &amp; Stack</h2><div class="item"><div class="l">Build-any-project flow</div><div class="n">Feature list -&gt; UI/UX (end-user + merchant) -&gt; DB schema -&gt; architecture/stack -&gt; bootstrap -&gt; iterate. Decide the schema BEFORE coding routes.</div></div><div class="item"><div class="l">Core features (wallet clone)</div><div class="n">End user: on-ramp (add money via bank), P2P transfer, balance view, txn history. Merchant: receive money, cash-out. Two separate apps, one shared DB.</div></div><div class="item"><div class="l">Stack</div><pre><code>Next.js (App Router) + TypeScript + TailwindCSS
+Prisma + PostgreSQL
+NextAuth (Credentials/phone) + bcrypt
+Recoil (client state)
+Turborepo monorepo</code></pre></div><div class="item"><div class="l">Monorepo layout</div><pre><code>apps/
+  user-app/       # end-user Next.js app
+  merchant-app/   # merchant Next.js app
+packages/
+  db/     # prisma client + schema (@repo/db)
+  store/  # recoil atoms/selectors (@repo/store)
+  ui/     # shared React components (@repo/ui)</code></pre><div class="n">Two frontends share one DB package -&gt; single source of truth for the wallet schema.</div></div><h2>Bootstrap the Monorepo</h2><div class="item"><div class="l">Scaffold Turborepo</div><pre><code>npx create-turbo@latest
+# pick npm; gives apps/web,docs + packages/ui,eslint,ts-config</code></pre><div class="n">Rename/duplicate apps/web into user-app and merchant-app; delete docs if unused.</div></div><div class="item"><div class="l">Run everything from root</div><pre><code>npm install            # installs all workspaces
+npm run dev            # turbo runs every app's dev in parallel</code></pre><div class="n">Give each app a distinct port: dev script -&gt; "next dev --port 3001".</div></div><div class="item"><div class="l">Local Postgres (Docker)</div><pre><code>docker run -e POSTGRES_PASSWORD=mysecretpassword -d -p 5432:5432 postgres</code></pre></div><div class="item"><div class="l">Env vars (per app + db)</div><pre><code>DATABASE_URL="postgresql://postgres:mysecretpassword@localhost:5432/postgres"
+NEXTAUTH_URL=http://localhost:3001
+JWT_SECRET=verysecret</code></pre><div class="n">DATABASE_URL lives in packages/db/.env; NEXTAUTH_URL/JWT_SECRET in each app's .env.</div></div><h2>Prisma (packages/db)</h2><div class="item"><div class="l">Init inside the db package</div><pre><code>cd packages/db
+npm install prisma @prisma/client
+npx prisma init</code></pre></div><div class="item"><div class="l">Schema models</div><pre><code>model User {
+  id      Int     @id @default(autoincrement())
+  email   String? @unique
+  name    String?
+  number  String  @unique
+  password String
+  Balance Balance[]
+  OnRampTransaction OnRampTransaction[]
+  sentTransfers p2pTransfer[] @relation("FromUser")
+  receivedTransfers p2pTransfer[] @relation("ToUser")
+}
+model Balance {
+  id Int @id @default(autoincrement())
+  userId Int @unique
+  amount Int
+  locked Int
+  user User @relation(fields:[userId], references:[id])
+}
+model OnRampTransaction {
+  id Int @id @default(autoincrement())
+  status OnRampStatus
+  token String @unique
+  provider String
+  amount Int
+  startTime DateTime
+  userId Int
+  user User @relation(fields:[userId], references:[id])
+}
+enum OnRampStatus { Success Failure Processing }</code></pre><div class="n">Store money in the smallest unit (paise) as Int -&gt; amount*100. Never use float for currency.</div></div><div class="item"><div class="l">Migrate + generate</div><pre><code>npx prisma migrate dev --name init
+npx prisma generate
+npx prisma studio   # GUI to inspect data</code></pre></div><div class="item"><div class="l">Export a singleton client</div><pre><code>// packages/db/index.ts
+import { PrismaClient } from "@prisma/client";
+const prismaClientSingleton = () =&gt; new PrismaClient();
+declare global { var prisma: undefined | ReturnType&lt;typeof prismaClientSingleton&gt;; }
+const prisma = globalThis.prisma ?? prismaClientSingleton();
+export default prisma;
+if (process.env.NODE_ENV !== "production") globalThis.prisma = prisma;</code></pre><div class="n">Singleton avoids exhausting connections on Next.js hot-reload.</div></div><div class="item"><div class="l">Expose it as @repo/db/client</div><pre><code>// packages/db/package.json
+{
+  "name": "@repo/db",
+  "exports": { "./client": "./index.ts" }
+}
+// usage: import prisma from "@repo/db/client";</code></pre></div><h2>Recoil Store (packages/store)</h2><div class="item"><div class="l">Create the store package</div><pre><code>cd packages/store
+npm install recoil</code></pre></div><div class="item"><div class="l">Atom</div><pre><code>// packages/store/src/atoms/balance.ts
+import { atom } from "recoil";
+export const balanceAtom = atom&lt;{ amount: number; locked: number }&gt;({
+  key: "balance",
+  default: { amount: 0, locked: 0 }
+});</code></pre></div><div class="item"><div class="l">Selector (derived total)</div><pre><code>import { selector } from "recoil";
+import { balanceAtom } from "../atoms/balance";
+export const totalBalance = selector({
+  key: "totalBalance",
+  get: ({ get }) =&gt; { const b = get(balanceAtom); return b.amount + b.locked; }
+});</code></pre></div><div class="item"><div class="l">Client-only Providers wrapper</div><pre><code>// apps/user-app/providers.tsx
+"use client";
+import { RecoilRoot } from "recoil";
+import { SessionProvider } from "next-auth/react";
+export const Providers = ({ children }: { children: React.ReactNode }) =&gt; (
+  &lt;RecoilRoot&gt;&lt;SessionProvider&gt;{children}&lt;/SessionProvider&gt;&lt;/RecoilRoot&gt;
+);</code></pre><div class="n">RecoilRoot needs "use client". Wrap {children} in layout.tsx with &lt;Providers&gt;. next-transpilePackages: ["@repo/store"] in next.config.js.</div></div><h2>NextAuth + Auth</h2><div class="item"><div class="l">Install</div><pre><code>npm install next-auth bcrypt
+npm install -D @types/bcrypt   # in the app</code></pre></div><div class="item"><div class="l">authOptions (Credentials/phone)</div><pre><code>// apps/user-app/app/lib/auth.ts
+import CredentialsProvider from "next-auth/providers/credentials";
+import bcrypt from "bcrypt";
+import db from "@repo/db/client";
+export const authOptions = {
+  providers: [CredentialsProvider({
+    name: "Credentials",
+    credentials: { phone: {label:"Phone",type:"text"}, password:{label:"Password",type:"password"} },
+    async authorize(c) {
+      const hashed = await bcrypt.hash(c!.password, 10);
+      const existing = await db.user.findFirst({ where: { number: c!.phone } });
+      if (existing) {
+        const ok = await bcrypt.compare(c!.password, existing.password);
+        return ok ? { id: String(existing.id), name: existing.name, email: existing.number } : null;
+      }
+      const user = await db.user.create({ data: { number: c!.phone, password: hashed } });
+      return { id: String(user.id), name: user.name, email: user.number };
+    }
+  })],
+  secret: process.env.JWT_SECRET || "secret",
+  callbacks: { async session({ token, session }: any){ session.user.id = token.sub; return session; } }
+};</code></pre></div><div class="item"><div class="l">Route handler (App Router)</div><pre><code>// apps/user-app/app/api/auth/[...nextauth]/route.ts
+import NextAuth from "next-auth";
+import { authOptions } from "../../../lib/auth";
+const handler = NextAuth(authOptions);
+export { handler as GET, handler as POST };</code></pre></div><div class="item"><div class="l">Read session on server</div><pre><code>import { getServerSession } from "next-auth";
+import { authOptions } from "./lib/auth";
+const session = await getServerSession(authOptions);
+if (!session?.user) redirect("/api/auth/signin");</code></pre></div><h2>Components: Appbar, Sidebar, Transfer</h2><div class="item"><div class="l">Generic Appbar (packages/ui) - dumb/presentational</div><pre><code>// packages/ui/src/appbar.tsx
+import { Button } from "./button";
+export const Appbar = ({ user, onSignin, onSignout }: any) =&gt; (
+  &lt;div className="flex justify-between border-b px-4 h-14"&gt;
+    &lt;div className="flex items-center text-lg font-bold"&gt;PayTM&lt;/div&gt;
+    &lt;Button onClick={user ? onSignout : onSignin}&gt;{user ? "Logout" : "Login"}&lt;/Button&gt;
+  &lt;/div&gt;
+);</code></pre><div class="n">Keep it prop-driven (no next-auth import) so both apps reuse it.</div></div><div class="item"><div class="l">AppbarClient wrapper (per app) - wires auth</div><pre><code>// apps/user-app/components/AppbarClient.tsx
+"use client";
+import { signIn, signOut, useSession } from "next-auth/react";
+import { Appbar } from "@repo/ui/appbar";
+export function AppbarClient() {
+  const session = useSession();
+  return &lt;Appbar user={session.data?.user} onSignin={signIn} onSignout={signOut} /&gt;;
+}</code></pre></div><div class="item"><div class="l">Sidebar item (active-route highlight)</div><pre><code>"use client";
+import { usePathname, useRouter } from "next/navigation";
+export const SidebarItem = ({ href, title, icon }: any) =&gt; {
+  const router = useRouter(); const path = usePathname();
+  const selected = path === href;
+  return (
+    &lt;div onClick={() =&gt; router.push(href)}
+      className={`flex cursor-pointer p-2 pl-8 ${selected ? "text-[#6a51a6]" : "text-slate-500"}`}&gt;
+      &lt;div className="pr-2"&gt;{icon}&lt;/div&gt;&lt;div className="font-bold"&gt;{title}&lt;/div&gt;
+    &lt;/div&gt;
+  );
+};</code></pre></div><div class="item"><div class="l">Transfer / dashboard page (server component)</div><pre><code>// apps/user-app/app/(dashboard)/transfer/page.tsx
+import prisma from "@repo/db/client";
+import { getServerSession } from "next-auth";
+import { authOptions } from "../../lib/auth";
+async function getBalance() {
+  const s = await getServerSession(authOptions);
+  const b = await prisma.balance.findFirst({ where: { userId: Number(s?.user?.id) } });
+  return { amount: b?.amount || 0, locked: b?.locked || 0 };
+}
+export default async function Page() {
+  const balance = await getBalance();
+  return &lt;div&gt;{/* AddMoney card + BalanceCard(balance) */}&lt;/div&gt;;
+}</code></pre><div class="n">Fetch on the server, pass to client cards. Divide by 100 for display (paise -&gt; rupees).</div></div><h2>On-Ramp, Seed &amp; Landing Redirect</h2><div class="item"><div class="l">On-ramp via server action</div><pre><code>// apps/user-app/app/lib/actions/createOnrampTransaction.ts
+"use server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "../auth";
+import prisma from "@repo/db/client";
+export async function createOnRampTransaction(provider: string, amount: number) {
+  const session = await getServerSession(authOptions);
+  const userId = session?.user?.id;
+  if (!userId) return { message: "User not logged in" };
+  await prisma.onRampTransaction.create({ data: {
+    provider, status: "Processing", startTime: new Date(),
+    token: Math.random().toString(), userId: Number(userId), amount: amount * 100
+  }});
+  return { message: "On ramp transaction added" };
+}</code></pre><div class="n">"use server" action callable directly from a client button; no manual API route needed.</div></div><div class="item"><div class="l">Seed script</div><pre><code>// packages/db/prisma/seed.ts
+import { PrismaClient } from "@prisma/client";
+import bcrypt from "bcrypt";
+const prisma = new PrismaClient();
+async function main(){
+  await prisma.user.create({ data: {
+    number: "1111111111", password: await bcrypt.hash("alice",10), name: "alice",
+    Balance: { create: { amount: 20000, locked: 0 } },
+    OnRampTransaction: { create: { startTime: new Date(), amount: 20000, status: "Success", provider: "HDFC Bank", token: "token__1" } }
+  }});
+}
+main();</code></pre></div><div class="item"><div class="l">Wire + run the seed</div><pre><code>// packages/db/package.json
+"prisma": { "seed": "ts-node prisma/seed.ts" }
+// then:
+npx prisma db seed</code></pre></div><div class="item"><div class="l">Landing page redirect</div><pre><code>// apps/user-app/app/page.tsx
+import { redirect } from "next/navigation";
+export default function Page() {
+  redirect("/dashboard");
+}</code></pre><div class="n">redirect() throws internally -&gt; put it at top level of a server component, not inside try/catch.</div></div>
+<h2>Quick tips &amp; gotchas</h2><ul class="tips"><li>Money = Int in paise (amount * 100). Floats round wrong; convert to rupees (/100) only at display.</li><li>Keep packages/ui components dumb (props only). Do auth/state in a per-app *Client wrapper so both user-app and merchant-app reuse the UI.</li><li>RecoilRoot and SessionProvider must be in a 'use client' Providers component; add transpilePackages:['@repo/store','@repo/ui'] to next.config.js.</li><li>Prisma client must be a global singleton, else Next.js hot-reload spawns dozens of connections ('too many clients').</li><li>Set NEXTAUTH_URL and JWT_SECRET per app, and DATABASE_URL in packages/db/.env; run migrate/generate from inside packages/db.</li><li>Prefer server actions ('use server') over manual /api routes for mutations like on-ramp and transfer — less boilerplate, typesafe.</li><li>P2P transfer must be a prisma.$transaction: lock sender balance, decrement sender, increment receiver — all-or-nothing to avoid partial transfers.</li><li>getServerSession(authOptions) in server components/actions; useSession() only in client components. Redirect unauthenticated users to /api/auth/signin.</li></ul>
+</div></body></html>

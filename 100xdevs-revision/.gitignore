@@ -1,0 +1,22 @@
+# Dependencies
+node_modules/
+
+# Playwright login session (SENSITIVE — never commit auth cookies)
+.pw-profile/
+
+# Logs
+*.log
+
+# Regenerable scrape/parse intermediates (rebuilt by scrape.mjs / parse*.mjs)
+out/debug-*.html
+out/flight.txt
+out/tracks-raw.json
+out/track-page.html
+out/explore-report.json
+out/all-content.json
+
+# Empty raw backups produced by scrape.mjs (superseded by revision.*)
+out/index.html
+out/index.md
+out/lessons.csv
+out/resources.csv

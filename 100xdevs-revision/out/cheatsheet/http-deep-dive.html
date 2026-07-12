@@ -1,0 +1,120 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Cheat Sheet · HTTP Deep dive</title><style>:root{--bg:#fff;--fg:#1a1a1a;--muted:#6b7280;--line:#e5e7eb;--accent:#0d9488;--card:#f9fafb;--code:#f3f4f6;--codefg:#111}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1115;--fg:#e6e6e6;--muted:#9aa0aa;--line:#242833;--accent:#2dd4bf;--card:#171a21;--code:#0b0e13;--codefg:#e6e6e6}}
+*{box-sizing:border-box}body{margin:0;font:16px/1.6 system-ui,Segoe UI,sans-serif;background:var(--bg);color:var(--fg)}
+.wrap{max-width:860px;margin:0 auto;padding:1.2rem}
+a.back{color:var(--accent);text-decoration:none;font-size:.9rem}
+h1{font-size:1.5rem;margin:.6rem 0 .2rem}.sub{color:var(--muted);margin:0 0 1.4rem}
+h2{font-size:1.1rem;margin:1.6rem 0 .5rem;color:var(--accent)}
+.item{border:1px solid var(--line);border-radius:10px;background:var(--card);padding:.6rem .8rem;margin:.5rem 0}
+.item .l{font-weight:700}
+.item .n{color:var(--muted);font-size:.92rem;margin-top:.2rem}
+pre{margin:.45rem 0 0;background:var(--code);color:var(--codefg);border:1px solid var(--line);border-radius:8px;padding:.6rem .8rem;overflow-x:auto}
+code,pre{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:.86rem}
+.tips{border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:10px;background:var(--card);padding:.6rem 1rem}
+.tips li{margin:.35rem 0}
+@media print{.back{display:none}}</style></head><body><div class="wrap">
+<a class="back" href="../revision.html">← Back to revision index</a>
+<h1>HTTP Deep dive — Cheat Sheet</h1>
+<p class="sub">Cohort 3.0 · 9 lessons · quick reference</p>
+<h2>HTTP Recap (methods, status, anatomy)</h2><div class="item"><div class="l">Methods (verbs)</div><pre><code>GET     // read, no body, idempotent, cacheable
+POST    // create / non-idempotent action
+PUT     // full replace (idempotent)
+PATCH   // partial update
+DELETE  // remove (idempotent)
+OPTIONS // preflight / capabilities
+HEAD    // GET headers only, no body</code></pre><div class="n">Idempotent = same result if repeated. Only GET/HEAD are safe (no side effects).</div></div><div class="item"><div class="l">Status code families</div><pre><code>1xx info    2xx success   3xx redirect
+4xx client  5xx server
+200 OK  201 Created  204 No Content
+301 Moved  302 Found  304 Not Modified
+400 Bad Request  401 Unauthorized  403 Forbidden
+404 Not Found    409 Conflict     429 Too Many
+500 Internal  502 Bad Gateway  503 Unavailable</code></pre><div class="n">401 = not authenticated; 403 = authenticated but not allowed.</div></div><div class="item"><div class="l">Request line + anatomy</div><pre><code>POST /api/users?active=1 HTTP/1.1
+Host: api.example.com
+Content-Type: application/json
+
+{"name":"jae"}</code></pre><div class="n">Blank line separates headers from body. Query string is part of the URL, not the body.</div></div><h2>Headers</h2><div class="item"><div class="l">Content negotiation</div><pre><code>Content-Type: application/json; charset=utf-8
+Accept: application/json
+Accept-Encoding: gzip, br
+Content-Length: 348</code></pre><div class="n">Server MUST set Content-Type on responses so the client parses correctly.</div></div><div class="item"><div class="l">Auth</div><pre><code>Authorization: Bearer &lt;jwt&gt;
+Authorization: Basic base64(user:pass)
+WWW-Authenticate: Bearer   // sent with 401</code></pre><div class="n">Never log Authorization headers.</div></div><div class="item"><div class="l">Caching</div><pre><code>Cache-Control: no-store | no-cache | max-age=3600
+ETag: "abc123"
+If-None-Match: "abc123"   // -&gt; 304 if unchanged</code></pre><div class="n">no-store = never cache; no-cache = revalidate before use.</div></div><div class="item"><div class="l">Cookies</div><pre><code>Set-Cookie: sid=xyz; HttpOnly; Secure; SameSite=Strict; Max-Age=3600
+Cookie: sid=xyz   // sent back by browser</code></pre><div class="n">HttpOnly blocks JS access (XSS defense); SameSite mitigates CSRF.</div></div><div class="item"><div class="l">Read / set in Express</div><pre><code>app.get('/x', (req, res) =&gt; {
+  const ct = req.headers['content-type'];  // lowercased keys
+  res.set('X-Custom', 'v');
+  res.status(200).json({ ct });
+});</code></pre><div class="n">req.headers keys are always lowercase in Node.</div></div><h2>Fetch API (client)</h2><div class="item"><div class="l">GET + parse JSON</div><pre><code>const res = await fetch('/api/users');
+if (!res.ok) throw new Error(res.status);  // fetch does NOT reject on 4xx/5xx
+const data = await res.json();</code></pre><div class="n">fetch only rejects on network failure, never on HTTP error status.</div></div><div class="item"><div class="l">POST JSON</div><pre><code>await fetch('/api/users', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ name: 'jae' })
+});</code></pre><div class="n">Must JSON.stringify the body AND set Content-Type manually.</div></div><div class="item"><div class="l">Response helpers</div><pre><code>res.ok        // true if status 200-299
+res.status    // 200
+res.headers.get('content-type')
+await res.text() / .json() / .blob() / .arrayBuffer()</code></pre><div class="n">Body can only be consumed once.</div></div><div class="item"><div class="l">Timeout / abort</div><pre><code>const c = new AbortController();
+const t = setTimeout(() =&gt; c.abort(), 5000);
+await fetch(url, { signal: c.signal });
+clearTimeout(t);</code></pre><div class="n">Also: AbortSignal.timeout(5000) as a one-liner signal.</div></div><div class="item"><div class="l">Credentials &amp; mode</div><pre><code>fetch(url, {
+  credentials: 'include',  // send cookies cross-origin
+  mode: 'cors'
+});</code></pre><div class="n">credentials 'include' requires the server to send Access-Control-Allow-Credentials: true (and a non-wildcard origin).</div></div><h2>Create an HTTP Server</h2><div class="item"><div class="l">Raw Node http</div><pre><code>const http = require('http');
+const server = http.createServer((req, res) =&gt; {
+  res.writeHead(200, { 'Content-Type': 'application/json' });
+  res.end(JSON.stringify({ ok: true }));
+});
+server.listen(3000, () =&gt; console.log('up on 3000'));</code></pre><div class="n">res.end() must be called or the request hangs.</div></div><div class="item"><div class="l">Express setup</div><pre><code>npm init -y &amp;&amp; npm i express
+---
+const express = require('express');
+const app = express();
+app.use(express.json());         // parse JSON bodies
+app.get('/', (req, res) =&gt; res.send('hi'));
+app.listen(3000);</code></pre><div class="n">Without express.json() req.body is undefined for JSON requests.</div></div><div class="item"><div class="l">Route params &amp; query</div><pre><code>app.get('/users/:id', (req, res) =&gt; {
+  req.params.id;      // path param
+  req.query.active;   // ?active=1
+  res.json({ id: req.params.id });
+});</code></pre></div><div class="item"><div class="l">Send responses</div><pre><code>res.status(201).json({...});
+res.send('text or buffer');
+res.sendStatus(204);
+res.redirect(302, '/login');
+res.set('X-Foo','bar');</code></pre><div class="n">Set status BEFORE json/send; sending twice throws ERR_HTTP_HEADERS_SENT.</div></div><h2>Middlewares</h2><div class="item"><div class="l">Signature &amp; next()</div><pre><code>function logger(req, res, next) {
+  console.log(req.method, req.url);
+  next();            // pass control on
+}
+app.use(logger);     // global, runs on every request</code></pre><div class="n">Forget next() (and don't send a response) =&gt; request hangs forever.</div></div><div class="item"><div class="l">Order matters</div><pre><code>app.use(express.json());   // 1st
+app.use(logger);           // 2nd
+app.get('/x', handler);    // runs after both</code></pre><div class="n">Middleware runs top-to-bottom; register body parsers before routes.</div></div><div class="item"><div class="l">Short-circuit (auth gate)</div><pre><code>function auth(req, res, next) {
+  if (!req.headers.authorization)
+    return res.status(401).json({ err: 'no token' });
+  next();
+}</code></pre><div class="n">return the res call so next() is never reached after responding.</div></div><div class="item"><div class="l">Error-handling middleware</div><pre><code>app.use((err, req, res, next) =&gt; {   // 4 args = error handler
+  console.error(err);
+  res.status(500).json({ err: err.message });
+});</code></pre><div class="n">Must have exactly 4 params and be registered LAST. In Express 4, async errors need next(err); Express 5 auto-forwards rejected promises.</div></div><h2>Route-specific middleware</h2><div class="item"><div class="l">Per-route inline</div><pre><code>app.get('/dashboard', auth, (req, res) =&gt; {
+  res.json({ secret: true });
+});</code></pre><div class="n">Middleware args between path and handler run only for that route.</div></div><div class="item"><div class="l">Chain multiple</div><pre><code>app.post('/admin', auth, isAdmin, rateLimit, handler);</code></pre><div class="n">Executed left to right; each must call next() to continue the chain.</div></div><div class="item"><div class="l">Path-mounted</div><pre><code>app.use('/api', apiMiddleware);   // runs for any /api/*</code></pre><div class="n">app.use with a path prefix scopes middleware to that subtree.</div></div><div class="item"><div class="l">Router-level</div><pre><code>const router = express.Router();
+router.use(auth);                 // applies to all router routes
+router.get('/me', handler);
+app.use('/users', router);</code></pre><div class="n">Great for grouping and mounting a feature under one prefix.</div></div><h2>Commonly used middlewares</h2><div class="item"><div class="l">Body parsers (built-in)</div><pre><code>app.use(express.json());                       // JSON
+app.use(express.urlencoded({ extended: true })); // form posts
+app.use(express.static('public'));             // serve files</code></pre><div class="n">No more separate body-parser package; it's built into Express 4.16+.</div></div><div class="item"><div class="l">morgan — request logging</div><pre><code>npm i morgan
+app.use(require('morgan')('dev'));</code></pre></div><div class="item"><div class="l">helmet — security headers</div><pre><code>npm i helmet
+app.use(require('helmet')());</code></pre><div class="n">Sets sane defaults (CSP, X-Frame-Options, etc.).</div></div><div class="item"><div class="l">express-rate-limit</div><pre><code>npm i express-rate-limit
+const rl = require('express-rate-limit');
+app.use(rl({ windowMs: 60_000, max: 100 }));   // 100 req/min</code></pre><div class="n">Returns 429 when exceeded.</div></div><div class="item"><div class="l">cookie-parser</div><pre><code>npm i cookie-parser
+app.use(require('cookie-parser')());
+// then: req.cookies.sid</code></pre></div><h2>CORS — Cross-Origin Resource Sharing</h2><div class="item"><div class="l">Why</div><pre><code>// Origin = scheme + host + port
+// http://a.com:3000  vs  http://a.com:4000  =&gt; cross-origin</code></pre><div class="n">Enforced by the BROWSER, not the server. Server-to-server calls ignore CORS.</div></div><div class="item"><div class="l">cors package</div><pre><code>npm i cors
+const cors = require('cors');
+app.use(cors());                        // allow all origins</code></pre><div class="n">app.use(cors()) globally; or cors(opts) per-route.</div></div><div class="item"><div class="l">Restrict origin + credentials</div><pre><code>app.use(cors({
+  origin: 'https://app.example.com',
+  credentials: true,
+  methods: ['GET','POST']
+}));</code></pre><div class="n">With credentials:true you CANNOT use origin '*' — must echo a specific origin.</div></div><div class="item"><div class="l">Manual headers</div><pre><code>res.setHeader('Access-Control-Allow-Origin', 'https://app.com');
+res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE');
+res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization');</code></pre></div><div class="item"><div class="l">Preflight (OPTIONS)</div><pre><code>// Browser auto-sends OPTIONS before non-simple requests
+// (custom headers, PUT/DELETE, JSON content-type)
+app.options('*', cors());   // answer preflight</code></pre><div class="n">Preflight response needs 2xx + Allow-* headers, or the real request is blocked.</div></div>
+<h2>Quick tips &amp; gotchas</h2><ul class="tips"><li>fetch never throws on 4xx/5xx — always check res.ok before parsing.</li><li>A middleware that neither calls next() nor sends a response hangs the request; always do one or the other.</li><li>Register body parsers (express.json) BEFORE routes, and the error handler (4-arg) LAST.</li><li>Set res.status() before .json()/.send(); calling res twice throws ERR_HTTP_HEADERS_SENT.</li><li>CORS is browser-enforced — curl/Postman/server-to-server calls bypass it, so 'works in Postman' doesn't mean CORS is configured.</li><li>credentials:'include' (fetch) requires a specific Allow-Origin (no '*') plus Access-Control-Allow-Credentials:true.</li><li>Node lowercases all req.headers keys — use req.headers['content-type'], not 'Content-Type'.</li><li>401 = who are you (unauthenticated); 403 = I know you, still not allowed (unauthorized).</li></ul>
+</div></body></html>

@@ -1,0 +1,71 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Cheat Sheet · Client side ETH</title><style>:root{--bg:#fff;--fg:#1a1a1a;--muted:#6b7280;--line:#e5e7eb;--accent:#0d9488;--card:#f9fafb;--code:#f3f4f6;--codefg:#111}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1115;--fg:#e6e6e6;--muted:#9aa0aa;--line:#242833;--accent:#2dd4bf;--card:#171a21;--code:#0b0e13;--codefg:#e6e6e6}}
+*{box-sizing:border-box}body{margin:0;font:16px/1.6 system-ui,Segoe UI,sans-serif;background:var(--bg);color:var(--fg)}
+.wrap{max-width:860px;margin:0 auto;padding:1.2rem}
+a.back{color:var(--accent);text-decoration:none;font-size:.9rem}
+h1{font-size:1.5rem;margin:.6rem 0 .2rem}.sub{color:var(--muted);margin:0 0 1.4rem}
+h2{font-size:1.1rem;margin:1.6rem 0 .5rem;color:var(--accent)}
+.item{border:1px solid var(--line);border-radius:10px;background:var(--card);padding:.6rem .8rem;margin:.5rem 0}
+.item .l{font-weight:700}
+.item .n{color:var(--muted);font-size:.92rem;margin-top:.2rem}
+pre{margin:.45rem 0 0;background:var(--code);color:var(--codefg);border:1px solid var(--line);border-radius:8px;padding:.6rem .8rem;overflow-x:auto}
+code,pre{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:.86rem}
+.tips{border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:10px;background:var(--card);padding:.6rem 1rem}
+.tips li{margin:.35rem 0}
+@media print{.back{display:none}}</style></head><body><div class="wrap">
+<a class="back" href="../revision.html">← Back to revision index</a>
+<h1>Client side ETH — Cheat Sheet</h1>
+<p class="sub">Cohort 3.0 · 7 lessons · quick reference</p>
+<h2>Setup &amp; Providers</h2><div class="item"><div class="l">Install (ethers v6)</div><pre><code>npm install ethers   # v6 (native bigint)</code></pre></div><div class="item"><div class="l">Browser: wrap MetaMask (injected EIP-1193 provider)</div><pre><code>// MetaMask injects window.ethereum
+const provider = new ethers.BrowserProvider(window.ethereum);</code></pre><div class="n">v5: new ethers.providers.Web3Provider(window.ethereum)</div></div><div class="item"><div class="l">Connect wallet + get signer (opens MetaMask popup)</div><pre><code>await provider.send("eth_requestAccounts", []);
+const signer = await provider.getSigner();
+const addr   = await signer.getAddress();</code></pre><div class="n">getSigner() is async in v6, was sync in v5</div></div><div class="item"><div class="l">Read-only RPC provider (no wallet needed)</div><pre><code>const provider = new ethers.JsonRpcProvider(
+  "https://eth-sepolia.g.alchemy.com/v2/&lt;KEY&gt;"
+);</code></pre><div class="n">Use for reads/server. Alchemy/Infura give you the RPC URL.</div></div><div class="item"><div class="l">Load ethers in a plain HTML page (CDN, ESM)</div><pre><code>&lt;script type="module"&gt;
+  import { ethers } from "https://cdn.ethers.org/lib/ethers.min.js";
+&lt;/script&gt;</code></pre></div><h2>ETH JSON-RPC (what everything sits on)</h2><div class="item"><div class="l">Every node speaks JSON-RPC over HTTP/WS — ethers is a wrapper</div><pre><code>curl &lt;RPC_URL&gt; -X POST -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}'</code></pre></div><div class="item"><div class="l">Core node methods</div><pre><code>eth_blockNumber        // latest block
+eth_getBalance         // wei of an address
+eth_call               // read-only exec, no state change (free)
+eth_sendRawTransaction // broadcast signed tx (costs gas)
+eth_getTransactionReceipt
+eth_chainId  eth_gasPrice  eth_estimateGas</code></pre></div><div class="item"><div class="l">Fire a raw RPC method through ethers</div><pre><code>const hexBn = await provider.send("eth_blockNumber", []);
+const bn = parseInt(hexBn, 16);</code></pre></div><div class="item"><div class="l">Wallet-only methods (only exist via MetaMask, not raw nodes)</div><pre><code>eth_requestAccounts        // connect
+wallet_switchEthereumChain // change network
+wallet_addEthereumChain
+personal_sign              // sign a message</code></pre></div><h2>Reading chain data &amp; units</h2><div class="item"><div class="l">ETH balance of an address</div><pre><code>const wei = await provider.getBalance("0xAbc...");
+console.log(ethers.formatEther(wei)); // "1.5"</code></pre></div><div class="item"><div class="l">Block number, nonce, fees</div><pre><code>await provider.getBlockNumber();
+await provider.getTransactionCount(addr); // nonce
+const f = await provider.getFeeData();    // gasPrice, maxFeePerGas</code></pre></div><div class="item"><div class="l">Unit conversion (wei &lt;-&gt; human)</div><pre><code>ethers.parseEther("0.1");     // 100000000000000000n (bigint)
+ethers.formatEther(wei);      // "0.1"
+ethers.parseUnits("100", 6);  // USDC has 6 decimals
+ethers.formatUnits(raw, dec);</code></pre><div class="n">v6 returns native bigint (n suffix), not v5 BigNumber. Chain amounts are ALWAYS wei.</div></div><h2>Interacting with a contract (read-only)</h2><div class="item"><div class="l">You need: contract address + ABI (a subset is fine)</div><pre><code>// human-readable ABI — only the fns you call
+const abi = [
+  "function balanceOf(address) view returns (uint256)",
+  "function decimals() view returns (uint8)",
+  "function transfer(address to, uint256 amt) returns (bool)"
+];</code></pre></div><div class="item"><div class="l">Instantiate with a PROVIDER for reads</div><pre><code>const c = new ethers.Contract(address, abi, provider);</code></pre></div><div class="item"><div class="l">Call view/pure functions (free, instant, no signer)</div><pre><code>const raw = await c.balanceOf(addr);
+const dec = await c.decimals();
+console.log(ethers.formatUnits(raw, dec));</code></pre><div class="n">view/pure -&gt; resolves to eth_call. No gas, no wallet popup.</div></div><h2>Writing to a contract (state change)</h2><div class="item"><div class="l">Re-instantiate with a SIGNER (needs wallet + gas)</div><pre><code>const signer = await provider.getSigner();
+const c = new ethers.Contract(address, abi, signer);
+// or reuse: c.connect(signer)</code></pre></div><div class="item"><div class="l">Send tx and wait for confirmation</div><pre><code>const tx = await c.transfer(to, ethers.parseUnits("10", 6));
+const receipt = await tx.wait();   // wait 1 confirmation
+console.log(receipt.hash, receipt.status); // status 1 = success</code></pre><div class="n">await c.foo() only broadcasts; state isn't changed until tx.wait() resolves.</div></div><div class="item"><div class="l">Overrides: send ETH along / cap gas</div><pre><code>await c.deposit({ value: ethers.parseEther("0.5") });
+await c.foo(arg, { gasLimit: 100000n });</code></pre></div><div class="item"><div class="l">Dry-run to catch reverts before spending gas</div><pre><code>await c.transfer.estimateGas(to, amt); // will it fit / revert?
+await c.transfer.staticCall(to, amt);  // simulate, surfaces revert</code></pre></div><div class="item"><div class="l">Plain ETH transfer (no contract)</div><pre><code>const tx = await signer.sendTransaction({
+  to, value: ethers.parseEther("0.01")
+});
+await tx.wait();</code></pre></div><h2>Interacting from the server (Node.js)</h2><div class="item"><div class="l">No MetaMask on a server — YOU hold the key</div><pre><code>import { ethers } from "ethers";
+const provider = new ethers.JsonRpcProvider(process.env.RPC_URL);
+const wallet = new ethers.Wallet(process.env.PRIVATE_KEY, provider);</code></pre><div class="n">Never hardcode/commit keys. Load from env / secret manager.</div></div><div class="item"><div class="l">Same Contract API — the wallet IS the signer</div><pre><code>const c = new ethers.Contract(addr, abi, wallet);
+const tx = await c.transfer(to, amt);
+await tx.wait();</code></pre></div><div class="item"><div class="l">Create / import a wallet</div><pre><code>const w = ethers.Wallet.createRandom(); // w.address, w.privateKey, w.mnemonic.phrase
+ethers.Wallet.fromPhrase(mnemonic);     // from seed phrase</code></pre></div><h2>Network, events &amp; config</h2><div class="item"><div class="l">Detect / assert network</div><pre><code>const net = await provider.getNetwork();
+net.chainId; // 1n mainnet, 11155111n sepolia, 137n polygon</code></pre></div><div class="item"><div class="l">Ask MetaMask to switch chains (chainId is HEX here)</div><pre><code>await window.ethereum.request({
+  method: "wallet_switchEthereumChain",
+  params: [{ chainId: "0xaa36a7" }] // 11155111 sepolia
+});</code></pre><div class="n">ethers uses decimal chainId; wallet_* RPC params use hex.</div></div><div class="item"><div class="l">React to wallet changes</div><pre><code>window.ethereum.on("accountsChanged", (a) =&gt; setAccount(a[0]));
+window.ethereum.on("chainChanged", () =&gt; window.location.reload());</code></pre></div><div class="item"><div class="l">Contract events (live + historical)</div><pre><code>c.on("Transfer", (from, to, amt, ev) =&gt; { /* live */ });
+const logs = await c.queryFilter("Transfer", fromBlock, toBlock);</code></pre></div>
+<h2>Quick tips &amp; gotchas</h2><ul class="tips"><li>Reads vs writes: view/pure = eth_call (free, instant, provider is enough); state changes = signed tx (gas + wallet + tx.wait()).</li><li>ethers v6 uses native bigint everywhere; v5 used BigNumber. Don't mix versions — check which one the project pins.</li><li>Always await tx.wait() before assuming state changed. receipt.status === 1 = success; a revert throws.</li><li>Key custody rule: browser -&gt; MetaMask signs (you never see the key); server -&gt; ethers.Wallet + private key from env. Never ship a key to the client.</li><li>ABIs can be a subset — include only the functions you actually call. Human-readable ABI beats pasting giant JSON.</li><li>getSigner() is async in v6 (returns a Promise); it was synchronous in v5 — a common migration bug.</li><li>Guard for missing wallet: if (!window.ethereum) prompt to install MetaMask before calling any eth_* method.</li><li>chainId is decimal in ethers (11155111n) but hex in wallet_* RPC params ("0xaa36a7"). Use staticCall/estimateGas to catch reverts before spending gas.</li></ul>
+</div></body></html>

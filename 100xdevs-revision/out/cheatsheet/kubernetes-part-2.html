@@ -1,0 +1,120 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Cheat Sheet · Kubernetes Part 2</title><style>:root{--bg:#fff;--fg:#1a1a1a;--muted:#6b7280;--line:#e5e7eb;--accent:#0d9488;--card:#f9fafb;--code:#f3f4f6;--codefg:#111}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1115;--fg:#e6e6e6;--muted:#9aa0aa;--line:#242833;--accent:#2dd4bf;--card:#171a21;--code:#0b0e13;--codefg:#e6e6e6}}
+*{box-sizing:border-box}body{margin:0;font:16px/1.6 system-ui,Segoe UI,sans-serif;background:var(--bg);color:var(--fg)}
+.wrap{max-width:860px;margin:0 auto;padding:1.2rem}
+a.back{color:var(--accent);text-decoration:none;font-size:.9rem}
+h1{font-size:1.5rem;margin:.6rem 0 .2rem}.sub{color:var(--muted);margin:0 0 1.4rem}
+h2{font-size:1.1rem;margin:1.6rem 0 .5rem;color:var(--accent)}
+.item{border:1px solid var(--line);border-radius:10px;background:var(--card);padding:.6rem .8rem;margin:.5rem 0}
+.item .l{font-weight:700}
+.item .n{color:var(--muted);font-size:.92rem;margin-top:.2rem}
+pre{margin:.45rem 0 0;background:var(--code);color:var(--codefg);border:1px solid var(--line);border-radius:8px;padding:.6rem .8rem;overflow-x:auto}
+code,pre{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:.86rem}
+.tips{border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:10px;background:var(--card);padding:.6rem 1rem}
+.tips li{margin:.35rem 0}
+@media print{.back{display:none}}</style></head><body><div class="wrap">
+<a class="back" href="../revision.html">← Back to revision index</a>
+<h1>Kubernetes Part 2 — Cheat Sheet</h1>
+<p class="sub">Cohort 2.0 · 23 lessons · quick reference</p>
+<h2>Cluster: run locally &amp; on cloud</h2><div class="item"><div class="l">Local cluster (kind)</div><pre><code>kind create cluster --name dev
+kubectl cluster-info --context kind-dev</code></pre><div class="n">kind runs nodes as Docker containers; ports must be mapped via cluster config for ingress.</div></div><div class="item"><div class="l">Local cluster (minikube)</div><pre><code>minikube start --driver=docker
+minikube tunnel   # needed for type=LoadBalancer + ingress</code></pre><div class="n">Without `minikube tunnel`, LoadBalancer EXTERNAL-IP stays &lt;pending&gt;.</div></div><div class="item"><div class="l">Cloud cluster (EKS / GKE)</div><pre><code>eksctl create cluster --name prod --nodes 3
+gcloud container clusters create prod --num-nodes 3
+aws eks update-kubeconfig --name prod   # writes kubeconfig</code></pre><div class="n">Cloud gives you real LoadBalancer + dynamic PV provisioning out of the box.</div></div><div class="item"><div class="l">Contexts &amp; apply loop</div><pre><code>kubectl config get-contexts
+kubectl config use-context kind-dev
+kubectl apply -f manifest.yaml
+kubectl get pods,svc,ingress -o wide</code></pre><div class="n">Everything is `apply -f` (declarative). `kubectl get all -n &lt;ns&gt;` for a quick snapshot.</div></div><h2>Services &amp; their downsides</h2><div class="item"><div class="l">ClusterIP (default, internal only)</div><pre><code>apiVersion: v1
+kind: Service
+metadata: { name: web }
+spec:
+  selector: { app: web }   # must match pod labels
+  ports:
+    - port: 80          # service port
+      targetPort: 3000  # container port</code></pre><div class="n">Reachable in-cluster only. DNS: web.&lt;namespace&gt;.svc.cluster.local</div></div><div class="item"><div class="l">NodePort (exposes on every node)</div><pre><code>spec:
+  type: NodePort
+  ports:
+    - port: 80
+      targetPort: 3000
+      nodePort: 30080   # 30000-32767</code></pre><div class="n">Hit any nodeIP:30080. Ugly high ports; fine for dev/testing.</div></div><div class="item"><div class="l">LoadBalancer (cloud external IP)</div><pre><code>spec:
+  type: LoadBalancer
+  ports: [{ port: 80, targetPort: 3000 }]</code></pre><div class="n">Provisions a real cloud LB. On bare-metal/kind stays &lt;pending&gt; without MetalLB.</div></div><div class="item"><div class="l">Quick expose</div><pre><code>kubectl expose deployment web --port=80 --target-port=3000 --type=LoadBalancer</code></pre></div><div class="item"><div class="l">Downside → why Ingress exists</div><div class="n">One LoadBalancer per service = one cloud LB each = $$ + a public IP each. Services are L4 only: no host/path routing, no TLS termination, no single entrypoint.</div></div><h2>Ingress, controllers &amp; namespaces</h2><div class="item"><div class="l">Namespaces (isolate resources)</div><pre><code>kubectl create namespace app
+kubectl apply -f x.yaml -n app
+kubectl get pods -n app
+kubectl config set-context --current --namespace=app</code></pre><div class="n">Controllers usually live in their own ns (e.g. ingress-nginx, cert-manager).</div></div><div class="item"><div class="l">Install NGINX ingress controller</div><pre><code>helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
+helm install ingress-nginx ingress-nginx/ingress-nginx -n ingress-nginx --create-namespace
+# kind/manifest alt:
+kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/main/deploy/static/provider/cloud/deploy.yaml</code></pre><div class="n">Controller = the actual pod (a reverse proxy) that watches Ingress objects. Ingress object = just the routing config.</div></div><div class="item"><div class="l">Ingress routing rules</div><pre><code>apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata: { name: app-ing }
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: app.example.com
+      http:
+        paths:
+          - path: /api
+            pathType: Prefix
+            backend:
+              service: { name: api, port: { number: 80 } }
+          - path: /
+            pathType: Prefix
+            backend:
+              service: { name: web, port: { number: 80 } }</code></pre><div class="n">One LB fronts many services via host/path. pathType: Prefix | Exact | ImplementationSpecific.</div></div><div class="item"><div class="l">Try Traefik instead</div><pre><code>helm repo add traefik https://traefik.github.io/charts
+helm install traefik traefik/traefik -n traefik --create-namespace</code></pre><div class="n">Same Ingress API works; set ingressClassName: traefik. Swappable controllers, one spec.</div></div><h2>ConfigMaps &amp; Secrets</h2><div class="item"><div class="l">Create ConfigMap</div><pre><code>kubectl create configmap app-cfg \
+  --from-literal=LOG_LEVEL=info \
+  --from-file=config.json</code></pre><div class="n">Non-sensitive config only. Stored in plaintext in etcd.</div></div><div class="item"><div class="l">Create Secret</div><pre><code>kubectl create secret generic db-sec \
+  --from-literal=PASSWORD=s3cr3t
+# YAML: use stringData (plain) or data (base64)
+kind: Secret
+type: Opaque
+stringData: { PASSWORD: s3cr3t }</code></pre><div class="n">`data:` values must be base64. Decode: kubectl get secret db-sec -o jsonpath='{.data.PASSWORD}' | base64 -d</div></div><div class="item"><div class="l">Consume as env vars</div><pre><code>envFrom:
+  - configMapRef: { name: app-cfg }
+  - secretRef:    { name: db-sec }
+# or single key:
+env:
+  - name: PASSWORD
+    valueFrom:
+      secretKeyRef: { name: db-sec, key: PASSWORD }</code></pre></div><div class="item"><div class="l">Consume as mounted volume</div><pre><code>volumes:
+  - name: cfg
+    configMap: { name: app-cfg }
+containers:
+  - volumeMounts:
+      - { name: cfg, mountPath: /etc/app }</code></pre><div class="n">Mounted values update live (env vars do NOT — pod needs restart).</div></div><div class="item"><div class="l">ConfigMap vs Secret</div><div class="n">Same API shape. Secrets are base64 (NOT encryption), can be RBAC-restricted + encrypted-at-rest, mounted as tmpfs. Use Secret for tokens/passwords/certs; ConfigMap for everything else.</div></div><h2>HTTPS with cert-manager</h2><div class="item"><div class="l">Install cert-manager</div><pre><code>helm repo add jetstack https://charts.jetstack.io
+helm install cert-manager jetstack/cert-manager \
+  -n cert-manager --create-namespace --set crds.enabled=true</code></pre></div><div class="item"><div class="l">ClusterIssuer (Let's Encrypt)</div><pre><code>apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata: { name: letsencrypt }
+spec:
+  acme:
+    server: https://acme-v02.api.letsencrypt.org/directory
+    email: you@example.com
+    privateKeySecretRef: { name: le-account }
+    solvers:
+      - http01: { ingress: { class: nginx } }</code></pre><div class="n">Use staging server first to avoid LE rate limits.</div></div><div class="item"><div class="l">Auto-TLS via Ingress annotation</div><pre><code>metadata:
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt
+spec:
+  tls:
+    - hosts: [app.example.com]
+      secretName: app-tls   # cert-manager fills this</code></pre><div class="n">cert-manager watches the tls block, solves ACME challenge, writes the cert Secret, and auto-renews.</div></div><h2>Volumes: ephemeral → persistent</h2><div class="item"><div class="l">Docker volumes (baseline)</div><pre><code>docker run -v mydata:/var/lib/data img      # named volume
+docker run -v $(pwd):/app img               # bind mount</code></pre><div class="n">Container FS is ephemeral; volumes outlive the container. k8s generalizes this.</div></div><div class="item"><div class="l">emptyDir (ephemeral)</div><pre><code>volumes:
+  - name: cache
+    emptyDir: {}</code></pre><div class="n">Lives &amp; dies with the POD (survives container restart, NOT pod deletion/reschedule). Good for scratch/cache.</div></div><div class="item"><div class="l">PersistentVolumeClaim (what pods use)</div><pre><code>apiVersion: v1
+kind: PersistentVolumeClaim
+metadata: { name: data }
+spec:
+  accessModes: [ReadWriteOnce]
+  resources: { requests: { storage: 5Gi } }
+  storageClassName: standard</code></pre><div class="n">Pod references the CLAIM, never the PV directly: volumes: [{ name: d, persistentVolumeClaim: { claimName: data } }]</div></div><div class="item"><div class="l">Static PV (admin pre-provisions)</div><pre><code>apiVersion: v1
+kind: PersistentVolume
+metadata: { name: pv1 }
+spec:
+  capacity: { storage: 5Gi }
+  accessModes: [ReadWriteOnce]
+  hostPath: { path: /mnt/data }   # or nfs/csi</code></pre><div class="n">PVC binds to a matching PV. No StorageClass → manual binding.</div></div><div class="item"><div class="l">Dynamic / automatic PV (StorageClass)</div><pre><code>kind: StorageClass
+metadata: { name: fast }
+provisioner: kubernetes.io/aws-ebs
+parameters: { type: gp3 }
+reclaimPolicy: Delete</code></pre><div class="n">PVC names the StorageClass → PV is provisioned on the fly. This is the default in cloud clusters.</div></div>
+<h2>Quick tips &amp; gotchas</h2><ul class="tips"><li>Service selector labels MUST match pod template labels exactly, or EXTERNAL/ENDPOINTS stay empty — debug with `kubectl get endpoints &lt;svc&gt;`.</li><li>One entrypoint rule: use ONE LoadBalancer for the ingress controller, then route everything else through Ingress objects (ClusterIP services behind it).</li><li>Ingress does nothing without a controller running — installing the Ingress object alone is a common newbie trap.</li><li>Secrets are base64-encoded, NOT encrypted. Don't commit them to git; enable etcd encryption-at-rest and restrict via RBAC.</li><li>env-var-injected ConfigMaps/Secrets need a pod restart to pick up changes; volume-mounted ones update live (with a short kubelet sync delay).</li><li>Test cert-manager against Let's Encrypt STAGING first — the prod endpoint rate-limits ~5 certs/domain/week.</li><li>emptyDir data is lost when the pod is deleted or rescheduled to another node — only PVCs survive that. For DBs, always use a PVC.</li><li>accessModes matter: ReadWriteOnce = one node at a time (most block storage); use ReadWriteMany (NFS/CSI) only if multiple pods must write simultaneously.</li></ul>
+</div></body></html>

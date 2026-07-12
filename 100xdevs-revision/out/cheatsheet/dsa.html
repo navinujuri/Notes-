@@ -1,0 +1,71 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Cheat Sheet · Intro Class - DSA</title><style>:root{--bg:#fff;--fg:#1a1a1a;--muted:#6b7280;--line:#e5e7eb;--accent:#0d9488;--card:#f9fafb;--code:#f3f4f6;--codefg:#111}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1115;--fg:#e6e6e6;--muted:#9aa0aa;--line:#242833;--accent:#2dd4bf;--card:#171a21;--code:#0b0e13;--codefg:#e6e6e6}}
+*{box-sizing:border-box}body{margin:0;font:16px/1.6 system-ui,Segoe UI,sans-serif;background:var(--bg);color:var(--fg)}
+.wrap{max-width:860px;margin:0 auto;padding:1.2rem}
+a.back{color:var(--accent);text-decoration:none;font-size:.9rem}
+h1{font-size:1.5rem;margin:.6rem 0 .2rem}.sub{color:var(--muted);margin:0 0 1.4rem}
+h2{font-size:1.1rem;margin:1.6rem 0 .5rem;color:var(--accent)}
+.item{border:1px solid var(--line);border-radius:10px;background:var(--card);padding:.6rem .8rem;margin:.5rem 0}
+.item .l{font-weight:700}
+.item .n{color:var(--muted);font-size:.92rem;margin-top:.2rem}
+pre{margin:.45rem 0 0;background:var(--code);color:var(--codefg);border:1px solid var(--line);border-radius:8px;padding:.6rem .8rem;overflow-x:auto}
+code,pre{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:.86rem}
+.tips{border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:10px;background:var(--card);padding:.6rem 1rem}
+.tips li{margin:.35rem 0}
+@media print{.back{display:none}}</style></head><body><div class="wrap">
+<a class="back" href="../revision.html">← Back to revision index</a>
+<h1>Intro Class - DSA — Cheat Sheet</h1>
+<p class="sub">Cohort 2.0 · 7 lessons · quick reference</p>
+<h2>DSA vs CP + How to Approach</h2><div class="item"><div class="l">What is DSA</div><div class="n">Data Structures (how you store data) + Algorithms (how you process it). Success = correct output at the best time/space Big-O, not just working code.</div></div><div class="item"><div class="l">DSA vs CP</div><div class="n">DSA = interview-focused: standard problems, correctness + optimal complexity. CP = timed contests: math tricks, observations, ranking/speed. For jobs start with DSA; CP later sharpens speed.</div></div><div class="item"><div class="l">Big-O ladder (fastest to slowest)</div><pre><code>O(1) &lt; O(log n) &lt; O(n) &lt; O(n log n) &lt; O(n^2) &lt; O(2^n) &lt; O(n!)</code></pre><div class="n">~10^8 simple ops/sec. Use constraints to pick target: n&lt;=10^4 -&gt; O(n^2) fine; n&lt;=10^6 -&gt; need O(n) or O(n log n).</div></div><div class="item"><div class="l">Universal problem-solving flow</div><div class="n">1) Brute force first (get it correct). 2) Find the bottleneck. 3) Optimize with hashing / sorting / two-pointers / prefix sums. Always eyeball edge cases before submitting.</div></div><h2>Choice of Language &amp; Fast I/O</h2><div class="item"><div class="l">Which language?</div><div class="n">C++ is the DSA/CP default (STL + raw speed). Java = rich libs but verbose. Python = concise but slow (TLE risk). JS is fine for web devs. Logic is language-agnostic — pick one, master its std lib.</div></div><div class="item"><div class="l">C++ competitive boilerplate</div><pre><code>#include &lt;bits/stdc++.h&gt;
+using namespace std;
+int main() {
+    ios_base::sync_with_stdio(false);
+    cin.tie(NULL);
+    int t; cin &gt;&gt; t;
+    while (t--) {
+        // solve()
+    }
+}</code></pre><div class="n">sync_with_stdio(false) + cin.tie(NULL) are mandatory for large inputs or you TLE on I/O alone.</div></div><div class="item"><div class="l">Compile &amp; run C++</div><pre><code>g++ -std=c++17 -O2 sol.cpp -o sol &amp;&amp; ./sol &lt; in.txt</code></pre><div class="n">-O2 enables optimization; redirect stdin from a file for quick local testing.</div></div><div class="item"><div class="l">JavaScript (Node) full-stdin read</div><pre><code>const lines = require('fs').readFileSync(0, 'utf8').split('\n');
+let i = 0;
+const t = +lines[i++];
+while (t--) {
+  const [n, k] = lines[i++].split(' ').map(Number);
+}</code></pre><div class="n">readFileSync(0) reads all of stdin at once. Batch output into one console.log — many small logs are slow.</div></div><div class="item"><div class="l">Python fast input</div><pre><code>import sys
+input = sys.stdin.readline
+t = int(input())</code></pre><div class="n">Default input() is slow for large T; rebinding to sys.stdin.readline avoids TLE.</div></div><h2>Arrays / Lists</h2><div class="item"><div class="l">Declare &amp; init</div><pre><code>vector&lt;int&gt; a(n, 0);      // n zeros
+vector&lt;int&gt; b = {1, 2, 3};
+vector&lt;vector&lt;int&gt;&gt; g(n, vector&lt;int&gt;(m, 0)); // 2D</code></pre><div class="n">JS: const a = new Array(n).fill(0);  let b = [1,2,3];</div></div><div class="item"><div class="l">Add / remove</div><pre><code>a.push_back(x); a.pop_back();   // back: O(1)</code></pre><div class="n">JS: a.push()/a.pop() O(1); a.shift()/a.unshift() are O(n) — avoid in loops.</div></div><div class="item"><div class="l">Iterate</div><pre><code>for (int x : a) cout &lt;&lt; x &lt;&lt; ' ';
+for (int i = 0; i &lt; a.size(); i++) { }</code></pre><div class="n">C++ operator[] has NO bounds check — out-of-range is undefined behavior, not an error.</div></div><div class="item"><div class="l">Sort (asc / desc)</div><pre><code>sort(a.begin(), a.end());                  // asc
+sort(a.begin(), a.end(), greater&lt;int&gt;());  // desc</code></pre><div class="n">JS: a.sort((x,y)=&gt;x-y). NEVER call bare a.sort() on numbers — it sorts lexicographically (10 &lt; 2).</div></div><div class="item"><div class="l">Max / min / sum / reverse</div><pre><code>*max_element(a.begin(), a.end());
+accumulate(a.begin(), a.end(), 0LL);  // 0LL -&gt; long long
+reverse(a.begin(), a.end());</code></pre><div class="n">JS: Math.max(...a); a.reduce((s,x)=&gt;s+x,0); a.reverse(). Use 0LL seed to avoid int overflow on big sums.</div></div><h2>Strings</h2><div class="item"><div class="l">Read input</div><pre><code>string s; cin &gt;&gt; s;   // one token (stops at whitespace)
+getline(cin, s);      // full line incl. spaces</code></pre><div class="n">After cin &gt;&gt; x, call cin.ignore() before getline() to drop the leftover newline.</div></div><div class="item"><div class="l">Char &lt;-&gt; int</div><pre><code>int d   = s[i] - '0';   // digit char -&gt; value
+int idx = c   - 'a';    // 'a'..'z' -&gt; 0..25
+char c  = 'a' + idx;</code></pre><div class="n">JS: +ch for digit, ch.charCodeAt(0)-97 for index, String.fromCharCode(97+idx).</div></div><div class="item"><div class="l">Frequency count (fixed alphabet)</div><pre><code>int cnt[26] = {0};
+for (char c : s) cnt[c - 'a']++;</code></pre><div class="n">A size-26 array beats unordered_map when the alphabet is fixed — faster, no hashing.</div></div><div class="item"><div class="l">Substring &amp; reverse</div><pre><code>s.substr(pos, len);
+reverse(s.begin(), s.end());</code></pre><div class="n">JS: s.slice(start,end). JS strings are immutable — build with an array + arr.join('') for heavy concatenation.</div></div><div class="item"><div class="l">Compare</div><pre><code>if (s1 == s2) { }   // C++: value comparison</code></pre><div class="n">Java uses s1.equals(s2) (== compares references!). JS === is value comparison — fine.</div></div><h2>Problem 1: Good Pairs (LeetCode 1512)</h2><div class="item"><div class="l">Problem</div><div class="n">Count pairs (i, j) with i &lt; j and nums[i] == nums[j].</div></div><div class="item"><div class="l">Brute force O(n^2)</div><pre><code>int cnt = 0;
+for (int i = 0; i &lt; n; i++)
+  for (int j = i + 1; j &lt; n; j++)
+    if (a[i] == a[j]) cnt++;</code></pre><div class="n">Fine for n&lt;=10^4; TLEs beyond. This is your baseline before optimizing.</div></div><div class="item"><div class="l">Optimal O(n) — count-so-far</div><pre><code>unordered_map&lt;int,int&gt; freq;
+long long good = 0;
+for (int x : a) { good += freq[x]; freq[x]++; }</code></pre><div class="n">Each new x forms a pair with every earlier equal value -&gt; add freq[x] BEFORE incrementing. This trick kills most O(n^2) pair problems.</div></div><div class="item"><div class="l">Formula variant</div><pre><code>for (auto&amp; [v, f] : freq) good += 1LL * f * (f - 1) / 2;</code></pre><div class="n">A value seen f times yields C(f,2)=f*(f-1)/2 pairs. Use 1LL* to avoid int overflow.</div></div><div class="item"><div class="l">JS one-pass</div><pre><code>const m = new Map(); let good = 0;
+for (const x of a) { good += m.get(x)||0; m.set(x,(m.get(x)||0)+1); }</code></pre></div><h2>Problem 2: Chef and Happy Strings</h2><div class="item"><div class="l">Problem</div><div class="n">A string is 'happy' if no two adjacent characters are equal. Count how many substrings are happy (i.e. alternating).</div></div><div class="item"><div class="l">Optimal O(n) — running-run count</div><pre><code>long long ans = 0, run = 0;
+for (int i = 0; i &lt; n; i++) {
+    if (i &gt; 0 &amp;&amp; s[i] != s[i-1]) run++;
+    else run = 1;
+    ans += run;   // # happy substrings ending at i
+}</code></pre><div class="n">run = length of the alternating streak ending at i = number of happy substrings ending there. Resets to 1 on a repeat.</div></div><div class="item"><div class="l">Closed form per segment</div><pre><code>// maximal alternating segment of length L -&gt; L*(L+1)/2 substrings</code></pre><div class="n">Equivalent to the running-run sum; handy for a math-only derivation.</div></div><div class="item"><div class="l">Variant: min deletions to make happy</div><pre><code>int del = 0;
+for (int i = 1; i &lt; n; i++) if (s[i] == s[i-1]) del++;</code></pre><div class="n">Every adjacent equal pair needs one deletion. Watch for which variant the statement actually asks.</div></div><h2>Problem 3 &amp; Core Intro Patterns</h2><div class="item"><div class="l">Note on Problem 3</div><div class="n">dsa7 is unlabeled in the course — a follow-up problem drilling the same toolkit below. Reach for these four patterns first on any intro array/string problem.</div></div><div class="item"><div class="l">Hashing / frequency</div><div class="n">Detect duplicates, anagrams, counts, first-unique. int cnt[26] for fixed alphabet, unordered_map&lt;int,int&gt; otherwise. Turns 'search for a match' into O(1) lookup.</div></div><div class="item"><div class="l">Prefix sum (range queries O(1))</div><pre><code>vector&lt;long long&gt; pre(n + 1, 0);
+for (int i = 0; i &lt; n; i++) pre[i+1] = pre[i] + a[i];
+// sum of a[l..r] = pre[r+1] - pre[l]</code></pre><div class="n">O(n) build, O(1) per query. Core of the 'Intro Class 2' track (Highest Altitude, subarray sums).</div></div><div class="item"><div class="l">Two pointers (sorted array)</div><pre><code>int l = 0, r = n - 1;
+while (l &lt; r) {
+    int s = a[l] + a[r];
+    if (s == tgt) break;
+    s &lt; tgt ? l++ : r--;
+}</code></pre><div class="n">Two-Sum on a sorted array in O(n) / O(1) space — no hashmap needed.</div></div><div class="item"><div class="l">Two Sum via hashmap (unsorted)</div><pre><code>unordered_map&lt;int,int&gt; seen;
+for (int i = 0; i &lt; n; i++) {
+    if (seen.count(tgt - a[i])) { /* i, seen[tgt-a[i]] */ }
+    seen[a[i]] = i;
+}</code></pre><div class="n">O(n) when input isn't sorted; check for complement before inserting current.</div></div>
+<h2>Quick tips &amp; gotchas</h2><ul class="tips"><li>Read the constraints FIRST — n's magnitude picks your complexity, and value ranges pick your data type (int vs long long).</li><li>Counting pairs/substrings overflows 32-bit int fast: n*(n-1)/2 exceeds int around n~65536. Use long long in C++ (Number is safe to 2^53 in JS).</li><li>The 'add count-so-far, then increment' hashmap pattern collapses many O(n^2) pair problems to O(n) (see Good Pairs).</li><li>JS gotcha: [10,2,1].sort() gives [1,10,2]. Always pass a comparator: .sort((a,b)=&gt;a-b).</li><li>C++ operator[] on vector/string is unchecked — out-of-range reads are UB, not exceptions. Guard your indices.</li><li>For a fixed alphabet use int cnt[26] instead of a hashmap — no hashing overhead, cache-friendly, and auto-sorted by letter.</li><li>Always compile C++ with -O2 and enable fast I/O (sync_with_stdio(false)); many 'wrong' TLEs are just slow I/O.</li><li>Test the four killer edge cases every time: empty, single element, all-same, all-distinct.</li></ul>
+</div></body></html>

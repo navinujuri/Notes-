@@ -1,0 +1,99 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Cheat Sheet · Ganache, Trufle, Hardhat and Foundry</title><style>:root{--bg:#fff;--fg:#1a1a1a;--muted:#6b7280;--line:#e5e7eb;--accent:#0d9488;--card:#f9fafb;--code:#f3f4f6;--codefg:#111}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1115;--fg:#e6e6e6;--muted:#9aa0aa;--line:#242833;--accent:#2dd4bf;--card:#171a21;--code:#0b0e13;--codefg:#e6e6e6}}
+*{box-sizing:border-box}body{margin:0;font:16px/1.6 system-ui,Segoe UI,sans-serif;background:var(--bg);color:var(--fg)}
+.wrap{max-width:860px;margin:0 auto;padding:1.2rem}
+a.back{color:var(--accent);text-decoration:none;font-size:.9rem}
+h1{font-size:1.5rem;margin:.6rem 0 .2rem}.sub{color:var(--muted);margin:0 0 1.4rem}
+h2{font-size:1.1rem;margin:1.6rem 0 .5rem;color:var(--accent)}
+.item{border:1px solid var(--line);border-radius:10px;background:var(--card);padding:.6rem .8rem;margin:.5rem 0}
+.item .l{font-weight:700}
+.item .n{color:var(--muted);font-size:.92rem;margin-top:.2rem}
+pre{margin:.45rem 0 0;background:var(--code);color:var(--codefg);border:1px solid var(--line);border-radius:8px;padding:.6rem .8rem;overflow-x:auto}
+code,pre{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:.86rem}
+.tips{border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:10px;background:var(--card);padding:.6rem 1rem}
+.tips li{margin:.35rem 0}
+@media print{.back{display:none}}</style></head><body><div class="wrap">
+<a class="back" href="../revision.html">← Back to revision index</a>
+<h1>Ganache, Trufle, Hardhat and Foundry — Cheat Sheet</h1>
+<p class="sub">Cohort 3.0 · 12 lessons · quick reference</p>
+<h2>Ganache &amp; Truffle (legacy stack)</h2><div class="item"><div class="l">Install (both deprecated Mar 2023 — know for legacy repos)</div><pre><code>npm i -g truffle ganache</code></pre></div><div class="item"><div class="l">Start local chain (10 funded accounts, chainId 1337)</div><pre><code>ganache            # CLI, RPC on http://127.0.0.1:8545
+ganache -d         # deterministic mnemonic (same keys every run)</code></pre></div><div class="item"><div class="l">Scaffold a Truffle project</div><pre><code>truffle init       # contracts/, migrations/, test/, truffle-config.js</code></pre></div><div class="item"><div class="l">Compile / test / migrate</div><pre><code>truffle compile
+truffle test
+truffle migrate --network development</code></pre></div><div class="item"><div class="l">truffle-config.js network block</div><pre><code>networks: {
+  development: { host: '127.0.0.1', port: 8545, network_id: '*' }
+}</code></pre><div class="n">network_id '*' matches any chain; Ganache defaults to 1337/5777</div></div><div class="item"><div class="l">Interactive console against a network</div><pre><code>truffle console --network development</code></pre></div><h2>Hardhat (JS/TS ecosystem)</h2><div class="item"><div class="l">Init a project</div><pre><code>mkdir myapp &amp;&amp; cd myapp
+npm init -y
+npm i -D hardhat
+npx hardhat init      # pick TypeScript + toolbox</code></pre></div><div class="item"><div class="l">Compile / test / clean</div><pre><code>npx hardhat compile
+npx hardhat test
+npx hardhat clean</code></pre></div><div class="item"><div class="l">Run the built-in in-process node (replaces Ganache)</div><pre><code>npx hardhat node     # 20 funded accounts, RPC :8545, chainId 31337</code></pre></div><div class="item"><div class="l">Run a script against a network</div><pre><code>npx hardhat run scripts/deploy.ts --network localhost</code></pre></div><div class="item"><div class="l">hardhat.config.ts</div><pre><code>import '@nomicfoundation/hardhat-toolbox';
+export default {
+  solidity: '0.8.24',
+  networks: {
+    sepolia: { url: process.env.RPC_URL, accounts: [process.env.PK!] }
+  }
+};</code></pre></div><div class="item"><div class="l">console.log inside Solidity (debug)</div><pre><code>import 'hardhat/console.sol';
+console.log('bal: %s', balance);</code></pre><div class="n">Only works on the Hardhat network, strip before mainnet deploy</div></div><h2>Foundry — install &amp; scaffold</h2><div class="item"><div class="l">Install via foundryup (Linux/macOS/WSL)</div><pre><code>curl -L https://foundry.paradigm.xyz | bash
+foundryup            # installs forge, cast, anvil, chisel</code></pre><div class="n">On Windows use WSL; foundryup keeps the toolchain updated</div></div><div class="item"><div class="l">New project</div><pre><code>forge init hello_foundry
+# src/  test/  script/  lib/  foundry.toml</code></pre></div><div class="item"><div class="l">Build / test / format</div><pre><code>forge build
+forge test
+forge fmt</code></pre></div><div class="item"><div class="l">Local node (Ganache/Hardhat-node equivalent)</div><pre><code>anvil                # RPC :8545, chainId 31337, 10 funded accts</code></pre></div><div class="item"><div class="l">foundry.toml essentials</div><pre><code>[profile.default]
+src = 'src'
+out = 'out'
+libs = ['lib']
+solc = '0.8.24'
+remappings = ['@openzeppelin/=lib/openzeppelin-contracts/']</code></pre></div><h2>External packages &amp; remappings</h2><div class="item"><div class="l">Install a dependency (git submodule under lib/)</div><pre><code>forge install OpenZeppelin/openzeppelin-contracts
+forge install foundry-rs/forge-std</code></pre></div><div class="item"><div class="l">Pin a version / tag</div><pre><code>forge install OpenZeppelin/openzeppelin-contracts@v5.1.0</code></pre></div><div class="item"><div class="l">Update / remove</div><pre><code>forge update
+forge remove OpenZeppelin/openzeppelin-contracts</code></pre></div><div class="item"><div class="l">Auto-generate remappings</div><pre><code>forge remappings &gt; remappings.txt</code></pre><div class="n">Import then resolves e.g. `@openzeppelin/contracts/...` to lib/</div></div><div class="item"><div class="l">Hardhat equivalent (npm, not submodules)</div><pre><code>npm i @openzeppelin/contracts</code></pre><div class="n">Hardhat imports from node_modules; no remappings needed</div></div><h2>First contract &amp; ERC-20</h2><div class="item"><div class="l">Minimal contract (src/Counter.sol)</div><pre><code>// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+contract Counter {
+    uint256 public number;
+    function set(uint256 n) public { number = n; }
+    function inc() public { number++; }
+}</code></pre></div><div class="item"><div class="l">ERC-20 via OpenZeppelin (src/MyToken.sol)</div><pre><code>// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+import {ERC20} from '@openzeppelin/contracts/token/ERC20/ERC20.sol';
+contract MyToken is ERC20 {
+    constructor(uint256 supply) ERC20('MyToken', 'MTK') {
+        _mint(msg.sender, supply);
+    }
+}</code></pre></div><div class="item"><div class="l">Standard ERC-20 surface (from base)</div><pre><code>totalSupply() balanceOf(a) transfer(to,amt)
+approve(spender,amt) allowance(o,s) transferFrom(from,to,amt)</code></pre><div class="n">decimals() defaults to 18; override it to change</div></div><div class="item"><div class="l">Mint / burn helpers</div><pre><code>_mint(to, amount);
+_burn(from, amount);</code></pre><div class="n">Internal — wrap in access-controlled public fns (e.g. Ownable)</div></div><h2>Testing in Foundry (forge-std)</h2><div class="item"><div class="l">Test file layout (test/MyToken.t.sol)</div><pre><code>import {Test} from 'forge-std/Test.sol';
+contract MyTokenTest is Test {
+    MyToken t;
+    function setUp() public { t = new MyToken(1000e18); }
+    function test_Supply() public view {
+        assertEq(t.totalSupply(), 1000e18);
+    }
+}</code></pre><div class="n">setUp() runs before EACH test; fns prefixed test_ are cases</div></div><div class="item"><div class="l">Common cheatcodes (vm.*)</div><pre><code>vm.prank(alice);          // next call from alice
+vm.startPrank(alice); ... vm.stopPrank();
+vm.deal(alice, 1 ether);  // set ETH balance
+vm.expectRevert(bytes('ERR'));
+address bob = makeAddr('bob');</code></pre></div><div class="item"><div class="l">Test an emitted event</div><pre><code>event Transfer(address indexed from, address indexed to, uint256 v);
+function test_Emit() public {
+    vm.expectEmit(true, true, false, true);
+    emit Transfer(address(this), bob, 10);   // expected event
+    t.transfer(bob, 10);                       // triggering call
+}</code></pre><div class="n">expectEmit flags = (topic1, topic2, topic3, data); emit the expected event, THEN make the call</div></div><div class="item"><div class="l">Assertions &amp; fuzzing</div><pre><code>assertEq(a,b); assertTrue(x); assertGt(a,b);
+function testFuzz_Transfer(uint96 amt) public { ... }</code></pre><div class="n">Fn args = fuzzed inputs; use vm.assume() to bound them</div></div><div class="item"><div class="l">Verbosity &amp; gas</div><pre><code>forge test -vvv           # show traces on failure
+forge test --match-test test_Emit
+forge test --gas-report</code></pre></div><h2>Deploying contracts</h2><div class="item"><div class="l">Foundry deploy script (script/Deploy.s.sol)</div><pre><code>import {Script} from 'forge-std/Script.sol';
+contract Deploy is Script {
+    function run() external {
+        vm.startBroadcast();
+        new MyToken(1_000_000e18);
+        vm.stopBroadcast();
+    }
+}</code></pre></div><div class="item"><div class="l">Run the script (broadcast + verify)</div><pre><code>forge script script/Deploy.s.sol \
+  --rpc-url $RPC_URL --private-key $PK \
+  --broadcast --verify</code></pre><div class="n">Drop --broadcast for a dry-run simulation; --verify needs ETHERSCAN_API_KEY</div></div><div class="item"><div class="l">One-liner deploy (no script)</div><pre><code>forge create src/MyToken.sol:MyToken \
+  --rpc-url $RPC_URL --private-key $PK \
+  --constructor-args 1000000000000000000000000</code></pre></div><div class="item"><div class="l">cast — chain interaction from CLI</div><pre><code>cast call $ADDR 'totalSupply()(uint256)' --rpc-url $RPC_URL
+cast send $ADDR 'transfer(address,uint256)' $TO 10 --private-key $PK
+cast balance $ADDR</code></pre></div><div class="item"><div class="l">Hardhat deploy (ethers v6)</div><pre><code>const T = await ethers.getContractFactory('MyToken');
+const t = await T.deploy(ethers.parseEther('1000000'));
+await t.waitForDeployment();
+console.log(await t.getAddress());</code></pre></div>
+<h2>Quick tips &amp; gotchas</h2><ul class="tips"><li>Ganache + Truffle are deprecated (ConsenSys sunset Mar 2023) — new projects use Foundry or Hardhat; only touch Truffle for legacy maintenance.</li><li>Default local chainIds differ: Ganache 1337, Anvil &amp; Hardhat node 31337 — a wrong chainId in your wallet/config is the #1 'nonce/connection' bug.</li><li>Foundry deps are git submodules in lib/, not npm packages — after `git clone` run `forge install` (or `git submodule update --init`) or imports won't resolve.</li><li>vm.expectEmit(t1,t2,t3,data): emit the EXPECTED event first, then call the function that emits the real one — order matters and mismatched indexed topics fail silently-looking.</li><li>vm.prank sets msg.sender for only the NEXT call; use startPrank/stopPrank to span multiple calls.</li><li>Never hardcode private keys in scripts or git — load from env (`$PK`) or use `cast wallet` / keystore; Anvil's printed test keys are public and mainnet-unsafe.</li><li>forge test -vvvv gives full call traces incl. reverts; ratchet verbosity up only when a test fails to keep output readable.</li><li>Use `_mint`/`_burn` behind access control (Ownable/AccessControl) — leaving a public mint open is a classic ERC-20 exploit.</li></ul>
+</div></body></html>

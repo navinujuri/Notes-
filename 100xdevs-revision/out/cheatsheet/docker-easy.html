@@ -1,0 +1,65 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Cheat Sheet · Actionable Docker</title><style>:root{--bg:#fff;--fg:#1a1a1a;--muted:#6b7280;--line:#e5e7eb;--accent:#0d9488;--card:#f9fafb;--code:#f3f4f6;--codefg:#111}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1115;--fg:#e6e6e6;--muted:#9aa0aa;--line:#242833;--accent:#2dd4bf;--card:#171a21;--code:#0b0e13;--codefg:#e6e6e6}}
+*{box-sizing:border-box}body{margin:0;font:16px/1.6 system-ui,Segoe UI,sans-serif;background:var(--bg);color:var(--fg)}
+.wrap{max-width:860px;margin:0 auto;padding:1.2rem}
+a.back{color:var(--accent);text-decoration:none;font-size:.9rem}
+h1{font-size:1.5rem;margin:.6rem 0 .2rem}.sub{color:var(--muted);margin:0 0 1.4rem}
+h2{font-size:1.1rem;margin:1.6rem 0 .5rem;color:var(--accent)}
+.item{border:1px solid var(--line);border-radius:10px;background:var(--card);padding:.6rem .8rem;margin:.5rem 0}
+.item .l{font-weight:700}
+.item .n{color:var(--muted);font-size:.92rem;margin-top:.2rem}
+pre{margin:.45rem 0 0;background:var(--code);color:var(--codefg);border:1px solid var(--line);border-radius:8px;padding:.6rem .8rem;overflow-x:auto}
+code,pre{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:.86rem}
+.tips{border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:10px;background:var(--card);padding:.6rem 1rem}
+.tips li{margin:.35rem 0}
+@media print{.back{display:none}}</style></head><body><div class="wrap">
+<a class="back" href="../revision.html">← Back to revision index</a>
+<h1>Actionable Docker — Cheat Sheet</h1>
+<p class="sub">Cohort 2.0 · 6 lessons · quick reference</p>
+<h2>Install &amp; Verify</h2><div class="item"><div class="l">Linux (Ubuntu/Debian) — official convenience script</div><pre><code>curl -fsSL https://get.docker.com | sh</code></pre><div class="n">Fast path; for prod prefer the apt repo install from docs.docker.com.</div></div><div class="item"><div class="l">macOS / Windows</div><pre><code># Install Docker Desktop from docker.com
+# includes engine, CLI, compose, and a Linux VM</code></pre><div class="n">On Windows use the WSL2 backend for near-native Linux perf.</div></div><div class="item"><div class="l">Run docker without sudo (Linux)</div><pre><code>sudo usermod -aG docker $USER
+# log out/in for the group to apply</code></pre><div class="n">Adding to the docker group = root-equivalent. Only for trusted users.</div></div><div class="item"><div class="l">Confirm it works</div><pre><code>docker version      # client + daemon
+docker info         # system-wide status
+docker run hello-world</code></pre><div class="n">If `Cannot connect to the Docker daemon` — the daemon/Desktop isn't running.</div></div><h2>What Docker Is For</h2><div class="item"><div class="l">Run software without polluting your host</div><pre><code>docker run -d -p 5432:5432 -e POSTGRES_PASSWORD=pw postgres</code></pre><div class="n">Spin up Postgres/Redis/Mongo in seconds; delete the container, host stays clean.</div></div><div class="item"><div class="l">Reproducible environments ("works on my machine" killer)</div><div class="n">The image pins OS libs + runtime + deps. Same image runs identically anywhere.</div></div><div class="item"><div class="l">Isolation</div><div class="n">Each container = isolated filesystem, network, and processes. Two apps can need different Node/Python versions with no conflict.</div></div><div class="item"><div class="l">Image vs Container</div><div class="n">Image = immutable blueprint (a class). Container = a running instance of that image (an object).</div></div><h2>Where Packages (Images) Come From</h2><div class="item"><div class="l">Docker Hub — the default public registry</div><pre><code>docker pull redis          # = docker.io/library/redis:latest
+docker pull node:20-alpine</code></pre><div class="n">Bare names like `redis`/`node` are Official Images. Browse: hub.docker.com.</div></div><div class="item"><div class="l">Image reference anatomy</div><pre><code>registry/namespace/repo:tag
+ghcr.io/acme/api:1.4.2</code></pre><div class="n">No tag =&gt; `:latest` (a mutable pointer, not a stable version — pin real tags).</div></div><div class="item"><div class="l">Other registries</div><pre><code>ghcr.io/...        # GitHub Container Registry
+quay.io/...        # Red Hat Quay
+&lt;acct&gt;.dkr.ecr.&lt;region&gt;.amazonaws.com/...  # AWS ECR</code></pre><div class="n">Fully-qualified names bypass Docker Hub entirely.</div></div><div class="item"><div class="l">Authenticate to pull/push private images</div><pre><code>docker login                 # Docker Hub
+docker login ghcr.io -u USER</code></pre><div class="n">Token/PAT goes in the password prompt, not your account password.</div></div><h2>Common Commands — Images</h2><div class="item"><div class="l">Pull / list / remove</div><pre><code>docker pull nginx:1.27
+docker images            # or: docker image ls
+docker rmi nginx:1.27</code></pre></div><div class="item"><div class="l">Build from a Dockerfile</div><pre><code>docker build -t myapp:1.0 .
+docker build -t myapp:1.0 -f api.Dockerfile .</code></pre><div class="n">`.` is the build context (files sent to daemon). Add a .dockerignore.</div></div><div class="item"><div class="l">Tag &amp; push</div><pre><code>docker tag myapp:1.0 user/myapp:1.0
+docker push user/myapp:1.0</code></pre></div><div class="item"><div class="l">Inspect / history</div><pre><code>docker inspect nginx:1.27
+docker history myapp:1.0</code></pre><div class="n">`inspect` dumps JSON — pipe to `jq` or use `--format`.</div></div><h2>Common Commands — Containers</h2><div class="item"><div class="l">Run (foreground) vs detached</div><pre><code>docker run -it ubuntu bash        # interactive shell
+docker run -d --name web -p 8080:80 nginx</code></pre><div class="n">-p HOST:CONTAINER maps ports. -it = interactive TTY; -d = background.</div></div><div class="item"><div class="l">Env vars &amp; volumes</div><pre><code>docker run -d \
+  -e NODE_ENV=production \
+  -v $(pwd)/data:/app/data \
+  --name api myapp:1.0</code></pre><div class="n">-v HOST:CONTAINER persists data past container life. Use named volumes for DBs.</div></div><div class="item"><div class="l">List / stop / start / remove</div><pre><code>docker ps            # running
+docker ps -a         # all incl. stopped
+docker stop web &amp;&amp; docker rm web
+docker rm -f web     # force-kill + remove</code></pre><div class="n">`docker run --rm ...` auto-deletes the container on exit.</div></div><div class="item"><div class="l">Logs &amp; exec into a running container</div><pre><code>docker logs -f web
+docker exec -it web sh    # or bash</code></pre><div class="n">`exec` runs a NEW process; use it to debug a live container.</div></div><div class="item"><div class="l">Copy files &amp; check stats</div><pre><code>docker cp web:/etc/nginx/nginx.conf .
+docker stats           # live CPU/mem</code></pre></div><div class="item"><div class="l">Cleanup</div><pre><code>docker system prune -a        # dangling images, stopped containers, networks
+docker volume prune</code></pre><div class="n">-a also removes unused (not just dangling) images. Frees a LOT of disk.</div></div><h2>Common Packages (ready-to-run)</h2><div class="item"><div class="l">PostgreSQL</div><pre><code>docker run -d --name pg -p 5432:5432 \
+  -e POSTGRES_PASSWORD=pw -v pgdata:/var/lib/postgresql/data postgres:16</code></pre></div><div class="item"><div class="l">Redis</div><pre><code>docker run -d --name redis -p 6379:6379 redis:7</code></pre></div><div class="item"><div class="l">MongoDB</div><pre><code>docker run -d --name mongo -p 27017:27017 \
+  -e MONGO_INITDB_ROOT_PASSWORD=pw mongo:7</code></pre></div><div class="item"><div class="l">MySQL</div><pre><code>docker run -d --name mysql -p 3306:3306 \
+  -e MYSQL_ROOT_PASSWORD=pw mysql:8</code></pre></div><div class="item"><div class="l">Nginx (static/reverse proxy)</div><pre><code>docker run -d -p 8080:80 \
+  -v $(pwd)/site:/usr/share/nginx/html:ro nginx</code></pre></div><div class="item"><div class="l">Node / language base images</div><pre><code>docker run -it --rm -v $(pwd):/app -w /app node:20-alpine npm ci</code></pre><div class="n">`-alpine` tags are tiny; `-slim` is a middle ground. Great for one-off tooling.</div></div><h2>Dockerfile &amp; Compose Essentials</h2><div class="item"><div class="l">Minimal Node Dockerfile</div><pre><code>FROM node:20-alpine
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci
+COPY . .
+EXPOSE 3000
+CMD ["node", "index.js"]</code></pre><div class="n">Copy manifests + install BEFORE copying source so the deps layer caches.</div></div><div class="item"><div class="l">Multi-container with Compose (docker-compose.yml)</div><pre><code>services:
+  api:
+    build: .
+    ports: ["3000:3000"]
+    depends_on: [db]
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_PASSWORD: pw</code></pre><div class="n">YAML file; `depends_on` controls start order, not readiness.</div></div><div class="item"><div class="l">Compose lifecycle</div><pre><code>docker compose up -d     # build+start
+docker compose logs -f
+docker compose down      # add -v to drop volumes</code></pre><div class="n">Modern Docker: `docker compose` (space), not the old `docker-compose` binary.</div></div>
+<h2>Quick tips &amp; gotchas</h2><ul class="tips"><li>`:latest` is a mutable tag, not "newest stable" — always pin explicit versions (postgres:16, node:20-alpine) for reproducibility.</li><li>-p HOST:CONTAINER order trips everyone up: the LEFT number is the port on your machine, the RIGHT is inside the container.</li><li>Container data vanishes on `docker rm`. Anything you must keep (DB files) needs a volume (-v).</li><li>`docker exec -it &lt;c&gt; sh` to poke around a live container; `docker run` makes a fresh one — don't confuse the two.</li><li>Alpine images sometimes lack bash/glibc — use `sh` for exec, and watch for native-module build failures.</li><li>`docker system prune -a` reclaims tons of disk but deletes all unused images — you'll re-pull them next run.</li><li>Add a .dockerignore (node_modules, .git) or your build context balloons and builds crawl.</li><li>On Windows/macOS, `localhost` inside a container is NOT your host — use `host.docker.internal` to reach host services.</li></ul>
+</div></body></html>

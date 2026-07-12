@@ -1,0 +1,131 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Cheat Sheet · PayTM Part-2</title><style>:root{--bg:#fff;--fg:#1a1a1a;--muted:#6b7280;--line:#e5e7eb;--accent:#0d9488;--card:#f9fafb;--code:#f3f4f6;--codefg:#111}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1115;--fg:#e6e6e6;--muted:#9aa0aa;--line:#242833;--accent:#2dd4bf;--card:#171a21;--code:#0b0e13;--codefg:#e6e6e6}}
+*{box-sizing:border-box}body{margin:0;font:16px/1.6 system-ui,Segoe UI,sans-serif;background:var(--bg);color:var(--fg)}
+.wrap{max-width:860px;margin:0 auto;padding:1.2rem}
+a.back{color:var(--accent);text-decoration:none;font-size:.9rem}
+h1{font-size:1.5rem;margin:.6rem 0 .2rem}.sub{color:var(--muted);margin:0 0 1.4rem}
+h2{font-size:1.1rem;margin:1.6rem 0 .5rem;color:var(--accent)}
+.item{border:1px solid var(--line);border-radius:10px;background:var(--card);padding:.6rem .8rem;margin:.5rem 0}
+.item .l{font-weight:700}
+.item .n{color:var(--muted);font-size:.92rem;margin-top:.2rem}
+pre{margin:.45rem 0 0;background:var(--code);color:var(--codefg);border:1px solid var(--line);border-radius:8px;padding:.6rem .8rem;overflow-x:auto}
+code,pre{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:.86rem}
+.tips{border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:10px;background:var(--card);padding:.6rem 1rem}
+.tips li{margin:.35rem 0}
+@media print{.back{display:none}}</style></head><body><div class="wrap">
+<a class="back" href="../revision.html">← Back to revision index</a>
+<h1>PayTM Part-2 — Cheat Sheet</h1>
+<p class="sub">Cohort 2.0 · 5 lessons · quick reference</p>
+<h2>Repo &amp; Setup (Turborepo monorepo)</h2><div class="item"><div class="l">Layout — apps + shared packages</div><pre><code>apps/user-app        # Next.js (App Router, server actions, NextAuth)
+apps/merchant-app    # Next.js merchant
+apps/bank-webhook    # Express server (mock bank callback)
+packages/db          # Prisma client + schema (imported everywhere)
+packages/ui  packages/store</code></pre><div class="n">One Prisma schema/client lives in packages/db; every app imports it — never duplicate the schema.</div></div><div class="item"><div class="l">Boot the DB (Postgres via Docker)</div><pre><code>docker run -e POSTGRES_PASSWORD=mysecretpassword -d -p 5432:5432 postgres</code></pre><div class="n">Put DATABASE_URL in packages/db/.env, e.g. postgresql://postgres:mysecretpassword@localhost:5432/postgres</div></div><div class="item"><div class="l">Install + migrate + generate + seed</div><pre><code>npm install                 # from repo root
+cd packages/db
+npx prisma migrate dev --name init
+npx prisma generate
+npx prisma db seed          # seeds alice/bob + balances</code></pre><div class="n">prisma generate is what makes the typed client available to the apps; re-run after any schema edit.</div></div><div class="item"><div class="l">Run everything</div><pre><code>npm run dev                 # turbo runs dev across all apps
+npm run dev -- --filter=user-app   # just one app</code></pre><div class="n">turbo.json: dev task has cache:false + persistent:true; build has dependsOn ['^build'].</div></div><h2>Prisma Schema (core models)</h2><div class="item"><div class="l">Balance — money is Int (paise), never float</div><pre><code>model Balance {
+  id     Int  @id @default(autoincrement())
+  userId Int  @unique
+  amount Int
+  locked Int
+  user   User @relation(fields: [userId], references: [id])
+}</code></pre><div class="n">userId @unique = one balance per user. Store smallest currency unit as Int; floats corrupt money.</div></div><div class="item"><div class="l">OnRampTransaction + status enum</div><pre><code>model OnRampTransaction {
+  id        Int          @id @default(autoincrement())
+  status    OnRampStatus
+  token     String       @unique
+  provider  String
+  amount    Int
+  startTime DateTime
+  userId    Int
+  user      User         @relation(fields: [userId], references: [id])
+}
+enum OnRampStatus { Success Failure Processing }</code></pre><div class="n">token is @unique — it's the idempotency key the webhook matches on.</div></div><div class="item"><div class="l">p2pTransfer — two relations to User</div><pre><code>model p2pTransfer {
+  id         Int      @id @default(autoincrement())
+  amount     Int
+  timestamp  DateTime
+  fromUserId Int
+  fromUser   User     @relation("FromUserRelation", fields:[fromUserId], references:[id])
+  toUserId   Int
+  toUser     User     @relation("ToUserRelation",   fields:[toUserId],   references:[id])
+}</code></pre><div class="n">Two FKs to the same table REQUIRE named relations, else prisma validate errors.</div></div><div class="item"><div class="l">Back-relations on User</div><pre><code>model User {
+  // ...
+  Balance           Balance[]
+  OnRampTransaction OnRampTransaction[]
+  sentTransfers     p2pTransfer[] @relation("FromUserRelation")
+  receivedTransfers p2pTransfer[] @relation("ToUserRelation")
+}</code></pre></div><h2>Onramp (Add Money) flow</h2><div class="item"><div class="l">Server action — create Processing txn + token</div><pre><code>"use server"
+export async function createOnRampTransaction(provider: string, amount: number) {
+  const session = await getServerSession(authOptions);
+  const userId = session?.user?.id;
+  if (!userId) return { message: "User not logged in" };
+  const token = Math.random().toString();   // real world: from bank
+  await prisma.onRampTransaction.create({
+    data: { userId: Number(userId), amount, status: "Processing", startTime: new Date(), provider, token }
+  });
+  return { message: "On ramp transaction added" };
+}</code></pre><div class="n">Never credit Balance here — the client is untrusted. Credit only on the bank webhook.</div></div><div class="item"><div class="l">Bank webhook — credit + flip status atomically</div><pre><code>app.post("/hdfcWebhook", async (req, res) =&gt; {
+  const { token, user_identifier: userId, amount } = req.body;
+  await db.$transaction([
+    db.balance.updateMany({
+      where: { userId: Number(userId) },
+      data:  { amount: { increment: Number(amount) } }
+    }),
+    db.onRampTransaction.updateMany({
+      where: { token, status: "Processing" },   // idempotency guard
+      data:  { status: "Success" }
+    })
+  ]);
+  res.json({ message: "Captured" });
+});</code></pre><div class="n">Array $transaction = atomic batch. Guard on status:Processing so a retried webhook can't double-credit.</div></div><div class="item"><div class="l">increment / decrement atomic ops</div><pre><code>data: { amount: { increment: n } }   // or { decrement: n }</code></pre><div class="n">Runs UPDATE ... SET amount = amount + n in the DB — no read-modify-write in JS.</div></div><h2>P2P Transfer (send money) — the crux</h2><div class="item"><div class="l">Interactive $transaction with row lock</div><pre><code>"use server"
+export async function p2pTransfer(to: string, amount: number) {
+  const session = await getServerSession(authOptions);
+  const from = session?.user?.id;
+  if (!from) return { message: "Error while sending" };
+  const toUser = await prisma.user.findFirst({ where: { number: to } });
+  if (!toUser) return { message: "User not found" };
+
+  await prisma.$transaction(async (tx) =&gt; {
+    await tx.$queryRaw`SELECT * FROM "Balance" WHERE "userId" = ${Number(from)} FOR UPDATE`;
+    const fromBalance = await tx.balance.findUnique({ where: { userId: Number(from) } });
+    if (!fromBalance || fromBalance.amount &lt; amount) throw new Error("Insufficient funds");
+    await tx.balance.update({ where: { userId: Number(from) },  data: { amount: { decrement: amount } } });
+    await tx.balance.update({ where: { userId: toUser.id },     data: { amount: { increment: amount } } });
+  });
+}</code></pre><div class="n">SELECT ... FOR UPDATE takes a pessimistic lock so a concurrent transfer blocks until commit — kills the lost-update/double-spend race.</div></div><div class="item"><div class="l">Array form vs interactive form</div><pre><code>// array: atomic batch, no intermediate reads / branching
+await prisma.$transaction([q1, q2]);
+// interactive: read -&gt; decide -&gt; write on one connection
+await prisma.$transaction(async (tx) =&gt; { /* ... */ });</code></pre><div class="n">Transfers need interactive: you must lock, read balance, branch on sufficiency, then write.</div></div><div class="item"><div class="l">Why $queryRaw for the lock</div><div class="n">Prisma has no first-class SELECT FOR UPDATE, so drop to tx.$queryRaw. Default Read Committed alone does NOT stop a read-check-write race — you need the explicit lock (or Serializable + retry).</div></div><h2>P2P transactions table (ledger write)</h2><div class="item"><div class="l">Insert ledger row inside the SAME transaction</div><pre><code>await prisma.$transaction(async (tx) =&gt; {
+  await tx.$queryRaw`SELECT * FROM "Balance" WHERE "userId" = ${Number(from)} FOR UPDATE`;
+  const fromBalance = await tx.balance.findUnique({ where: { userId: Number(from) } });
+  if (!fromBalance || fromBalance.amount &lt; amount) throw new Error("Insufficient funds");
+  await tx.balance.update({ where:{ userId:Number(from) }, data:{ amount:{ decrement: amount } } });
+  await tx.balance.update({ where:{ userId: toUser.id },   data:{ amount:{ increment: amount } } });
+  await tx.p2pTransfer.create({
+    data: { fromUserId: Number(from), toUserId: toUser.id, amount, timestamp: new Date() }
+  });
+});</code></pre><div class="n">Debit + credit + ledger insert commit or roll back together — balances and history can never diverge.</div></div><div class="item"><div class="l">Migrate after adding the model</div><pre><code>cd packages/db &amp;&amp; npx prisma migrate dev --name add_p2p_transfer &amp;&amp; npx prisma generate</code></pre></div><h2>Assignment — Frontend for P2P transactions</h2><div class="item"><div class="l">Server-side fetch scoped to session user</div><pre><code>async function getP2PTransactions() {
+  const session = await getServerSession(authOptions);
+  const me = Number(session?.user?.id);
+  const txns = await prisma.p2pTransfer.findMany({
+    where: { OR: [ { fromUserId: me }, { toUserId: me } ] },
+    orderBy: { timestamp: "desc" }
+  });
+  return txns.map(t =&gt; ({
+    time: t.timestamp,
+    amount: t.amount,
+    type: t.fromUserId === me ? "Sent" : "Received"
+  }));
+}</code></pre><div class="n">Get the user id from getServerSession — NEVER from props/query string, or it's an IDOR. Scope with OR fromUserId/toUserId.</div></div><div class="item"><div class="l">Async server component page</div><pre><code>export default async function Page() {
+  const transactions = await getP2PTransactions();
+  return &lt;P2PTransactions transactions={transactions} /&gt;;
+}</code></pre><div class="n">App Router server component can await Prisma directly — no API route needed.</div></div><div class="item"><div class="l">Render sent vs received</div><pre><code>transactions.map(t =&gt; (
+  &lt;div key={t.time.toString()}&gt;
+    &lt;span&gt;{t.type}&lt;/span&gt;
+    &lt;span&gt;{t.type === "Sent" ? "- " : "+ "}{t.amount / 100} INR&lt;/span&gt;
+    &lt;span&gt;{t.time.toDateString()}&lt;/span&gt;
+  &lt;/div&gt;
+))</code></pre><div class="n">Divide by 100 for display since amount is stored in paise.</div></div>
+<h2>Quick tips &amp; gotchas</h2><ul class="tips"><li>Money is an Int in paise/cents — never float/double (binary floats can't represent decimal currency). Divide by 100 only at display time.</li><li>Onramp: credit Balance ONLY in the bank webhook, never in the click-time server action — the client is untrusted.</li><li>Make the webhook idempotent: match on the unique token and update only rows still in Processing; the bank retries on timeout and would otherwise double-credit.</li><li>Transfers MUST be an interactive $transaction with SELECT ... FOR UPDATE on the sender's balance row — array-form $transaction and default Read Committed don't stop the lost-update race.</li><li>Two FKs from p2pTransfer to User need named @relation("FromUserRelation"/"ToUserRelation") or prisma validate fails.</li><li>Write the p2pTransfer ledger row inside the same $transaction as the balance moves so audit trail and balances always agree.</li><li>Re-run npx prisma generate (and migrate dev) after every schema change, from packages/db — the apps import that generated client.</li><li>Scope the P2P history query to the session user id (getServerSession), never a client-supplied id — otherwise it's an IDOR leaking others' transactions.</li></ul>
+</div></body></html>

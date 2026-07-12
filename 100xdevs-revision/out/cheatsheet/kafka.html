@@ -1,0 +1,85 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Cheat Sheet · Kafka</title><style>:root{--bg:#fff;--fg:#1a1a1a;--muted:#6b7280;--line:#e5e7eb;--accent:#0d9488;--card:#f9fafb;--code:#f3f4f6;--codefg:#111}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1115;--fg:#e6e6e6;--muted:#9aa0aa;--line:#242833;--accent:#2dd4bf;--card:#171a21;--code:#0b0e13;--codefg:#e6e6e6}}
+*{box-sizing:border-box}body{margin:0;font:16px/1.6 system-ui,Segoe UI,sans-serif;background:var(--bg);color:var(--fg)}
+.wrap{max-width:860px;margin:0 auto;padding:1.2rem}
+a.back{color:var(--accent);text-decoration:none;font-size:.9rem}
+h1{font-size:1.5rem;margin:.6rem 0 .2rem}.sub{color:var(--muted);margin:0 0 1.4rem}
+h2{font-size:1.1rem;margin:1.6rem 0 .5rem;color:var(--accent)}
+.item{border:1px solid var(--line);border-radius:10px;background:var(--card);padding:.6rem .8rem;margin:.5rem 0}
+.item .l{font-weight:700}
+.item .n{color:var(--muted);font-size:.92rem;margin-top:.2rem}
+pre{margin:.45rem 0 0;background:var(--code);color:var(--codefg);border:1px solid var(--line);border-radius:8px;padding:.6rem .8rem;overflow-x:auto}
+code,pre{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:.86rem}
+.tips{border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:10px;background:var(--card);padding:.6rem 1rem}
+.tips li{margin:.35rem 0}
+@media print{.back{display:none}}</style></head><body><div class="wrap">
+<a class="back" href="../revision.html">← Back to revision index</a>
+<h1>Kafka — Cheat Sheet</h1>
+<p class="sub">Cohort 2.0 · 9 lessons · quick reference</p>
+<h2>Core concepts &amp; jargon</h2><div class="item"><div class="l">Kafka = distributed, append-only commit log for event streaming</div><div class="n">Pull-based, durable, replayable. NOT a queue that deletes on read — messages persist per retention.</div></div><div class="item"><div class="l">Broker</div><div class="n">One Kafka server. A cluster = many brokers sharing partitions.</div></div><div class="item"><div class="l">Topic</div><div class="n">Named stream/category of messages (e.g. 'orders').</div></div><div class="item"><div class="l">Partition</div><div class="n">Ordered, immutable log within a topic. Unit of parallelism. Ordering guaranteed ONLY within a partition, never across a topic.</div></div><div class="item"><div class="l">Offset</div><div class="n">Sequential id of a message inside a partition. Consumers track 'where they are' by committing offsets.</div></div><div class="item"><div class="l">Producer / Consumer</div><div class="n">Producers write; consumers read. Decoupled — neither knows the other.</div></div><div class="item"><div class="l">Consumer group</div><div class="n">Consumers sharing a groupId that SPLIT a topic's partitions among themselves.</div></div><div class="item"><div class="l">Replication factor / retention</div><div class="n">RF = copies of a partition across brokers. Retention = keep by time/size (log.retention.hours), not by consumption.</div></div><div class="item"><div class="l">KRaft vs ZooKeeper</div><div class="n">Modern Kafka runs metadata in KRaft mode (no separate ZooKeeper needed).</div></div><h2>Start Kafka locally (Docker + CLI)</h2><div class="item"><div class="l">Run a broker (KRaft, no ZooKeeper)</div><pre><code>docker run -p 9092:9092 apache/kafka:3.7.1</code></pre></div><div class="item"><div class="l">Shell into the container</div><pre><code>docker ps                       # get container id
+docker exec -it &lt;id&gt; /bin/bash
+cd /opt/kafka/bin               # all *.sh tools live here</code></pre></div><div class="item"><div class="l">Create a topic with partitions</div><pre><code>./kafka-topics.sh --create --topic quickstart \
+  --partitions 3 --replication-factor 1 \
+  --bootstrap-server localhost:9092</code></pre></div><div class="item"><div class="l">List / describe topics</div><pre><code>./kafka-topics.sh --list --bootstrap-server localhost:9092
+./kafka-topics.sh --describe --topic quickstart --bootstrap-server localhost:9092</code></pre><div class="n">--describe shows leader/replicas per partition.</div></div><div class="item"><div class="l">Console producer / consumer (quick sanity check)</div><pre><code>./kafka-console-producer.sh --topic quickstart --bootstrap-server localhost:9092
+./kafka-console-consumer.sh --topic quickstart --from-beginning --bootstrap-server localhost:9092</code></pre></div><div class="item"><div class="l">Inspect a consumer group (offsets + LAG)</div><pre><code>./kafka-consumer-groups.sh --describe --group group-1 \
+  --bootstrap-server localhost:9092</code></pre><div class="n">CURRENT-OFFSET vs LOG-END-OFFSET gives LAG per partition — key debugging tool.</div></div><h2>KafkaJS setup (Node.js)</h2><div class="item"><div class="l">Install</div><pre><code>npm install kafkajs</code></pre></div><div class="item"><div class="l">Create client (shared across producer/consumer/admin)</div><pre><code>const { Kafka } = require('kafkajs');
+const kafka = new Kafka({
+  clientId: 'my-app',
+  brokers: ['localhost:9092'],
+});</code></pre></div><div class="item"><div class="l">Admin: create topic with N partitions from code</div><pre><code>const admin = kafka.admin();
+await admin.connect();
+await admin.createTopics({
+  topics: [{ topic: 'quickstart', numPartitions: 3, replicationFactor: 1 }],
+});
+await admin.disconnect();</code></pre><div class="n">Idempotent — returns false if the topic already exists.</div></div><div class="item"><div class="l">Graceful shutdown</div><pre><code>process.on('SIGINT', async () =&gt; {
+  await consumer.disconnect();
+  await producer.disconnect();
+  process.exit(0);
+});</code></pre><div class="n">Disconnect triggers a clean group rebalance instead of a session timeout.</div></div><h2>Producer script</h2><div class="item"><div class="l">Minimal producer</div><pre><code>// producer.js
+const producer = kafka.producer();
+await producer.connect();
+await producer.send({
+  topic: 'quickstart',
+  messages: [{ value: 'hello' }],
+});
+await producer.disconnect();</code></pre></div><div class="item"><div class="l">Send WITH a key (controls routing)</div><pre><code>await producer.send({
+  topic: 'quickstart',
+  messages: [{ key: 'user-1', value: 'order-created' }],
+});</code></pre><div class="n">Same key → same partition → per-key ordering preserved. Use key = entity id (userId, orderId).</div></div><div class="item"><div class="l">Batch multiple messages / multiple topics</div><pre><code>await producer.sendBatch({
+  topicMessages: [
+    { topic: 'a', messages: [{ value: '1' }, { value: '2' }] },
+    { topic: 'b', messages: [{ value: '3' }] },
+  ],
+});</code></pre></div><div class="item"><div class="l">Pin to an explicit partition</div><pre><code>messages: [{ value: 'x', partition: 0 }]</code></pre><div class="n">Overrides the partitioner — bypasses key hashing entirely.</div></div><h2>Consumer script &amp; consumer groups</h2><div class="item"><div class="l">Minimal consumer</div><pre><code>// consumer.js
+const consumer = kafka.consumer({ groupId: 'group-1' });
+await consumer.connect();
+await consumer.subscribe({ topic: 'quickstart', fromBeginning: true });
+await consumer.run({
+  eachMessage: async ({ topic, partition, message }) =&gt; {
+    console.log(partition, message.offset, message.value.toString());
+  },
+});</code></pre><div class="n">fromBeginning only applies the FIRST time a group has no committed offset; ignored afterward.</div></div><div class="item"><div class="l">Manual offset commit (at-least-once control)</div><pre><code>await consumer.run({
+  autoCommit: false,
+  eachMessage: async ({ topic, partition, message }) =&gt; {
+    await handle(message);
+    await consumer.commitOffsets([{ topic, partition,
+      offset: (Number(message.offset) + 1).toString() }]);
+  },
+});</code></pre><div class="n">Commit offset+1 = the NEXT offset to read. Default autoCommit can lose/replay on crash.</div></div><div class="item"><div class="l">Batch processing</div><pre><code>await consumer.run({
+  eachBatch: async ({ batch, resolveOffset, heartbeat }) =&gt; {
+    for (const m of batch.messages) {
+      await handle(m);
+      resolveOffset(m.offset);
+      await heartbeat();
+    }
+  },
+});</code></pre></div><div class="item"><div class="l">Concurrency across partitions</div><pre><code>await consumer.run({ partitionsConsumedConcurrently: 3, eachMessage });</code></pre><div class="n">Runs eachMessage in parallel across partitions; still serial within one partition.</div></div><h2>Partitions &amp; partitioning strategy</h2><div class="item"><div class="l">Default routing: key present</div><div class="n">partition = hash(key) % numPartitions → deterministic, sticky per key.</div></div><div class="item"><div class="l">Default routing: no key</div><div class="n">Round-robin / sticky across partitions → good load spread, NO ordering guarantee.</div></div><div class="item"><div class="l">Custom partitioner</div><pre><code>const MyPartitioner = () =&gt; ({ partitionMetadata, message }) =&gt; {
+  const n = partitionMetadata.length;
+  return Number(message.key) % n;
+};
+kafka.producer({ createPartitioner: MyPartitioner });</code></pre></div><div class="item"><div class="l">Match Java hashing (KafkaJS v2 gotcha)</div><pre><code>const { Partitioners } = require('kafkajs');
+kafka.producer({ createPartitioner: Partitioners.LegacyPartitioner });</code></pre><div class="n">KafkaJS v2 changed the default partitioner and warns. Use LegacyPartitioner to keep old key→partition mapping / match other clients.</div></div><div class="item"><div class="l">Choosing a key</div><div class="n">Pick a key with even cardinality (userId good; country bad → hot partition). Adding partitions later re-hashes keys and breaks existing per-key ordering.</div></div><h2>Consumers vs partitions — the three cases</h2><div class="item"><div class="l">Case 1: consumers &lt; partitions</div><div class="n">Some consumers own multiple partitions. Works, but uneven load. E.g. 3 partitions, 2 consumers → 2+1 split.</div></div><div class="item"><div class="l">Case 2: consumers == partitions</div><div class="n">Ideal 1:1 mapping — max parallelism, each consumer owns exactly one partition.</div></div><div class="item"><div class="l">Case 3: consumers &gt; partitions</div><div class="n">Extra consumers sit IDLE. Max useful consumers in a group = partition count. Add partitions to scale further.</div></div><div class="item"><div class="l">Multiple consumer groups = broadcast (pub/sub)</div><pre><code>kafka.consumer({ groupId: 'analytics' });
+kafka.consumer({ groupId: 'billing' });</code></pre><div class="n">Each group tracks its own offsets, so each group receives a FULL copy of every message. Within a group = load-balanced; across groups = fan-out.</div></div>
+<h2>Quick tips &amp; gotchas</h2><ul class="tips"><li>Ordering is per-partition only — never across a topic. Need global order? Use 1 partition (kills parallelism) or a shared key.</li><li>Same key → same partition → same consumer. Route related events (same userId) with a key to keep them ordered and co-located.</li><li>A consumer group can't use more consumers than partitions — extras stay idle. Provision partitions for your peak consumer count up front.</li><li>Kafka does not delete on read; it's retention-based. Replay by resetting offsets: kafka-consumer-groups.sh --reset-offsets --to-earliest --execute.</li><li>KafkaJS v2 changed the default partitioner (emits a warning). Set Partitioners.LegacyPartitioner for consistent hashing with Java/other producers.</li><li>Commit offset = last processed + 1. Committing message.offset (not +1) causes the last message to be reprocessed on restart.</li><li>Rebalancing pauses ALL consumption in the group. Keep eachMessage fast and call heartbeat() in long loops, or bump sessionTimeout, to avoid being kicked.</li><li>Adding partitions to a live topic breaks key→partition stability (keys re-hash) — plan partition count ahead; you can't cleanly decrease it.</li></ul>
+</div></body></html>

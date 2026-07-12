@@ -1,0 +1,101 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Cheat Sheet · Code along - Vercel</title><style>:root{--bg:#fff;--fg:#1a1a1a;--muted:#6b7280;--line:#e5e7eb;--accent:#0d9488;--card:#f9fafb;--code:#f3f4f6;--codefg:#111}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1115;--fg:#e6e6e6;--muted:#9aa0aa;--line:#242833;--accent:#2dd4bf;--card:#171a21;--code:#0b0e13;--codefg:#e6e6e6}}
+*{box-sizing:border-box}body{margin:0;font:16px/1.6 system-ui,Segoe UI,sans-serif;background:var(--bg);color:var(--fg)}
+.wrap{max-width:860px;margin:0 auto;padding:1.2rem}
+a.back{color:var(--accent);text-decoration:none;font-size:.9rem}
+h1{font-size:1.5rem;margin:.6rem 0 .2rem}.sub{color:var(--muted);margin:0 0 1.4rem}
+h2{font-size:1.1rem;margin:1.6rem 0 .5rem;color:var(--accent)}
+.item{border:1px solid var(--line);border-radius:10px;background:var(--card);padding:.6rem .8rem;margin:.5rem 0}
+.item .l{font-weight:700}
+.item .n{color:var(--muted);font-size:.92rem;margin-top:.2rem}
+pre{margin:.45rem 0 0;background:var(--code);color:var(--codefg);border:1px solid var(--line);border-radius:8px;padding:.6rem .8rem;overflow-x:auto}
+code,pre{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:.86rem}
+.tips{border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:10px;background:var(--card);padding:.6rem 1rem}
+.tips li{margin:.35rem 0}
+@media print{.back{display:none}}</style></head><body><div class="wrap">
+<a class="back" href="../revision.html">← Back to revision index</a>
+<h1>Code along - Vercel — Cheat Sheet</h1>
+<p class="sub">Cohort 2.0 · 4 lessons · quick reference</p>
+<h2>Setup &amp; Monorepo</h2><div class="item"><div class="l">Three backend services + one frontend, own tsconfig each</div><pre><code>upload/    # producer: clone repo -&gt; S3 -&gt; queue
+deploy/    # worker: queue -&gt; build -&gt; S3
+request/   # serve dist/&lt;id&gt;/* by subdomain
+frontend/  # React (Vite) dashboard</code></pre></div><div class="item"><div class="l">Core deps (each Node service)</div><pre><code>npm i express cors redis aws-sdk simple-git
+npm i -D typescript @types/express @types/cors ts-node</code></pre></div><div class="item"><div class="l">Run a service (dev)</div><pre><code>npx tsc -b &amp;&amp; node dist/index.js   # or: npx ts-node src/index.ts</code></pre></div><div class="item"><div class="l">Local Redis via Docker</div><pre><code>docker run -d -p 6379:6379 redis</code></pre></div><h2>Shared S3 / R2 client (aws.ts)</h2><div class="item"><div class="l">S3 client pointed at Cloudflare R2</div><pre><code>import { S3 } from "aws-sdk";
+export const s3 = new S3({
+  accessKeyId: process.env.S3_ACCESS_KEY,
+  secretAccessKey: process.env.S3_SECRET_KEY,
+  endpoint: "https://&lt;acct&gt;.r2.cloudflarestorage.com",
+});</code></pre><div class="n">R2 is S3-compatible: same SDK, just set endpoint. Never hardcode keys.</div></div><div class="item"><div class="l">Upload one file</div><pre><code>import fs from "fs";
+export const uploadFile = async (key: string, localPath: string) =&gt; {
+  await s3.upload({
+    Bucket: "vercel",
+    Key: key,
+    Body: fs.readFileSync(localPath),
+  }).promise();
+};</code></pre><div class="n">aws-sdk v2 calls need .promise() to await.</div></div><div class="item"><div class="l">Recursively list local files (source walk)</div><pre><code>export const getAllFiles = (dir: string): string[] =&gt;
+  fs.readdirSync(dir).flatMap(f =&gt; {
+    const p = path.join(dir, f);
+    return fs.statSync(p).isDirectory() ? getAllFiles(p) : [p];
+  });</code></pre></div><h2>Upload Service (producer)</h2><div class="item"><div class="l">Non-enumerable deployment id (not auto-increment)</div><pre><code>const chars = "abcdefghijklmnopqrstuvwxyz1234567890";
+export const generate = () =&gt;
+  Array.from({length:5}, () =&gt; chars[Math.floor(Math.random()*chars.length)]).join("");</code></pre><div class="n">Random id doubles as subdomain + S3 key prefix; sequential ids let others enumerate deployments.</div></div><div class="item"><div class="l">POST /deploy — clone, upload source, enqueue</div><pre><code>app.post("/deploy", async (req, res) =&gt; {
+  const { repoUrl } = req.body;
+  const id = generate();
+  await simpleGit().clone(repoUrl, path.join(__dirname, `output/${id}`));
+  const files = getAllFiles(path.join(__dirname, `output/${id}`));
+  await Promise.all(files.map(f =&gt;
+    uploadFile(f.slice(__dirname.length + 1), f)));
+  publisher.lPush("build-queue", id);
+  publisher.hSet("status", id, "uploaded");
+  res.json({ id });
+});</code></pre><div class="n">Return id immediately; the slow build happens async in the worker.</div></div><div class="item"><div class="l">GET /status?id= — for frontend polling</div><pre><code>app.get("/status", async (req, res) =&gt; {
+  const status = await subscriber.hGet("status", req.query.id as string);
+  res.json({ status });
+});</code></pre></div><div class="item"><div class="l">Redis clients</div><pre><code>import { createClient } from "redis";
+const publisher = createClient(); await publisher.connect();
+const subscriber = createClient(); await subscriber.connect();</code></pre></div><h2>Deploy Service (worker / consumer)</h2><div class="item"><div class="l">Blocking pull loop</div><pre><code>while (true) {
+  const res = await subscriber.brPop("build-queue", 0); // 0 = block forever
+  const id = res!.element;
+  await downloadS3Folder(`output/${id}`);
+  await buildProject(id);
+  await copyFinalDist(id);
+  await publisher.hSet("status", id, "deployed");
+}</code></pre><div class="n">brPop blocks with no busy-wait. LPUSH+BRPOP = FIFO at-least-once queue.</div></div><div class="item"><div class="l">Build with child_process, capture logs + exit code</div><pre><code>import { exec } from "child_process";
+export const buildProject = (id: string) =&gt; new Promise(resolve =&gt; {
+  const child = exec(`cd ${path.join(__dirname,`output/${id}`)} &amp;&amp; npm install &amp;&amp; npm run build`);
+  child.stdout?.on("data", d =&gt; console.log(d));
+  child.stderr?.on("data", d =&gt; console.error(d));
+  child.on("close", code =&gt; resolve(code));
+});</code></pre><div class="n">npm install runs untrusted postinstall scripts — sandbox in a container in prod.</div></div><div class="item"><div class="l">Download S3 prefix (stream each object)</div><pre><code>const list = await s3.listObjectsV2({Bucket:"vercel", Prefix:prefix}).promise();
+await Promise.all((list.Contents ?? []).map(({Key}) =&gt; new Promise(r =&gt; {
+  const out = path.join(__dirname, Key!);
+  fs.mkdirSync(path.dirname(out), {recursive:true});
+  s3.getObject({Bucket:"vercel", Key:Key!}).createReadStream()
+    .pipe(fs.createWriteStream(out)).on("finish", r);
+})));</code></pre></div><div class="item"><div class="l">Upload built dist under its own prefix</div><pre><code>export const copyFinalDist = (id: string) =&gt; {
+  const base = path.join(__dirname, `output/${id}/dist`);
+  getAllFiles(base).forEach(f =&gt;
+    uploadFile(`dist/${id}/` + f.slice(base.length + 1), f));
+};</code></pre><div class="n">Keep source (output/&lt;id&gt;) and build (dist/&lt;id&gt;) separate; artifact keyed by id =&gt; idempotent, rollback-able.</div></div><h2>Request Handler (serving)</h2><div class="item"><div class="l">Resolve subdomain -&gt; id, path -&gt; S3 key</div><pre><code>app.get("/*", async (req, res) =&gt; {
+  const id = req.hostname.split(".")[0];   // a1b2c3.domain.com
+  let filePath = req.path === "/" ? "/index.html" : req.path;
+  const obj = await s3.getObject({
+    Bucket: "vercel", Key: `dist/${id}${filePath}`,
+  }).promise();
+  res.set("Content-Type", contentType(filePath));
+  res.send(obj.Body);
+});</code></pre><div class="n">Default to index.html; for SPA client routes fall back to index.html on NoSuchKey, else return 404.</div></div><div class="item"><div class="l">MIME by extension (assets 404/blank if wrong)</div><pre><code>const contentType = (p: string) =&gt;
+  p.endsWith(".html") ? "text/html"
+: p.endsWith(".css")  ? "text/css"
+: p.endsWith(".js")   ? "application/javascript"
+: p.endsWith(".svg")  ? "image/svg+xml"
+: "application/octet-stream";</code></pre></div><h2>Frontend (React + Vite)</h2><div class="item"><div class="l">Upload then poll status until deployed</div><pre><code>const { data } = await axios.post(`${UPLOAD_URL}/deploy`, { repoUrl });
+setId(data.id);
+const t = setInterval(async () =&gt; {
+  const r = await axios.get(`${UPLOAD_URL}/status?id=${data.id}`);
+  if (r.data.status === "deployed") { clearInterval(t); setDone(true); }
+}, 3000);</code></pre><div class="n">Polling is stateless + reconnect-proof; fine for short builds. Use SSE/WebSocket for live log streaming.</div></div><div class="item"><div class="l">Surface the live URL</div><pre><code>{done &amp;&amp; &lt;a href={`http://${id}.localhost:3001/index.html`}&gt;
+  Visit deployment
+&lt;/a&gt;}</code></pre><div class="n">Subdomains on localhost work in Chrome without /etc/hosts edits.</div></div><div class="item"><div class="l">Env-based backend URL</div><pre><code>const UPLOAD_URL = import.meta.env.VITE_UPLOAD_URL; // Vite exposes VITE_* only</code></pre></div><h2>Config, DNS &amp; Production</h2><div class="item"><div class="l">Wildcard DNS -&gt; request handler</div><pre><code>*.yourdomain.com  A  &lt;request-handler-ip&gt;</code></pre><div class="n">One record routes every deployment subdomain to the same server; id parsed from Host header.</div></div><div class="item"><div class="l">Status state machine (hash in Redis)</div><pre><code>uploaded -&gt; building -&gt; deployed | failed</code></pre><div class="n">Atomic transitions; on build exit!=0 set status=failed and store stderr for the UI.</div></div><div class="item"><div class="l">Sandbox untrusted builds</div><pre><code># per-build ephemeral container, no host mounts, network + cpu/mem limits, hard timeout</code></pre><div class="n">Malicious postinstall can exfiltrate secrets — never build on the host.</div></div><div class="item"><div class="l">Durability upgrade path</div><pre><code>Redis LPUSH/BRPOP -&gt; Redis Streams (consumer groups) / SQS (visibility timeout + DLQ)</code></pre><div class="n">Naive RPOP loses in-flight jobs on worker crash; idempotent id-keyed builds make retries safe.</div></div><div class="item"><div class="l">CDN in front of serving</div><div class="n">Cache keyed on host+path so most requests never hit origin/S3.</div></div>
+<h2>Quick tips &amp; gotchas</h2><ul class="tips"><li>aws-sdk v2 calls are lazy — forget .promise() and nothing runs (or you await undefined). Migrate to @aws-sdk/client-s3 v3 for real promises.</li><li>Two Redis roles: the deploy worker BRPOPs the queue; the upload service HSETs status. Don't reuse a single subscribed connection for commands — a client in subscribe mode can't run normal commands.</li><li>Keep source and build artifacts under different prefixes (output/&lt;id&gt; vs dist/&lt;id&gt;). Serving the raw source instead of dist is the classic 'blank page' bug.</li><li>Set Content-Type from the file extension. Serving .js/.css as text/plain (or octet-stream) makes the browser refuse them and the site loads unstyled/broken.</li><li>Random, non-enumerable ids only — sequential ints let anyone guess other users' subdomains, and can collide under concurrent uploads.</li><li>At-least-once queue means a job can run twice; make builds idempotent and keyed by id so a re-run overwrites the same artifact rather than duplicating.</li><li>Capture build stdout/stderr + exit code and flip status to failed — a silent build failure looks identical to 'still building' to the user.</li><li>On localhost, id.localhost resolves automatically in Chrome; on a real domain you need a wildcard *.domain.com DNS record pointing at the request handler.</li></ul>
+</div></body></html>

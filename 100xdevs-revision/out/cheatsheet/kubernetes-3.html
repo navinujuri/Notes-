@@ -1,0 +1,65 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Cheat Sheet · Kubernetes Part 3 (Scaling)</title><style>:root{--bg:#fff;--fg:#1a1a1a;--muted:#6b7280;--line:#e5e7eb;--accent:#0d9488;--card:#f9fafb;--code:#f3f4f6;--codefg:#111}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1115;--fg:#e6e6e6;--muted:#9aa0aa;--line:#242833;--accent:#2dd4bf;--card:#171a21;--code:#0b0e13;--codefg:#e6e6e6}}
+*{box-sizing:border-box}body{margin:0;font:16px/1.6 system-ui,Segoe UI,sans-serif;background:var(--bg);color:var(--fg)}
+.wrap{max-width:860px;margin:0 auto;padding:1.2rem}
+a.back{color:var(--accent);text-decoration:none;font-size:.9rem}
+h1{font-size:1.5rem;margin:.6rem 0 .2rem}.sub{color:var(--muted);margin:0 0 1.4rem}
+h2{font-size:1.1rem;margin:1.6rem 0 .5rem;color:var(--accent)}
+.item{border:1px solid var(--line);border-radius:10px;background:var(--card);padding:.6rem .8rem;margin:.5rem 0}
+.item .l{font-weight:700}
+.item .n{color:var(--muted);font-size:.92rem;margin-top:.2rem}
+pre{margin:.45rem 0 0;background:var(--code);color:var(--codefg);border:1px solid var(--line);border-radius:8px;padding:.6rem .8rem;overflow-x:auto}
+code,pre{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:.86rem}
+.tips{border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:10px;background:var(--card);padding:.6rem 1rem}
+.tips li{margin:.35rem 0}
+@media print{.back{display:none}}</style></head><body><div class="wrap">
+<a class="back" href="../revision.html">← Back to revision index</a>
+<h1>Kubernetes Part 3 (Scaling) — Cheat Sheet</h1>
+<p class="sub">Cohort 2.0 · 9 lessons · quick reference</p>
+<h2>Scaling Basics &amp; Manual Scaling</h2><div class="item"><div class="l">Two axes of scaling</div><div class="n">Horizontal = more pod replicas (stateless, preferred). Vertical = bigger CPU/mem per pod (VPA, restarts pods). This lesson = horizontal.</div></div><div class="item"><div class="l">Set replicas declaratively in the Deployment</div><pre><code>spec:
+  replicas: 3   # kubectl apply -f deploy.yaml</code></pre><div class="n">Source of truth. HPA overrides this field at runtime — don't fight it by re-applying replicas.</div></div><div class="item"><div class="l">Scale imperatively (quick, ad-hoc)</div><pre><code>kubectl scale deployment myapp --replicas=5</code></pre></div><div class="item"><div class="l">Watch replicas roll out</div><pre><code>kubectl get deploy myapp -w
+kubectl get pods -l app=myapp -o wide</code></pre></div><div class="item"><div class="l">'Horizontal pod accelerator' = Horizontal Pod Autoscaler (HPA)</div><div class="n">Controller that auto-adjusts replicas based on observed metrics (CPU/mem/custom). Reconciles every ~15s.</div></div><h2>Prerequisite: metrics-server</h2><div class="item"><div class="l">HPA + `kubectl top` need metrics-server running</div><pre><code>kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml</code></pre><div class="n">No metrics-server =&gt; HPA shows targets as &lt;unknown&gt; and never scales.</div></div><div class="item"><div class="l">Local clusters (minikube/kind/k3d) need --kubelet-insecure-tls</div><pre><code># minikube shortcut
+minikube addons enable metrics-server</code></pre><div class="n">On kind, patch the deployment args to add --kubelet-insecure-tls or it CrashLoops on cert errors.</div></div><div class="item"><div class="l">Verify it works</div><pre><code>kubectl top nodes
+kubectl top pods</code></pre></div><h2>HorizontalPodAutoscaler (HPA)</h2><div class="item"><div class="l">Create imperatively</div><pre><code>kubectl autoscale deployment myapp \
+  --cpu-percent=50 --min=2 --max=10</code></pre></div><div class="item"><div class="l">Declarative HPA (autoscaling/v2 — current API)</div><pre><code>apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: myapp-hpa
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: myapp
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 50</code></pre><div class="n">averageUtilization is a % of the pod's CPU *request*, NOT the limit. No request set =&gt; HPA can't compute % =&gt; won't scale.</div></div><div class="item"><div class="l">Multiple / memory metrics</div><pre><code>  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: AverageValue
+        averageValue: 200Mi</code></pre><div class="n">With several metrics, HPA computes desiredReplicas for each and takes the MAX.</div></div><div class="item"><div class="l">Tune reaction speed (v2 behavior block)</div><pre><code>  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+    scaleUp:
+      stabilizationWindowSeconds: 0</code></pre><div class="n">Default scale-down window is 300s (prevents flapping). Scale-up is fast by default.</div></div><div class="item"><div class="l">Inspect</div><pre><code>kubectl get hpa
+kubectl describe hpa myapp-hpa   # see events + current metric</code></pre></div><h2>The Scaling Formula</h2><div class="item"><div class="l">Core formula</div><pre><code>desiredReplicas =
+  ceil[ currentReplicas * (currentMetric / desiredMetric) ]</code></pre></div><div class="item"><div class="l">Worked example</div><pre><code>3 pods, avg CPU = 90%, target = 50%
+= ceil[ 3 * (90/50) ] = ceil[5.4] = 6 pods</code></pre><div class="n">Result is clamped to [minReplicas, maxReplicas].</div></div><div class="item"><div class="l">Tolerance dead-zone (default 10%)</div><div class="n">If |currentMetric/desiredMetric - 1| &lt;= 0.1, HPA does nothing — avoids thrashing on tiny fluctuations.</div></div><div class="item"><div class="l">Ratio scale-down example</div><pre><code>6 pods, avg CPU = 20%, target = 50%
+= ceil[ 6 * (20/50) ] = ceil[2.4] = 3 pods</code></pre></div><h2>Resource Requests &amp; Limits</h2><div class="item"><div class="l">Set in the container spec (per container)</div><pre><code>resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 250m
+    memory: 256Mi</code></pre><div class="n">requests = guaranteed / used for scheduling + HPA %. limits = hard ceiling.</div></div><div class="item"><div class="l">CPU units</div><pre><code>1000m = 1 vCPU core   (100m = 0.1 core)</code></pre><div class="n">CPU is compressible: over limit =&gt; throttled, not killed.</div></div><div class="item"><div class="l">Memory units</div><pre><code>128Mi = 128 * 2^20 B   |   128M = 128 * 10^6 B</code></pre><div class="n">Memory is incompressible: exceed limit =&gt; OOMKilled. Use Mi/Gi (binary), not M/G.</div></div><div class="item"><div class="l">QoS classes (drives eviction order)</div><div class="n">Guaranteed = requests==limits on all containers. Burstable = requests&lt;limits. BestEffort = none set (evicted first under pressure).</div></div><div class="item"><div class="l">Requests power the scheduler AND the autoscaler</div><div class="n">Scheduler sums requests vs node allocatable. Cluster autoscaler adds nodes when requests can't fit; HPA % is relative to requests.</div></div><h2>Cluster Autoscaler (node scaling)</h2><div class="item"><div class="l">What it does</div><div class="n">HPA scales pods; Cluster Autoscaler scales NODES. Distinct controller, usually cloud-managed (EKS/GKE/AKS node groups).</div></div><div class="item"><div class="l">Scale-up trigger</div><div class="n">Fires when pods are stuck Pending due to insufficient CPU/mem (unschedulable). Adds a node from the node group.</div></div><div class="item"><div class="l">Scale-down trigger</div><div class="n">Removes a node underutilized (default &lt;50%) for ~10min if its pods can reschedule elsewhere. Blocked by pods with no controller, local storage, or restrictive PDBs.</div></div><div class="item"><div class="l">Diagnose why a pod won't schedule</div><pre><code>kubectl get pods --field-selector=status.phase=Pending
+kubectl describe pod &lt;pod&gt;   # look at Events: 0/3 nodes available</code></pre><div class="n">No requests set =&gt; CA can't reason about capacity and may not add nodes correctly.</div></div><div class="item"><div class="l">Full elastic stack</div><div class="n">HPA (pods) + Cluster Autoscaler (nodes) + requests/limits together = end-to-end elastic scaling.</div></div><h2>Lab: Load Test &amp; Debug</h2><div class="item"><div class="l">Generate CPU load against a Service</div><pre><code>kubectl run -it --rm load --image=busybox:1.28 --restart=Never -- \
+  /bin/sh -c "while true; do wget -q -O- http://myapp; done"</code></pre></div><div class="item"><div class="l">Watch HPA react in real time</div><pre><code>kubectl get hpa myapp-hpa -w</code></pre></div><div class="item"><div class="l">Live resource usage</div><pre><code>kubectl top pods -l app=myapp --containers</code></pre></div><div class="item"><div class="l">Expose the deployment (target for HPA/load)</div><pre><code>kubectl expose deployment myapp --port=80 --target-port=8080</code></pre></div><div class="item"><div class="l">Reset an HPA experiment</div><pre><code>kubectl delete hpa myapp-hpa
+kubectl scale deployment myapp --replicas=1</code></pre></div>
+<h2>Quick tips &amp; gotchas</h2><ul class="tips"><li>No resource *requests* = HPA can't compute CPU % and stays &lt;unknown&gt;. Always set requests before enabling HPA.</li><li>HPA utilization % is measured against the request, never the limit — a common source of confusion.</li><li>HPA needs metrics-server; on kind/minikube add --kubelet-insecure-tls or it CrashLoops on TLS.</li><li>Don't `kubectl apply` a Deployment with a hardcoded `replicas:` while an HPA manages it — they fight. Omit replicas or use apply server-side with the field ignored.</li><li>Default 10% tolerance means small metric drifts won't trigger scaling — expected, not a bug.</li><li>Memory over limit =&gt; OOMKilled (incompressible); CPU over limit =&gt; throttled (compressible). Size memory limits carefully.</li><li>Scale-down is deliberately slow (300s stabilization window) to prevent flapping; scale-up is fast.</li><li>HPA scales pods, Cluster Autoscaler scales nodes — you usually need both; nodes only get added when pods are Pending for lack of capacity.</li></ul>
+</div></body></html>

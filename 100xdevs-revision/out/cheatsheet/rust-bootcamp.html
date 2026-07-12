@@ -1,0 +1,130 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Cheat Sheet · Rust Bootcamp</title><style>:root{--bg:#fff;--fg:#1a1a1a;--muted:#6b7280;--line:#e5e7eb;--accent:#0d9488;--card:#f9fafb;--code:#f3f4f6;--codefg:#111}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1115;--fg:#e6e6e6;--muted:#9aa0aa;--line:#242833;--accent:#2dd4bf;--card:#171a21;--code:#0b0e13;--codefg:#e6e6e6}}
+*{box-sizing:border-box}body{margin:0;font:16px/1.6 system-ui,Segoe UI,sans-serif;background:var(--bg);color:var(--fg)}
+.wrap{max-width:860px;margin:0 auto;padding:1.2rem}
+a.back{color:var(--accent);text-decoration:none;font-size:.9rem}
+h1{font-size:1.5rem;margin:.6rem 0 .2rem}.sub{color:var(--muted);margin:0 0 1.4rem}
+h2{font-size:1.1rem;margin:1.6rem 0 .5rem;color:var(--accent)}
+.item{border:1px solid var(--line);border-radius:10px;background:var(--card);padding:.6rem .8rem;margin:.5rem 0}
+.item .l{font-weight:700}
+.item .n{color:var(--muted);font-size:.92rem;margin-top:.2rem}
+pre{margin:.45rem 0 0;background:var(--code);color:var(--codefg);border:1px solid var(--line);border-radius:8px;padding:.6rem .8rem;overflow-x:auto}
+code,pre{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:.86rem}
+.tips{border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:10px;background:var(--card);padding:.6rem 1rem}
+.tips li{margin:.35rem 0}
+@media print{.back{display:none}}</style></head><body><div class="wrap">
+<a class="back" href="../revision.html">← Back to revision index</a>
+<h1>Rust Bootcamp — Cheat Sheet</h1>
+<p class="sub">Cohort 2.0 · 23 lessons · quick reference</p>
+<h2>Setup, Cargo &amp; Project Layout</h2><div class="item"><div class="l">Install toolchain (rustup)</div><pre><code>curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+# Windows: download rustup-init.exe</code></pre><div class="n">Installs rustc, cargo, rustup. `rustup update` to upgrade; `rustup default stable`.</div></div><div class="item"><div class="l">Verify install</div><pre><code>rustc --version &amp;&amp; cargo --version</code></pre></div><div class="item"><div class="l">New project / new lib</div><pre><code>cargo new my_app        # binary (src/main.rs)
+cargo new my_lib --lib  # library (src/lib.rs)</code></pre><div class="n">Creates Cargo.toml + git repo. `cargo init` inside an existing dir.</div></div><div class="item"><div class="l">Build / run / check</div><pre><code>cargo run           # compile + run
+cargo build         # debug build -&gt; target/debug
+cargo build --release  # optimized -&gt; target/release
+cargo check         # typecheck only, no codegen (fast)</code></pre><div class="n">`cargo check` is the fastest feedback loop; use it while iterating.</div></div><div class="item"><div class="l">Format, lint, test</div><pre><code>cargo fmt           # rustfmt
+cargo clippy        # linter, catches idiom issues
+cargo test          # run #[test] fns</code></pre><div class="n">Clippy is the single biggest idiom teacher — run it often.</div></div><div class="item"><div class="l">VSCode setup</div><pre><code>// install extension: rust-analyzer (NOT the deprecated 'Rust')</code></pre><div class="n">rust-analyzer gives inline types, go-to-def, inlay hints. Add CodeLLDB for debugging.</div></div><div class="item"><div class="l">Hello world</div><pre><code>fn main() {
+    println!("Hello, world!");
+}</code></pre><div class="n">`println!` is a macro (note the `!`), not a function.</div></div><h2>Variables, Types &amp; Control Flow</h2><div class="item"><div class="l">Immutable by default / mut</div><pre><code>let x = 5;          // immutable
+let mut y = 10;     // mutable
+y += 1;</code></pre><div class="n">Reassigning an immutable `let` is a compile error. Mutability is opt-in.</div></div><div class="item"><div class="l">Type annotation &amp; inference</div><pre><code>let n: i64 = 42;
+let f = 3.14;       // inferred f64
+let b: bool = true;</code></pre><div class="n">Types inferred when unambiguous; integer default i32, float default f64.</div></div><div class="item"><div class="l">Shadowing</div><pre><code>let s = "42";
+let s: i32 = s.parse().unwrap();  // new var, new type</code></pre><div class="n">Shadowing creates a NEW binding — can change type; different from `mut`.</div></div><div class="item"><div class="l">Constants</div><pre><code>const MAX: u32 = 100_000;</code></pre><div class="n">Must have explicit type, UPPER_SNAKE, evaluated at compile time.</div></div><div class="item"><div class="l">Scalar types</div><pre><code>// i8..i128/isize, u8..u128/usize, f32/f64, bool, char
+let c: char = 'z';  // 4 bytes, Unicode scalar</code></pre><div class="n">`usize`/`isize` match pointer width; use `usize` for indexing.</div></div><div class="item"><div class="l">if / else (expression)</div><pre><code>let big = if n &gt; 10 { "yes" } else { "no" };</code></pre><div class="n">`if` is an expression; both arms must return the same type. No parens needed around condition.</div></div><div class="item"><div class="l">loop / while / for</div><pre><code>for i in 0..5 { println!("{i}"); }   // 0..5 exclusive, 0..=5 inclusive
+while n &gt; 0 { n -= 1; }
+let v = loop { break 42; };          // loop returns a value</code></pre><div class="n">`loop { break val; }` yields a value. Label loops with `'outer:` to break outer.</div></div><div class="item"><div class="l">Iterate a collection</div><pre><code>let arr = [1, 2, 3];
+for x in arr.iter() { println!("{x}"); }</code></pre></div><h2>Functions &amp; Ownership Core</h2><div class="item"><div class="l">Function signature</div><pre><code>fn add(a: i32, b: i32) -&gt; i32 {
+    a + b   // no semicolon = return expression
+}</code></pre><div class="n">Trailing expression (no `;`) is the return value. `return` also works but is non-idiomatic for the last line.</div></div><div class="item"><div class="l">Ownership rule</div><pre><code>let s1 = String::from("hi");
+let s2 = s1;        // s1 MOVED into s2
+// println!("{s1}"); // ERROR: value moved</code></pre><div class="n">Each value has ONE owner; when owner drops, value freed. Assignment/passing moves heap data.</div></div><div class="item"><div class="l">Clone (deep copy)</div><pre><code>let s2 = s1.clone();  // explicit deep copy, s1 still valid</code></pre><div class="n">Copy types (integers, bool, char, f64, fixed arrays of Copy) copy implicitly; heap types move.</div></div><div class="item"><div class="l">Borrowing (references)</div><pre><code>fn len(s: &amp;String) -&gt; usize { s.len() }
+len(&amp;s1);           // borrow, s1 keeps ownership</code></pre><div class="n">`&amp;` = shared/immutable borrow. Can have many `&amp;` at once.</div></div><div class="item"><div class="l">Mutable borrow</div><pre><code>fn push(s: &amp;mut String) { s.push_str("!"); }
+let mut s = String::from("hi");
+push(&amp;mut s);</code></pre><div class="n">Only ONE `&amp;mut` at a time, and no `&amp;` while a `&amp;mut` is live (data-race prevention at compile time).</div></div><div class="item"><div class="l">Stack vs heap (mental model)</div><pre><code>let x = 5;                 // stack: fixed size, fast
+let s = String::from("x"); // ptr/len/cap on stack, data on heap</code></pre><div class="n">Stack = LIFO, known size, cheap. Heap = dynamic size (String, Vec, Box), pointer lives on stack.</div></div><div class="item"><div class="l">Slices</div><pre><code>let s = String::from("hello world");
+let hello = &amp;s[0..5];   // &amp;str slice, borrows s</code></pre><div class="n">Slices are borrows into a contiguous sequence; `&amp;str` is a string slice, `&amp;[T]` a array/vec slice.</div></div><h2>Structs, Enums &amp; Pattern Matching</h2><div class="item"><div class="l">Struct definition</div><pre><code>struct User {
+    name: String,
+    age: u32,
+    active: bool,
+}
+let u = User { name: "a".into(), age: 30, active: true };</code></pre><div class="n">Tuple structs: `struct Point(i32, i32);`  Unit struct: `struct Unit;`</div></div><div class="item"><div class="l">impl block (methods)</div><pre><code>impl User {
+    fn new(name: String) -&gt; Self {
+        Self { name, age: 0, active: true }
+    }
+    fn greet(&amp;self) -&gt; String {
+        format!("Hi {}", self.name)
+    }
+}</code></pre><div class="n">`&amp;self` borrows, `&amp;mut self` mutates, `self` consumes. No `self` param = associated fn (call as `User::new`).</div></div><div class="item"><div class="l">Enums with data</div><pre><code>enum Shape {
+    Circle(f64),
+    Rect { w: f64, h: f64 },
+    Unit,
+}</code></pre><div class="n">Each variant can carry different data. Enums are Rust's tagged unions / sum types.</div></div><div class="item"><div class="l">match (exhaustive)</div><pre><code>let area = match shape {
+    Shape::Circle(r) =&gt; 3.14 * r * r,
+    Shape::Rect { w, h } =&gt; w * h,
+    Shape::Unit =&gt; 0.0,
+};</code></pre><div class="n">`match` MUST be exhaustive; use `_ =&gt;` as catch-all. It's an expression returning a value.</div></div><div class="item"><div class="l">if let / while let</div><pre><code>if let Some(x) = maybe {
+    println!("{x}");
+}</code></pre><div class="n">Concise single-pattern match; skip the boilerplate when you only care about one variant.</div></div><div class="item"><div class="l">match guards &amp; binding</div><pre><code>match n {
+    x if x &lt; 0 =&gt; "neg",
+    0 =&gt; "zero",
+    _ =&gt; "pos",
+}</code></pre></div><div class="item"><div class="l">Derive traits</div><pre><code>#[derive(Debug, Clone, PartialEq)]
+struct P { x: i32 }
+println!("{:?}", p);  // Debug print</code></pre><div class="n">`{:?}` needs Debug, `{:#?}` pretty-prints. Common derives: Debug, Clone, Copy, PartialEq, Eq, Hash, Default.</div></div><h2>Error Handling: Result &amp; Option</h2><div class="item"><div class="l">Option enum</div><pre><code>enum Option&lt;T&gt; { Some(T), None }
+let found: Option&lt;i32&gt; = v.iter().position(|&amp;x| x == 3).map(|i| i as i32);</code></pre><div class="n">Replaces null. Compiler forces you to handle `None`.</div></div><div class="item"><div class="l">Result enum</div><pre><code>enum Result&lt;T, E&gt; { Ok(T), Err(E) }
+fn parse(s: &amp;str) -&gt; Result&lt;i32, std::num::ParseIntError&gt; {
+    s.parse::&lt;i32&gt;()
+}</code></pre></div><div class="item"><div class="l">? operator (propagate)</div><pre><code>fn read() -&gt; Result&lt;String, std::io::Error&gt; {
+    let s = std::fs::read_to_string("f.txt")?;  // early-return Err
+    Ok(s)
+}</code></pre><div class="n">`?` unwraps Ok/Some or returns the Err/None early. Only usable in fns returning Result/Option.</div></div><div class="item"><div class="l">unwrap / expect</div><pre><code>let n = "5".parse::&lt;i32&gt;().unwrap();       // panics on Err
+let n = "5".parse::&lt;i32&gt;().expect("bad"); // panics with msg</code></pre><div class="n">Fine for prototypes/tests; avoid in library code — prefer `?` or match.</div></div><div class="item"><div class="l">Handle Option safely</div><pre><code>match config.get("key") {
+    Some(v) =&gt; println!("{v}"),
+    None =&gt; println!("missing"),
+}
+// or: let v = opt.unwrap_or("default");</code></pre><div class="n">Combinators: `unwrap_or`, `unwrap_or_else`, `map`, `and_then`, `ok_or`.</div></div><div class="item"><div class="l">panic! (unrecoverable)</div><pre><code>panic!("unreachable state");</code></pre><div class="n">Unwinds the stack. Use for bugs/invariants, not expected errors.</div></div><h2>Collections &amp; Iterators</h2><div class="item"><div class="l">Vec (growable array)</div><pre><code>let mut v: Vec&lt;i32&gt; = Vec::new();
+v.push(1); v.push(2);
+let v2 = vec![1, 2, 3];
+let first = v2[0];          // panics if OOB
+let safe = v2.get(0);       // Option&lt;&amp;i32&gt;</code></pre><div class="n">`v.get(i)` returns Option (safe); indexing panics on out-of-bounds.</div></div><div class="item"><div class="l">String vs &amp;str</div><pre><code>let owned: String = String::from("hi");
+let slice: &amp;str = "literal";
+let joined = owned + "!";   // + takes String + &amp;str</code></pre><div class="n">`String` = owned/growable heap; `&amp;str` = borrowed view. `.to_string()` / `.into()` to convert.</div></div><div class="item"><div class="l">HashMap</div><pre><code>use std::collections::HashMap;
+let mut m: HashMap&lt;String, i32&gt; = HashMap::new();
+m.insert("a".into(), 1);
+let v = m.get("a");                 // Option&lt;&amp;i32&gt;
+*m.entry("a".into()).or_insert(0) += 1;</code></pre><div class="n">`entry().or_insert()` is the idiomatic upsert pattern.</div></div><div class="item"><div class="l">Iterator chains</div><pre><code>let sum: i32 = v.iter()
+    .filter(|&amp;&amp;x| x % 2 == 0)
+    .map(|&amp;x| x * 2)
+    .sum();</code></pre><div class="n">Iterators are lazy — nothing runs until a consumer (`sum`, `collect`, `for`, `count`).</div></div><div class="item"><div class="l">collect into a Vec</div><pre><code>let doubled: Vec&lt;i32&gt; = v.iter().map(|x| x * 2).collect();</code></pre><div class="n">`collect()` often needs a type hint (turbofish `::&lt;Vec&lt;_&gt;&gt;()` or annotation).</div></div><div class="item"><div class="l">enumerate / zip</div><pre><code>for (i, val) in v.iter().enumerate() { }
+for (a, b) in va.iter().zip(vb.iter()) { }</code></pre></div><h2>Advanced: Traits, Generics, Lifetimes, Concurrency, Async</h2><div class="item"><div class="l">Trait (shared behavior)</div><pre><code>trait Summary {
+    fn summarize(&amp;self) -&gt; String;
+    fn preview(&amp;self) -&gt; String { "...".into() } // default impl
+}
+impl Summary for User {
+    fn summarize(&amp;self) -&gt; String { self.name.clone() }
+}</code></pre><div class="n">Traits = interfaces. `impl Trait for Type`. Default methods can be overridden.</div></div><div class="item"><div class="l">Generics + trait bounds</div><pre><code>fn largest&lt;T: PartialOrd&gt;(list: &amp;[T]) -&gt; &amp;T {
+    let mut max = &amp;list[0];
+    for x in list { if x &gt; max { max = x; } }
+    max
+}</code></pre><div class="n">`&lt;T: Bound&gt;` or `where T: Bound`. Bounds let you call trait methods on generic types.</div></div><div class="item"><div class="l">dyn / impl Trait</div><pre><code>fn make() -&gt; impl Summary { User::new("a".into()) }   // static
+let items: Vec&lt;Box&lt;dyn Summary&gt;&gt; = vec![];            // dynamic dispatch</code></pre><div class="n">`impl Trait` = monomorphized (fast). `dyn Trait` = runtime vtable, needs Box/&amp;.</div></div><div class="item"><div class="l">Lifetimes</div><pre><code>fn longest&lt;'a&gt;(x: &amp;'a str, y: &amp;'a str) -&gt; &amp;'a str {
+    if x.len() &gt; y.len() { x } else { y }
+}</code></pre><div class="n">Lifetimes tie output ref validity to inputs; no runtime cost — purely compile-time checking.</div></div><div class="item"><div class="l">Threads</div><pre><code>use std::thread;
+let h = thread::spawn(|| { /* work */ });
+h.join().unwrap();</code></pre><div class="n">Move data in with `move ||`. Share with `Arc&lt;Mutex&lt;T&gt;&gt;` for mutable shared state.</div></div><div class="item"><div class="l">Arc + Mutex (shared mutable)</div><pre><code>use std::sync::{Arc, Mutex};
+let data = Arc::new(Mutex::new(0));
+let d = Arc::clone(&amp;data);
+thread::spawn(move || { *d.lock().unwrap() += 1; });</code></pre><div class="n">`Arc` = atomic refcount for sharing across threads; `Mutex` = interior mutability with lock.</div></div><div class="item"><div class="l">Async (tokio)</div><pre><code>// Cargo.toml: tokio = { version = "1", features = ["full"] }
+#[tokio::main]
+async fn main() {
+    let res = fetch().await;
+}
+async fn fetch() -&gt; u32 { 42 }</code></pre><div class="n">`async fn` returns a Future; nothing runs until `.await`ed on a runtime (tokio/async-std).</div></div><div class="item"><div class="l">Declarative macros</div><pre><code>macro_rules! square {
+    ($x:expr) =&gt; { $x * $x };
+}
+let n = square!(4);   // 16</code></pre><div class="n">Macros expand at compile time. `!` marks a macro call (println!, vec!, format!).</div></div><div class="item"><div class="l">External deps (Cargo.toml)</div><pre><code>[dependencies]
+serde = { version = "1", features = ["derive"] }
+rand = "0.8"</code></pre><div class="n">`cargo add serde --features derive` edits Cargo.toml for you. Crates from crates.io.</div></div>
+<h2>Quick tips &amp; gotchas</h2><ul class="tips"><li>Run `cargo clippy` constantly — it teaches idiomatic Rust and catches the mistakes the compiler allows but shouldn't.</li><li>The borrow checker rule of thumb: many immutable borrows OR exactly one mutable borrow, never both simultaneously.</li><li>Move vs Copy: primitives (i32, bool, char, f64) copy implicitly; heap types (String, Vec, Box) MOVE — use `.clone()` when you genuinely need a second owner.</li><li>Avoid `.unwrap()`/`.expect()` in real code; propagate with `?` or handle with `match`. Reserve panics for true invariant violations.</li><li>`match` must be exhaustive — the compiler forces you to handle every enum variant, including `None`, which is how Rust kills null-pointer bugs.</li><li>Iterators are lazy: chains of `map`/`filter` do nothing until a consumer like `collect`, `sum`, or a `for` loop drives them.</li><li>Prefer `&amp;str` for function params and `String` for owned/returned data; prefer `&amp;[T]` over `&amp;Vec&lt;T&gt;` for slice params.</li><li>String indexing (`s[0]`) is NOT allowed — strings are UTF-8; use `.chars()`, `.bytes()`, or slice byte ranges carefully.</li></ul>
+</div></body></html>

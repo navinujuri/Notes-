@@ -1,0 +1,74 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Cheat Sheet · Turborepo and Monorepos</title><style>:root{--bg:#fff;--fg:#1a1a1a;--muted:#6b7280;--line:#e5e7eb;--accent:#0d9488;--card:#f9fafb;--code:#f3f4f6;--codefg:#111}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1115;--fg:#e6e6e6;--muted:#9aa0aa;--line:#242833;--accent:#2dd4bf;--card:#171a21;--code:#0b0e13;--codefg:#e6e6e6}}
+*{box-sizing:border-box}body{margin:0;font:16px/1.6 system-ui,Segoe UI,sans-serif;background:var(--bg);color:var(--fg)}
+.wrap{max-width:860px;margin:0 auto;padding:1.2rem}
+a.back{color:var(--accent);text-decoration:none;font-size:.9rem}
+h1{font-size:1.5rem;margin:.6rem 0 .2rem}.sub{color:var(--muted);margin:0 0 1.4rem}
+h2{font-size:1.1rem;margin:1.6rem 0 .5rem;color:var(--accent)}
+.item{border:1px solid var(--line);border-radius:10px;background:var(--card);padding:.6rem .8rem;margin:.5rem 0}
+.item .l{font-weight:700}
+.item .n{color:var(--muted);font-size:.92rem;margin-top:.2rem}
+pre{margin:.45rem 0 0;background:var(--code);color:var(--codefg);border:1px solid var(--line);border-radius:8px;padding:.6rem .8rem;overflow-x:auto}
+code,pre{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:.86rem}
+.tips{border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:10px;background:var(--card);padding:.6rem 1rem}
+.tips li{margin:.35rem 0}
+@media print{.back{display:none}}</style></head><body><div class="wrap">
+<a class="back" href="../revision.html">← Back to revision index</a>
+<h1>Turborepo and Monorepos — Cheat Sheet</h1>
+<p class="sub">Cohort 2.0 · 18 lessons · quick reference</p>
+<h2>Monorepo Concepts &amp; Why</h2><div class="item"><div class="l">Monorepo</div><div class="n">One repo holding many apps + packages, versioned together. NOT one giant app (that's a monolith).</div></div><div class="item"><div class="l">Why</div><div class="n">Atomic cross-package commits, shared code/config/tooling, single install, easy refactors, consistent deps. Cost: needs a task orchestrator to stay fast.</div></div><div class="item"><div class="l">Polyrepo pain it solves</div><div class="n">No more publishing internal libs to npm just to share; import via workspace protocol instead.</div></div><div class="item"><div class="l">Typical layout</div><pre><code>apps/       # deployables (web, docs, api)
+packages/   # shared libs (ui, config, utils)</code></pre></div><h2>Node.js Monorepo Tooling</h2><div class="item"><div class="l">Workspaces (built-in)</div><div class="n">npm/yarn/pnpm all support workspaces = symlink local packages into node_modules. The foundation everything else builds on.</div></div><div class="item"><div class="l">Turborepo</div><div class="n">Task orchestrator + cache layer over workspaces. Doesn't bundle — runs YOUR scripts smartly.</div></div><div class="item"><div class="l">Nx</div><div class="n">Heavier: orchestration + generators + plugins + graph. More opinionated than Turbo.</div></div><div class="item"><div class="l">Lerna</div><div class="n">Original JS monorepo tool; now focuses on versioning/publishing (delegates task running to Nx).</div></div><div class="item"><div class="l">Changesets</div><div class="n">Common companion for versioning + changelogs + publishing packages.</div></div><h2>Build System vs Orchestrator</h2><div class="item"><div class="l">Build system / bundler</div><div class="n">tsc, webpack, vite, next build, esbuild — transforms source into artifacts.</div></div><div class="item"><div class="l">Orchestrator (Turborepo)</div><div class="n">Decides WHAT to run, in WHAT ORDER, in PARALLEL, and skips work via cache. Calls the build systems; never replaces them.</div></div><div class="item"><div class="l">History</div><div class="n">Turborepo built by Jared Palmer, acquired by Vercel (Dec 2021). v2.0 (2024) renamed turbo.json `pipeline` -&gt; `tasks`.</div></div><h2>Initialize &amp; Folder Structure</h2><div class="item"><div class="l">Scaffold new monorepo</div><pre><code>npx create-turbo@latest
+# pick package manager (pnpm recommended)</code></pre></div><div class="item"><div class="l">Add turbo to existing repo</div><pre><code>pnpm add turbo -Dw   # -w = root/workspace</code></pre></div><div class="item"><div class="l">Default structure</div><pre><code>apps/
+  web/    docs/          # Next.js apps
+packages/
+  ui/                     # @repo/ui shared components
+  eslint-config/          # @repo/eslint-config
+  typescript-config/      # @repo/typescript-config
+turbo.json
+package.json
+pnpm-workspace.yaml</code></pre></div><div class="item"><div class="l">Internal package naming</div><div class="n">Convention: @repo/* (or your org scope). private:true so it never publishes to npm.</div></div><h2>Workspaces &amp; package.json</h2><div class="item"><div class="l">Root package.json</div><pre><code>{
+  "name": "monorepo",
+  "private": true,
+  "packageManager": "pnpm@9.0.0",
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "lint": "turbo run lint"
+  },
+  "devDependencies": { "turbo": "^2.0.0" }
+}</code></pre><div class="n">private:true is REQUIRED at root. No source here — only scripts + shared devDeps.</div></div><div class="item"><div class="l">Declare workspaces (npm/yarn)</div><pre><code>"workspaces": ["apps/*", "packages/*"]</code></pre></div><div class="item"><div class="l">Declare workspaces (pnpm)</div><pre><code># pnpm-workspace.yaml
+packages:
+  - "apps/*"
+  - "packages/*"</code></pre><div class="n">pnpm ignores the package.json workspaces field — uses this YAML instead.</div></div><div class="item"><div class="l">Consume a local package</div><pre><code>// apps/web/package.json
+"dependencies": {
+  "@repo/ui": "workspace:*"
+}</code></pre><div class="n">workspace:* = always link the local version, never fetch from npm.</div></div><div class="item"><div class="l">packages/ui — expose entrypoints</div><pre><code>// packages/ui/package.json
+{
+  "name": "@repo/ui",
+  "exports": {
+    "./button": "./src/button.tsx",
+    "./card": "./src/card.tsx"
+  }
+}</code></pre><div class="n">Modern approach ships raw TS/TSX; the consuming app transpiles it (Next: transpilePackages: ['@repo/ui']).</div></div><div class="item"><div class="l">Import shared code</div><pre><code>import { Button } from "@repo/ui/button";</code></pre></div><h2>Running Tasks (turbo CLI)</h2><div class="item"><div class="l">Run a task across all packages</div><pre><code>turbo run build</code></pre></div><div class="item"><div class="l">Run dev for everything</div><pre><code>turbo run dev   # parallel, persistent</code></pre></div><div class="item"><div class="l">Filter to one app</div><pre><code>turbo run build --filter=web</code></pre></div><div class="item"><div class="l">App + its dependencies</div><pre><code>turbo run build --filter=web...   # ... = include deps</code></pre></div><div class="item"><div class="l">Only changed since a ref</div><pre><code>turbo run build --filter='...[origin/main]'</code></pre></div><div class="item"><div class="l">Ignore cache / force rerun</div><pre><code>turbo run build --force</code></pre></div><div class="item"><div class="l">See plan without executing</div><pre><code>turbo run build --dry-run</code></pre></div><div class="item"><div class="l">Prune for Docker</div><pre><code>turbo prune web --docker</code></pre><div class="n">Emits a minimal subset (out/) with only web + its deps — small, cacheable Docker layers.</div></div><h2>turbo.json Config</h2><div class="item"><div class="l">Basic tasks pipeline</div><pre><code>{
+  "$schema": "https://turbo.build/schema.json",
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": [".next/**", "!.next/cache/**", "dist/**"]
+    },
+    "lint": {},
+    "dev": { "cache": false, "persistent": true }
+  }
+}</code></pre><div class="n">Key is `tasks` in v2+ (was `pipeline`). `dev` must set persistent:true (long-running) and cache:false.</div></div><div class="item"><div class="l">^ prefix = topological dep</div><pre><code>"dependsOn": ["^build"]</code></pre><div class="n">^build = build all internal DEPENDENCIES first. Bare "build" = a task in the SAME package must run first.</div></div><div class="item"><div class="l">outputs = what to cache</div><div class="n">Files Turbo saves/restores on a cache hit. Miss these and restore produces empty dirs. ! excludes.</div></div><div class="item"><div class="l">inputs = what invalidates cache</div><pre><code>"test": { "inputs": ["src/**", "test/**"] }</code></pre><div class="n">Narrow inputs so unrelated file changes don't bust the cache.</div></div><div class="item"><div class="l">Env vars in hash</div><pre><code>"build": { "env": ["API_URL"] }
+// or global:
+"globalEnv": ["NODE_ENV"]</code></pre><div class="n">Env vars affecting output MUST be listed or Turbo serves a stale cached build.</div></div><div class="item"><div class="l">Global invalidators</div><pre><code>"globalDependencies": [".env", "tsconfig.json"]</code></pre><div class="n">Changing these busts the cache for ALL tasks.</div></div><div class="item"><div class="l">Quiet cached logs</div><pre><code>"outputLogs": "new-only"</code></pre></div><h2>Caching, React &amp; Node Apps</h2><div class="item"><div class="l">How caching works</div><div class="n">Turbo hashes inputs (files + deps + env + config). Same hash -&gt; skips task, restores outputs + replays logs. '&gt;&gt;&gt; FULL TURBO' = everything hit.</div></div><div class="item"><div class="l">Local cache location</div><pre><code>node_modules/.turbo   (and .turbo/)</code></pre></div><div class="item"><div class="l">Remote cache (share across CI/team)</div><pre><code>turbo login
+turbo link</code></pre><div class="n">Free with Vercel; or self-host. CI reuses a teammate's/previous build's artifacts.</div></div><div class="item"><div class="l">Add a React (Next.js) app</div><pre><code>cd apps &amp;&amp; npx create-next-app@latest web
+# then add "@repo/ui": "workspace:*" and
+# transpilePackages: ['@repo/ui'] in next.config</code></pre></div><div class="item"><div class="l">Add a Node.js app</div><pre><code>mkdir apps/api
+# package.json: name @repo/api, scripts build(tsc)/dev/start
+# turbo picks up build/dev automatically via turbo.json tasks</code></pre></div><div class="item"><div class="l">Add a common shared module</div><pre><code>packages/utils/
+  package.json  -&gt; name "@repo/utils", exports "./index"
+  src/index.ts
+# consume: "@repo/utils": "workspace:*"</code></pre><div class="n">Run pnpm install after adding a package so symlinks + graph update.</div></div>
+<h2>Quick tips &amp; gotchas</h2><ul class="tips"><li>v2 breaking change: turbo.json uses `tasks`, not `pipeline`. Old repos on v1 still use `pipeline`.</li><li>Root package.json MUST be private:true, and each shared package should be private:true unless you actually publish it.</li><li>Empty dirs after a cache hit? Your `outputs` glob is wrong/missing — Turbo only restores what you list.</li><li>Stale build after changing an env var? Add it to task `env` or `globalEnv` so it enters the cache hash.</li><li>cache:false + persistent:true is mandatory for `dev` and any watch/long-running task.</li><li>Use `--filter=app...` to include deps and `--filter='[HEAD^1]'` in CI to build only what changed.</li><li>pnpm reads pnpm-workspace.yaml, NOT the package.json `workspaces` field — set the right one for your PM.</li><li>Turborepo orchestrates and caches; it never bundles. Your tsc/next/vite scripts still do the actual building.</li></ul>
+</div></body></html>

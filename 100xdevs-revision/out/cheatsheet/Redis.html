@@ -1,0 +1,103 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Cheat Sheet · Redis (Pub subs and Messaging queues)</title><style>:root{--bg:#fff;--fg:#1a1a1a;--muted:#6b7280;--line:#e5e7eb;--accent:#0d9488;--card:#f9fafb;--code:#f3f4f6;--codefg:#111}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1115;--fg:#e6e6e6;--muted:#9aa0aa;--line:#242833;--accent:#2dd4bf;--card:#171a21;--code:#0b0e13;--codefg:#e6e6e6}}
+*{box-sizing:border-box}body{margin:0;font:16px/1.6 system-ui,Segoe UI,sans-serif;background:var(--bg);color:var(--fg)}
+.wrap{max-width:860px;margin:0 auto;padding:1.2rem}
+a.back{color:var(--accent);text-decoration:none;font-size:.9rem}
+h1{font-size:1.5rem;margin:.6rem 0 .2rem}.sub{color:var(--muted);margin:0 0 1.4rem}
+h2{font-size:1.1rem;margin:1.6rem 0 .5rem;color:var(--accent)}
+.item{border:1px solid var(--line);border-radius:10px;background:var(--card);padding:.6rem .8rem;margin:.5rem 0}
+.item .l{font-weight:700}
+.item .n{color:var(--muted);font-size:.92rem;margin-top:.2rem}
+pre{margin:.45rem 0 0;background:var(--code);color:var(--codefg);border:1px solid var(--line);border-radius:8px;padding:.6rem .8rem;overflow-x:auto}
+code,pre{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:.86rem}
+.tips{border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:10px;background:var(--card);padding:.6rem 1rem}
+.tips li{margin:.35rem 0}
+@media print{.back{display:none}}</style></head><body><div class="wrap">
+<a class="back" href="../revision.html">← Back to revision index</a>
+<h1>Redis (Pub subs and Messaging queues) — Cheat Sheet</h1>
+<p class="sub">Cohort 2.0 · 9 lessons · quick reference</p>
+<h2>Setup &amp; Starting Redis Locally</h2><div class="item"><div class="l">Run via Docker (fastest, recommended)</div><pre><code>docker run -d --name redis -p 6379:6379 redis
+# with persistence volume
+docker run -d --name redis -p 6379:6379 -v redis-data:/data redis redis-server --appendonly yes</code></pre><div class="n">Default port 6379. -d = detached. Data lost on container rm unless volume mounted.</div></div><div class="item"><div class="l">Install natively</div><pre><code># macOS
+brew install redis &amp;&amp; brew services start redis
+# Ubuntu/Debian
+sudo apt install redis-server &amp;&amp; sudo systemctl start redis
+# Windows: use Docker or WSL2 (no official native build)</code></pre></div><div class="item"><div class="l">Connect with the CLI</div><pre><code>redis-cli                 # localhost:6379
+redis-cli -h host -p 6379 -a &lt;password&gt;
+redis-cli ping            # -&gt; PONG
+redis-cli -u redis://default:pass@host:6379</code></pre></div><div class="item"><div class="l">Managed / hosted</div><pre><code># Redis Cloud, AWS ElastiCache, Upstash
+# connect via TLS URL:
+redis-cli -u rediss://default:&lt;pass&gt;@&lt;host&gt;:6379</code></pre><div class="n">rediss:// (double s) = TLS. Managed services are the norm in production.</div></div><div class="item"><div class="l">Quick health/inspect</div><pre><code>redis-cli info
+redis-cli monitor          # live stream of every command (debug only)
+redis-cli keys '*'         # NEVER in prod - blocks; use SCAN</code></pre></div><h2>Redis as a DB — Core Commands</h2><div class="item"><div class="l">Strings (get/set + expiry)</div><pre><code>SET user:1 "chan"
+GET user:1
+SET session:abc "data" EX 3600     # expire in 3600s
+SETEX session:abc 3600 "data"       # same thing
+TTL session:abc                     # seconds left, -1 none, -2 gone
+INCR counter                        # atomic ++
+INCRBY counter 10</code></pre><div class="n">SET ... NX = set only if not exists (great for locks). GET on missing key = nil.</div></div><div class="item"><div class="l">Hashes (objects)</div><pre><code>HSET user:1 name chan age 30
+HGET user:1 name
+HGETALL user:1
+HINCRBY user:1 age 1</code></pre><div class="n">Store an object as one key instead of many string keys.</div></div><div class="item"><div class="l">Sets &amp; Sorted Sets</div><pre><code>SADD tags a b c            # unique members
+SMEMBERS tags
+SISMEMBER tags a          # 1/0
+ZADD leaderboard 100 chan 90 alice   # score member
+ZRANGE leaderboard 0 -1 WITHSCORES REV  # top-first</code></pre><div class="n">Sorted sets = leaderboards, rate limiters, delayed queues (score = timestamp).</div></div><div class="item"><div class="l">Keys, expiry &amp; delete</div><pre><code>EXPIRE key 60
+PERSIST key                # remove TTL
+DEL key
+EXISTS key
+SCAN 0 MATCH user:* COUNT 100   # cursor-based, non-blocking</code></pre></div><div class="item"><div class="l">When to use Redis as DB</div><div class="n">In-memory = blazing fast but volatile. Ideal for caching, sessions, counters, rate-limiting, leaderboards. Not a durable primary store unless AOF/RDB persistence tuned — treat as cache-first.</div></div><h2>Redis as a Queue (Lists)</h2><div class="item"><div class="l">Producer pushes, worker pops (FIFO)</div><pre><code># producer
+LPUSH jobs '{"id":1,"task":"email"}'
+# consumer (FIFO): push left, pop right
+RPOP jobs
+LLEN jobs                  # queue depth</code></pre><div class="n">LPUSH + RPOP = FIFO. LPUSH + LPOP = LIFO (stack). Pick one convention and stick to it.</div></div><div class="item"><div class="l">Blocking pop (efficient worker loop)</div><pre><code>BRPOP jobs 0               # block forever until an item
+BRPOP jobs 5               # block up to 5s, then nil
+# returns [listName, value]</code></pre><div class="n">Use BRPOP, NOT a RPOP polling loop — blocking avoids hammering the server. timeout 0 = wait indefinitely.</div></div><div class="item"><div class="l">Reliable queue (survive worker crash)</div><pre><code>BLMOVE jobs processing LEFT RIGHT 0
+# ... do work ...
+LREM processing 1 &lt;value&gt;   # ack: remove from processing</code></pre><div class="n">Plain BRPOP loses the message if the worker dies mid-job. BLMOVE atomically moves to a 'processing' list so you can recover/retry. (RPOPLPUSH/BRPOPLPUSH are the deprecated equivalents.)</div></div><div class="item"><div class="l">Pub/Sub vs Queue — the key difference</div><div class="n">Queue (list): message consumed by exactly ONE worker, persists until popped, work is load-balanced. Pub/Sub: fire-and-forget broadcast to ALL current subscribers, nothing stored — offline subscribers miss it.</div></div><div class="item"><div class="l">Streams (durable queue upgrade)</div><pre><code>XADD mystream '*' task email
+XREAD BLOCK 0 STREAMS mystream $
+XGROUP CREATE mystream grp1 0
+XREADGROUP GROUP grp1 c1 COUNT 1 STREAMS mystream &gt;</code></pre><div class="n">Redis Streams = persistent log + consumer groups + acks (XACK). Use over lists when you need replay, multiple consumer groups, or delivery guarantees.</div></div><h2>Node.js — Connecting &amp; Data Ops</h2><div class="item"><div class="l">node-redis (official) setup</div><pre><code>// npm i redis
+import { createClient } from 'redis';
+const client = createClient({ url: 'redis://localhost:6379' });
+client.on('error', e =&gt; console.error('Redis', e));
+await client.connect();</code></pre><div class="n">v4+ is promise-based and requires explicit await client.connect(). Commands are camelCase (client.hSet).</div></div><div class="item"><div class="l">Basic commands (async)</div><pre><code>await client.set('user:1', 'chan', { EX: 3600 });
+const v = await client.get('user:1');
+await client.hSet('user:1', { name: 'chan', age: 30 });
+await client.incr('counter');
+await client.lPush('jobs', JSON.stringify(job));</code></pre><div class="n">Redis stores strings — JSON.stringify/parse objects yourself.</div></div><div class="item"><div class="l">ioredis (popular alt) setup</div><pre><code>// npm i ioredis
+import Redis from 'ioredis';
+const redis = new Redis('redis://localhost:6379');
+await redis.set('k', 'v');
+await redis.lpush('jobs', data);</code></pre><div class="n">ioredis auto-connects (no .connect()), uses lowercase method names, has built-in cluster/sentinel support.</div></div><div class="item"><div class="l">Worker loop (blocking pop)</div><pre><code>while (true) {
+  const res = await client.brPop('jobs', 0); // {key, element}
+  const job = JSON.parse(res.element);
+  await handle(job);
+}</code></pre><div class="n">Run the blocking loop on a DEDICATED client — the connection is busy while blocked and can't issue other commands.</div></div><h2>Pub/Sub — CLI Commands</h2><div class="item"><div class="l">Subscribe &amp; publish</div><pre><code># terminal 1
+SUBSCRIBE news
+# terminal 2
+PUBLISH news "hello"        # -&gt; returns # of subscribers that got it</code></pre><div class="n">PUBLISH returns the count of receivers. If 0 subscribers, the message vanishes — no storage, no replay.</div></div><div class="item"><div class="l">Pattern subscribe</div><pre><code>PSUBSCRIBE news.*          # matches news.sports, news.tech
+PUBLISH news.sports "goal!"
+PUNSUBSCRIBE news.*</code></pre><div class="n">Glob-style: * (any chars), ? (one char), [ae] (set).</div></div><div class="item"><div class="l">Inspect channels</div><pre><code>PUBSUB CHANNELS           # active channels with subscribers
+PUBSUB NUMSUB news        # subscriber count per channel
+PUBSUB NUMPAT             # active pattern subs</code></pre></div><h2>Pub/Sub — Node.js</h2><div class="item"><div class="l">Subscriber (needs its own connection)</div><pre><code>const sub = client.duplicate();
+await sub.connect();
+await sub.subscribe('news', (message, channel) =&gt; {
+  console.log(channel, message);
+});</code></pre><div class="n">CRITICAL: a subscribed client cannot run normal commands. Use client.duplicate() so your main client stays free for get/set.</div></div><div class="item"><div class="l">Publisher</div><pre><code>await client.publish('news', JSON.stringify({ title: 'hi' }));</code></pre><div class="n">Publish from the main client; subscribe on the duplicated one.</div></div><div class="item"><div class="l">Pattern subscribe (node-redis v4)</div><pre><code>await sub.pSubscribe('news.*', (msg, channel) =&gt; {
+  console.log(channel, msg);
+});
+await sub.unsubscribe('news');</code></pre></div><div class="item"><div class="l">ioredis pub/sub (event-based)</div><pre><code>const sub = new Redis();
+sub.subscribe('news');
+sub.on('message', (channel, message) =&gt; {
+  console.log(channel, message);
+});
+redis.publish('news', 'hi');</code></pre><div class="n">ioredis emits a 'message' event rather than a per-channel callback.</div></div><h2>Assignment Patterns &amp; Mental Model</h2><div class="item"><div class="l">Typical exercise: producer + worker via list queue</div><pre><code>// producer.js
+await client.lPush('submissions', JSON.stringify(payload));
+// worker.js (long-running)
+const { element } = await client.brPop('submissions', 0);
+processAndPushResult(JSON.parse(element));</code></pre><div class="n">Classic 'code submission' style: HTTP handler pushes job, separate worker process blocks on BRPOP, pushes result to a per-user list/channel.</div></div><div class="item"><div class="l">Return result to a specific client</div><pre><code>// worker publishes to a user-scoped channel
+await client.publish(`result:${userId}`, JSON.stringify(out));
+// client subscribed to its own channel gets it</code></pre><div class="n">Combine queue (work distribution) + pub/sub (push result back) for request/response over Redis.</div></div><div class="item"><div class="l">Decision cheat</div><div class="n">One consumer, must-not-lose, load-balance -&gt; List/Stream queue. Broadcast to many, real-time, OK to miss if offline -&gt; Pub/Sub. Need replay + acks + groups -&gt; Streams.</div></div>
+<h2>Quick tips &amp; gotchas</h2><ul class="tips"><li>Pub/Sub is fire-and-forget: no persistence, no delivery guarantee. Offline or slow subscribers miss messages entirely — use Streams or a list queue when you need durability.</li><li>A subscribed connection is 'locked' into subscriber mode and can't run GET/SET/etc. Always client.duplicate() (node-redis) or use a second client for subscribing.</li><li>Prefer blocking BRPOP/BLMOVE over polling RPOP in a loop — polling wastes CPU and network round-trips.</li><li>Plain BRPOP loses the job if the worker crashes mid-processing. Use BLMOVE into a 'processing' list (or Streams with XACK) for at-least-once delivery.</li><li>Never run KEYS * in production — it blocks the single-threaded server. Use SCAN with a cursor instead.</li><li>Redis is single-threaded: each command is atomic, but a slow command (KEYS, big SORT, large MULTI) stalls everyone. Keep operations small.</li><li>Redis is in-memory and volatile by default — enable AOF (appendonly yes) or RDB snapshots if you can't afford to lose data on restart.</li><li>Redis stores only strings/bytes. Always JSON.stringify on write and JSON.parse on read; set EX/TTL on cache keys so memory doesn't grow unbounded.</li></ul>
+</div></body></html>

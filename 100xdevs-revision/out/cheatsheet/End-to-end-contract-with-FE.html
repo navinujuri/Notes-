@@ -1,0 +1,65 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Cheat Sheet · End to end contract with FE</title><style>:root{--bg:#fff;--fg:#1a1a1a;--muted:#6b7280;--line:#e5e7eb;--accent:#0d9488;--card:#f9fafb;--code:#f3f4f6;--codefg:#111}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1115;--fg:#e6e6e6;--muted:#9aa0aa;--line:#242833;--accent:#2dd4bf;--card:#171a21;--code:#0b0e13;--codefg:#e6e6e6}}
+*{box-sizing:border-box}body{margin:0;font:16px/1.6 system-ui,Segoe UI,sans-serif;background:var(--bg);color:var(--fg)}
+.wrap{max-width:860px;margin:0 auto;padding:1.2rem}
+a.back{color:var(--accent);text-decoration:none;font-size:.9rem}
+h1{font-size:1.5rem;margin:.6rem 0 .2rem}.sub{color:var(--muted);margin:0 0 1.4rem}
+h2{font-size:1.1rem;margin:1.6rem 0 .5rem;color:var(--accent)}
+.item{border:1px solid var(--line);border-radius:10px;background:var(--card);padding:.6rem .8rem;margin:.5rem 0}
+.item .l{font-weight:700}
+.item .n{color:var(--muted);font-size:.92rem;margin-top:.2rem}
+pre{margin:.45rem 0 0;background:var(--code);color:var(--codefg);border:1px solid var(--line);border-radius:8px;padding:.6rem .8rem;overflow-x:auto}
+code,pre{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:.86rem}
+.tips{border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:10px;background:var(--card);padding:.6rem 1rem}
+.tips li{margin:.35rem 0}
+@media print{.back{display:none}}</style></head><body><div class="wrap">
+<a class="back" href="../revision.html">← Back to revision index</a>
+<h1>End to end contract with FE — Cheat Sheet</h1>
+<p class="sub">Cohort 3.0 · 5 lessons · quick reference</p>
+<h2>Setup, compile &amp; deploy (Hardhat)</h2><div class="item"><div class="l">Init project + compile</div><pre><code>npm i -D hardhat &amp;&amp; npx hardhat init
+npx hardhat compile   # -&gt; artifacts/contracts/X.sol/X.json (abi + bytecode)</code></pre><div class="n">Compile emits BOTH the ABI (FE needs it) and bytecode (goes on-chain).</div></div><div class="item"><div class="l">Local chain for dev</div><pre><code>npx hardhat node        # JSON-RPC on http://127.0.0.1:8545, funded accounts</code></pre><div class="n">Point MetaMask at localhost:8545, chainId 31337.</div></div><div class="item"><div class="l">Deploy to a testnet</div><pre><code>npx hardhat run scripts/deploy.js --network sepolia</code></pre><div class="n">Deploy returns the contract ADDRESS — the third thing the FE needs (address + ABI + chain).</div></div><div class="item"><div class="l">Deploy script (ethers v6)</div><pre><code>const f = await ethers.getContractFactory("Crowdfund");
+const c = await f.deploy(ethers.parseEther("10"));
+await c.waitForDeployment();
+console.log(await c.getAddress());</code></pre></div><h2>Step 1 — Writing the contract (Solidity)</h2><div class="item"><div class="l">Skeleton: state, events, modifiers</div><pre><code>// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.20;
+contract Crowdfund {
+  address public owner;
+  uint256 public goal;
+  uint256 public totalRaised;
+  event Contributed(address indexed from, uint256 amount);
+  constructor(uint256 _goal){ owner = msg.sender; goal = _goal; }
+  modifier onlyOwner(){ require(msg.sender == owner, "not owner"); _; }
+}</code></pre></div><div class="item"><div class="l">payable state-changing fn (costs gas)</div><pre><code>function contribute() external payable {
+  require(msg.value &gt; 0, "zero");
+  totalRaised += msg.value;
+  emit Contributed(msg.sender, msg.value);
+}</code></pre><div class="n">Emit an event so the FE can react to the change without polling.</div></div><div class="item"><div class="l">view/pure fn (free read)</div><pre><code>function getStatus() external view returns (uint256, uint256) {
+  return (totalRaised, goal);
+}</code></pre><div class="n">view = reads state, pure = touches no state. Both are free via eth_call.</div></div><div class="item"><div class="l">Access control + safe ETH send</div><pre><code>function withdraw() external onlyOwner {
+  (bool ok,) = owner.call{value: address(this).balance}("");
+  require(ok, "transfer failed");
+}</code></pre><div class="n">Checks-Effects-Interactions: update state BEFORE external calls to avoid reentrancy.</div></div><h2>Writing the FE — provider vs signer</h2><div class="item"><div class="l">Connect wallet (MetaMask)</div><pre><code>import { ethers } from "ethers";
+const provider = new ethers.BrowserProvider(window.ethereum);
+await provider.send("eth_requestAccounts", []);
+const signer = await provider.getSigner();</code></pre><div class="n">window.ethereum is injected by MetaMask; guard for undefined (no wallet).</div></div><div class="item"><div class="l">Two Contract instances: read vs write</div><pre><code>import abi from "./abi/Crowdfund.json"; // artifact.abi array
+const read  = new ethers.Contract(ADDR, abi, provider); // eth_call, free
+const write = new ethers.Contract(ADDR, abi, signer);   // tx, costs gas</code></pre><div class="n">provider = read-only (works even disconnected); signer = writes (needs wallet).</div></div><div class="item"><div class="l">Read state</div><pre><code>const [raised, goal] = await read.getStatus();</code></pre><div class="n">Returns BigInt in ethers v6 — format with ethers.formatEther().</div></div><div class="item"><div class="l">Write + await receipt</div><pre><code>const tx = await write.contribute({ value: ethers.parseEther("0.1") });
+const receipt = await tx.wait(); // resolves only once MINED</code></pre><div class="n">The send resolves with a tx hash immediately; state is stale until tx.wait().</div></div><h2>React path — wagmi + viem</h2><div class="item"><div class="l">Read hook (auto-refetch, cached)</div><pre><code>const { data, refetch } = useReadContract({
+  address: ADDR, abi, functionName: "getStatus",
+});</code></pre></div><div class="item"><div class="l">Write hook</div><pre><code>const { writeContract, data: hash } = useWriteContract();
+writeContract({ address: ADDR, abi,
+  functionName: "contribute", value: parseEther("0.1") });</code></pre></div><div class="item"><div class="l">Wait for the tx in React</div><pre><code>const { isLoading, isSuccess } = useWaitForTransactionReceipt({ hash });</code></pre><div class="n">Invalidate/refetch reads on isSuccess so the UI reflects new state.</div></div><div class="item"><div class="l">Wallet connection state</div><pre><code>const { address, isConnected, chainId } = useAccount();</code></pre><div class="n">wagmi wraps viem + handles connection lifecycle, caching, re-renders.</div></div><h2>Add the ABI + address (the glue layer)</h2><div class="item"><div class="l">Address keyed by chainId</div><pre><code>const CONTRACTS = {
+  11155111: "0xSepolia...",
+  1:        "0xMainnet...",
+};
+const ADDR = CONTRACTS[Number(chainId)];</code></pre><div class="n">Wrong chain -&gt; wrong/nonexistent address. Pick address from the wallet's live chainId.</div></div><div class="item"><div class="l">Import ABI straight from artifacts</div><pre><code>import artifact from "../artifacts/contracts/Crowdfund.sol/Crowdfund.json";
+const abi = artifact.abi;</code></pre><div class="n">Re-copy ABI on EVERY redeploy — a stale ABI silently breaks encode/decode.</div></div><div class="item"><div class="l">Prompt a network switch</div><pre><code>await window.ethereum.request({
+  method: "wallet_switchEthereumChain",
+  params: [{ chainId: "0xaa36a7" }], // Sepolia = 11155111
+});</code></pre><div class="n">chainId in wallet RPC is hex; on-chain/JS values are decimal. Catch 4902 = chain not added.</div></div><h2>Events &amp; error handling</h2><div class="item"><div class="l">Live updates via events</div><pre><code>read.on("Contributed", (from, amount) =&gt; refresh());</code></pre><div class="n">Use a WebSocket provider for push; still re-read on load — events can be missed on reorg/disconnect.</div></div><div class="item"><div class="l">Query past logs</div><pre><code>const logs = await read.queryFilter("Contributed", fromBlock, "latest");</code></pre></div><div class="item"><div class="l">Handle rejection &amp; revert</div><pre><code>try { const r = await (await write.contribute(...)).wait(); }
+catch (e) {
+  if (e.code === "ACTION_REJECTED") {/* user cancelled */}
+  if (e.code === "CALL_EXCEPTION") {/* require() revert */}
+}</code></pre><div class="n">User rejection, revert, out-of-gas, and pending state only surface in the real end-to-end loop.</div></div>
+<h2>Quick tips &amp; gotchas</h2><ul class="tips"><li>Three things wire FE to a contract: ADDRESS + ABI + correct chainId. Get one wrong and calls silently fail or hit the wrong contract.</li><li>Reads (view/pure) go through a provider via eth_call — free, no wallet needed. Writes need a signer, cost gas, and are async transactions.</li><li>A state-changing call resolves with a tx HASH, not the new value. Always await tx.wait() (or useWaitForTransactionReceipt) before showing success.</li><li>Re-copy the ABI on every redeploy and re-check the address — a stale ABI causes silent decode failures; a stale address calls the old contract.</li><li>Never trust the FE for validation: enforce every invariant on-chain with require/revert. An attacker crafts raw txs that bypass your UI entirely.</li><li>ethers v6 returns BigInt, not number — use parseEther/formatEther and BigInt math, never Number().</li><li>Handle the wrong-network case explicitly: read wallet chainId, prompt wallet_switchEthereumChain, and only enable actions once on the right chain.</li><li>ethers/viem = low-level (providers, signers, encoding); wagmi = React hooks on top. Use wagmi in React to kill connection/caching boilerplate.</li></ul>
+</div></body></html>

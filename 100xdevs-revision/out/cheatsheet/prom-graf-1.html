@@ -1,0 +1,121 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Cheat Sheet · Prometheus and Grafana</title><style>:root{--bg:#fff;--fg:#1a1a1a;--muted:#6b7280;--line:#e5e7eb;--accent:#0d9488;--card:#f9fafb;--code:#f3f4f6;--codefg:#111}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1115;--fg:#e6e6e6;--muted:#9aa0aa;--line:#242833;--accent:#2dd4bf;--card:#171a21;--code:#0b0e13;--codefg:#e6e6e6}}
+*{box-sizing:border-box}body{margin:0;font:16px/1.6 system-ui,Segoe UI,sans-serif;background:var(--bg);color:var(--fg)}
+.wrap{max-width:860px;margin:0 auto;padding:1.2rem}
+a.back{color:var(--accent);text-decoration:none;font-size:.9rem}
+h1{font-size:1.5rem;margin:.6rem 0 .2rem}.sub{color:var(--muted);margin:0 0 1.4rem}
+h2{font-size:1.1rem;margin:1.6rem 0 .5rem;color:var(--accent)}
+.item{border:1px solid var(--line);border-radius:10px;background:var(--card);padding:.6rem .8rem;margin:.5rem 0}
+.item .l{font-weight:700}
+.item .n{color:var(--muted);font-size:.92rem;margin-top:.2rem}
+pre{margin:.45rem 0 0;background:var(--code);color:var(--codefg);border:1px solid var(--line);border-radius:8px;padding:.6rem .8rem;overflow-x:auto}
+code,pre{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:.86rem}
+.tips{border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:10px;background:var(--card);padding:.6rem 1rem}
+.tips li{margin:.35rem 0}
+@media print{.back{display:none}}</style></head><body><div class="wrap">
+<a class="back" href="../revision.html">← Back to revision index</a>
+<h1>Prometheus and Grafana — Cheat Sheet</h1>
+<p class="sub">Cohort 2.0 · 16 lessons · quick reference</p>
+<h2>Setup &amp; Instrumentation (Node/prom-client)</h2><div class="item"><div class="l">Install client lib</div><pre><code>npm install prom-client</code></pre><div class="n">prom-client is the official Node exporter; Prometheus pulls (scrapes) — the app never pushes.</div></div><div class="item"><div class="l">Import + default process metrics</div><pre><code>const client = require('prom-client');
+const register = new client.Registry();
+register.setDefaultLabels({ app: 'my-service' });
+client.collectDefaultMetrics({ register });</code></pre><div class="n">collectDefaultMetrics gives CPU, heap, event-loop lag, GC for free. Register scopes which metrics an endpoint exposes.</div></div><div class="item"><div class="l">Expose /metrics endpoint</div><pre><code>app.get('/metrics', async (req, res) =&gt; {
+  res.set('Content-Type', register.contentType);
+  res.end(await register.metrics());
+});</code></pre><div class="n">register.metrics() is async and returns text/plain in the Prometheus exposition format. This is the URL Prometheus scrapes.</div></div><h2>Metric Types</h2><div class="item"><div class="l">Counter — monotonically increasing (requests, errors)</div><pre><code>const reqCounter = new client.Counter({
+  name: 'http_requests_total',
+  help: 'Total HTTP requests',
+  labelNames: ['method', 'route', 'status_code'],
+  registers: [register],
+});
+reqCounter.inc();                                  // +1
+reqCounter.inc({ method: 'GET', route: '/', status_code: 200 });
+reqCounter.labels('GET', '/', '200').inc(5);</code></pre><div class="n">Only .inc() — never decreases. End name with _total by convention. Query rate() not the raw value.</div></div><div class="item"><div class="l">Gauge — value that goes up AND down (active conns, queue depth, temp)</div><pre><code>const active = new client.Gauge({
+  name: 'active_connections',
+  help: 'Currently open connections',
+  registers: [register],
+});
+active.set(10);
+active.inc(); active.dec();
+active.setToCurrentTime();
+const stop = active.startTimer();  // in-progress timer; stop() sets elapsed seconds</code></pre><div class="n">Use for point-in-time snapshots. .set() overwrites; don't use rate() on gauges.</div></div><div class="item"><div class="l">Histogram — distribution/latency, produces buckets + _sum + _count</div><pre><code>const httpDur = new client.Histogram({
+  name: 'http_request_duration_seconds',
+  help: 'Request duration in seconds',
+  labelNames: ['method', 'route', 'code'],
+  buckets: [0.005, 0.01, 0.05, 0.1, 0.3, 0.5, 1, 3, 5],
+  registers: [register],
+});
+const end = httpDur.startTimer();
+// ...handle request...
+end({ method: 'GET', route: '/', code: 200 });
+httpDur.observe(0.42);  // manual observation</code></pre><div class="n">Emits _bucket{le="..."}, _sum, _count. Choose buckets to bracket your SLO. Buckets are cumulative (le = 'less than or equal').</div></div><div class="item"><div class="l">Summary — client-side quantiles (rarely needed)</div><pre><code>const sum = new client.Summary({
+  name: 'resp_size_bytes', help: '...',
+  percentiles: [0.5, 0.9, 0.99], registers: [register],
+});</code></pre><div class="n">Prefer Histogram: summaries can't be aggregated across instances; histograms can via histogram_quantile().</div></div><h2>Better Structure — Middleware &amp; Labels</h2><div class="item"><div class="l">Single middleware instruments every route</div><pre><code>app.use((req, res, next) =&gt; {
+  const end = httpDur.startTimer();
+  res.on('finish', () =&gt; {
+    const route = req.route?.path ?? req.path;
+    const labels = { method: req.method, route, code: res.statusCode };
+    end(labels);            // observe duration
+    reqCounter.inc(labels); // increment count
+  });
+  next();
+});</code></pre><div class="n">res.on('finish') captures the real final status code. Use req.route.path (templated) not req.path to avoid high-cardinality label blowup.</div></div><div class="item"><div class="l">Keep metric defs in one module</div><pre><code>// metrics.js
+module.exports = { register, reqCounter, httpDur, active };</code></pre><div class="n">Define each metric ONCE at module load. Re-registering the same name throws 'A metric with the name X has already been registered'.</div></div><div class="item"><div class="l">Label cardinality discipline</div><div class="n">Never label with user IDs, emails, timestamps, or raw URLs — each unique combo = a new time series and can OOM Prometheus. Keep labels to bounded enums (method, route template, status class).</div></div><h2>Prometheus Config &amp; Running</h2><div class="item"><div class="l">prometheus.yml — scrape config</div><pre><code>global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: 'node-app'
+    metrics_path: /metrics   # default
+    static_configs:
+      - targets: ['host.docker.internal:3000']</code></pre><div class="n">From a container, reach the host app via host.docker.internal (Docker Desktop) — not localhost, which is the container itself.</div></div><div class="item"><div class="l">Run Prometheus in Docker</div><pre><code>docker run -p 9090:9090 \
+  -v $(pwd)/prometheus.yml:/etc/prometheus/prometheus.yml \
+  prom/prometheus</code></pre><div class="n">UI at http://localhost:9090. Check Status &gt; Targets to confirm your app is UP and being scraped.</div></div><div class="item"><div class="l">Reload config without restart</div><pre><code>curl -X POST http://localhost:9090/-/reload</code></pre><div class="n">Requires the flag --web.enable-lifecycle at startup. Otherwise restart the container.</div></div><h2>PromQL — Queries &amp; Graphs</h2><div class="item"><div class="l">Raw + filtered selection</div><pre><code>http_requests_total
+http_requests_total{route="/user", code=~"2.."}</code></pre><div class="n">= exact, != not, =~ regex match, !~ regex no-match. Instant vector = one point per series.</div></div><div class="item"><div class="l">rate() — per-second average over window (the go-to for counters)</div><pre><code>rate(http_requests_total[5m])
+sum(rate(http_requests_total[5m])) by (route)</code></pre><div class="n">ALWAYS wrap counters in rate()/increase() — raw counter numbers reset to 0 on restart and are meaningless alone. [5m] = range vector.</div></div><div class="item"><div class="l">increase() / irate()</div><pre><code>increase(http_requests_total[1h])   # total growth over 1h
+irate(http_requests_total[5m])      # instant rate (last 2 samples)</code></pre><div class="n">irate for volatile/fast-moving graphs; rate for smoother alerting.</div></div><div class="item"><div class="l">p95/p99 latency from histogram</div><pre><code>histogram_quantile(
+  0.95,
+  sum(rate(http_request_duration_seconds_bucket[5m])) by (le)
+)</code></pre><div class="n">Must aggregate by (le). Accuracy is bounded by your bucket boundaries.</div></div><div class="item"><div class="l">Error ratio</div><pre><code>sum(rate(http_requests_total{code=~"5.."}[5m]))
+/
+sum(rate(http_requests_total[5m]))</code></pre><div class="n">Graph tab renders any query over time; Table tab shows instant values.</div></div><h2>Grafana (docker-compose + datasource)</h2><div class="item"><div class="l">docker-compose.yml — Prometheus + Grafana together</div><pre><code>services:
+  prometheus:
+    image: prom/prometheus
+    ports: ['9090:9090']
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+  grafana:
+    image: grafana/grafana
+    ports: ['3001:3000']
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - grafana-data:/var/lib/grafana
+volumes:
+  grafana-data:</code></pre><div class="n">Map Grafana to 3001 to avoid clashing with a Node app on 3000 (Grafana listens on 3000 internally). The named volume persists dashboards across restarts.</div></div><div class="item"><div class="l">Add Prometheus as a data source</div><pre><code>URL: http://prometheus:9090</code></pre><div class="n">Use the compose SERVICE NAME (prometheus), not localhost — containers resolve each other by service name on the shared network. Connections &gt; Data sources &gt; Add &gt; Prometheus &gt; Save &amp; test.</div></div><div class="item"><div class="l">Provision datasource as code (optional)</div><pre><code># ./grafana/provisioning/datasources/ds.yml
+apiVersion: 1
+datasources:
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true</code></pre><div class="n">Mount to /etc/grafana/provisioning/datasources so it's auto-configured on boot — no manual clicks.</div></div><div class="item"><div class="l">Build a panel</div><div class="n">New dashboard &gt; Add visualization &gt; pick Prometheus &gt; paste a PromQL query (e.g. rate(...)). Import community dashboards by ID via Dashboards &gt; Import (e.g. Node Exporter Full).</div></div><h2>Alerting</h2><div class="item"><div class="l">Prometheus alert rule file</div><pre><code># alerts.yml
+groups:
+  - name: app-alerts
+    rules:
+      - alert: HighErrorRate
+        expr: |
+          sum(rate(http_requests_total{code=~"5.."}[5m]))
+          / sum(rate(http_requests_total[5m])) &gt; 0.05
+        for: 5m
+        labels: { severity: critical }
+        annotations:
+          summary: "5xx error rate &gt; 5% for 5m"</code></pre><div class="n">for: makes the condition hold N minutes before firing (avoids flapping). State goes Pending -&gt; Firing.</div></div><div class="item"><div class="l">Wire rules + Alertmanager into prometheus.yml</div><pre><code>rule_files:
+  - 'alerts.yml'
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ['alertmanager:9093']</code></pre><div class="n">Prometheus evaluates rules and fires to Alertmanager, which handles routing/dedup/silencing and sends to Slack, email, PagerDuty, etc.</div></div><div class="item"><div class="l">Grafana-native alerts (no Alertmanager needed)</div><div class="n">Alerting &gt; Alert rules &gt; New: define a query + threshold, set evaluation interval + pending period, attach a contact point (Slack/email webhook) and notification policy. Simpler for a single-team setup.</div></div>
+<h2>Quick tips &amp; gotchas</h2><ul class="tips"><li>Prometheus PULLS metrics by scraping /metrics on an interval — your app just exposes an endpoint, it never pushes. For short-lived jobs use the Pushgateway.</li><li>Always wrap counters in rate()/increase() — a bare counter resets to 0 on restart and its absolute value is meaningless.</li><li>Label cardinality is the #1 way to kill Prometheus: never put user IDs, request IDs, timestamps, or raw URLs in labels. Use route templates and status classes.</li><li>Prefer Histograms over Summaries — histogram buckets aggregate across instances via histogram_quantile(); summary quantiles cannot be summed.</li><li>Choose histogram buckets around your SLO/expected latency; percentile accuracy is limited by bucket boundaries, and too many buckets inflate series count.</li><li>In Docker, use service names between containers (http://prometheus:9090) and host.docker.internal to reach an app on the host — never localhost across the network boundary.</li><li>Confirm scraping in Prometheus UI &gt; Status &gt; Targets (state UP) before debugging dashboards; a blank Grafana panel is usually a broken target or wrong datasource URL.</li><li>Metric naming: base unit suffix (_seconds, _bytes), _total for counters, and histograms auto-emit _bucket/_sum/_count. Define each metric exactly once or registration throws.</li></ul>
+</div></body></html>

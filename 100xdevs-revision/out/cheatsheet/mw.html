@@ -1,0 +1,68 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Cheat Sheet · Middlwares in next</title><style>:root{--bg:#fff;--fg:#1a1a1a;--muted:#6b7280;--line:#e5e7eb;--accent:#0d9488;--card:#f9fafb;--code:#f3f4f6;--codefg:#111}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1115;--fg:#e6e6e6;--muted:#9aa0aa;--line:#242833;--accent:#2dd4bf;--card:#171a21;--code:#0b0e13;--codefg:#e6e6e6}}
+*{box-sizing:border-box}body{margin:0;font:16px/1.6 system-ui,Segoe UI,sans-serif;background:var(--bg);color:var(--fg)}
+.wrap{max-width:860px;margin:0 auto;padding:1.2rem}
+a.back{color:var(--accent);text-decoration:none;font-size:.9rem}
+h1{font-size:1.5rem;margin:.6rem 0 .2rem}.sub{color:var(--muted);margin:0 0 1.4rem}
+h2{font-size:1.1rem;margin:1.6rem 0 .5rem;color:var(--accent)}
+.item{border:1px solid var(--line);border-radius:10px;background:var(--card);padding:.6rem .8rem;margin:.5rem 0}
+.item .l{font-weight:700}
+.item .n{color:var(--muted);font-size:.92rem;margin-top:.2rem}
+pre{margin:.45rem 0 0;background:var(--code);color:var(--codefg);border:1px solid var(--line);border-radius:8px;padding:.6rem .8rem;overflow-x:auto}
+code,pre{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:.86rem}
+.tips{border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:10px;background:var(--card);padding:.6rem 1rem}
+.tips li{margin:.35rem 0}
+@media print{.back{display:none}}</style></head><body><div class="wrap">
+<a class="back" href="../revision.html">← Back to revision index</a>
+<h1>Middlwares in next — Cheat Sheet</h1>
+<p class="sub">Cohort 2.0 · 5 lessons · quick reference</p>
+<h2>What &amp; Where — Setup</h2><div class="item"><div class="l">Middleware = code that runs BEFORE a request is completed</div><div class="n">Runs on every matching request; can rewrite, redirect, block, or mutate headers/cookies before the route handler/page renders.</div></div><div class="item"><div class="l">Single file at project root (or inside src/)</div><pre><code>my-app/
+  middleware.ts   &lt;- here (NOT in app/)
+  app/
+  src/middleware.ts  &lt;- OR here if using src/</code></pre><div class="n">One middleware.ts per project. It's the top-level file, sibling to app/ (or inside src/).</div></div><div class="item"><div class="l">Minimal skeleton</div><pre><code>import { NextResponse } from 'next/server'
+import type { NextRequest } from 'next/server'
+
+export function middleware(request: NextRequest) {
+  return NextResponse.next()
+}
+
+export const config = { matcher: '/dashboard/:path*' }</code></pre><div class="n">Export a function named `middleware` (or `export default`). `config.matcher` scopes it.</div></div><div class="item"><div class="l">Runtime</div><div class="n">Edge runtime by default (no Node APIs like fs). Next 15.2+ can opt into Node via `export const config = { runtime: 'nodejs' }` (experimental).</div></div><h2>Core APIs — NextRequest / NextResponse</h2><div class="item"><div class="l">NextResponse.next() — let request continue</div><pre><code>return NextResponse.next()</code></pre></div><div class="item"><div class="l">Redirect (changes URL in browser)</div><pre><code>return NextResponse.redirect(new URL('/login', request.url))</code></pre><div class="n">Pass an absolute URL; build with `new URL(path, request.url)`.</div></div><div class="item"><div class="l">Rewrite (proxy — URL stays, content differs)</div><pre><code>return NextResponse.rewrite(new URL('/proxy', request.url))</code></pre><div class="n">Browser bar unchanged; internally serves another path.</div></div><div class="item"><div class="l">Return JSON / block early</div><pre><code>return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })</code></pre></div><div class="item"><div class="l">Read request URL parts</div><pre><code>const { pathname, searchParams } = request.nextUrl
+searchParams.get('token')</code></pre></div><div class="item"><div class="l">Read headers / cookies</div><pre><code>request.headers.get('authorization')
+request.cookies.get('session')?.value</code></pre></div><div class="item"><div class="l">Geo / IP (Next 15+)</div><pre><code>import { geolocation, ipAddress } from '@vercel/functions'
+const { country } = geolocation(request)</code></pre><div class="n">`request.geo` and `request.ip` were REMOVED in Next 15 — use @vercel/functions helpers.</div></div><h2>Code — Auth guard</h2><div class="item"><div class="l">Protect routes, redirect unauthenticated users</div><pre><code>export function middleware(request: NextRequest) {
+  const token = request.cookies.get('token')?.value
+
+  if (!token) {
+    return NextResponse.redirect(new URL('/login', request.url))
+  }
+  return NextResponse.next()
+}
+
+export const config = {
+  matcher: ['/dashboard/:path*', '/settings/:path*'],
+}</code></pre></div><div class="item"><div class="l">Preserve intended destination after login</div><pre><code>const url = new URL('/login', request.url)
+url.searchParams.set('from', request.nextUrl.pathname)
+return NextResponse.redirect(url)</code></pre></div><h2>Code #2 — Rewrite, headers &amp; cookies</h2><div class="item"><div class="l">Inject a response header</div><pre><code>const res = NextResponse.next()
+res.headers.set('x-custom-header', 'hello')
+return res</code></pre></div><div class="item"><div class="l">Set a cookie on the response</div><pre><code>const res = NextResponse.next()
+res.cookies.set('theme', 'dark', { path: '/', maxAge: 60 * 60 })
+return res</code></pre></div><div class="item"><div class="l">Forward/modify REQUEST headers to downstream</div><pre><code>const headers = new Headers(request.headers)
+headers.set('x-user-id', '123')
+return NextResponse.next({ request: { headers } })</code></pre><div class="n">Pass headers to route handlers/server components; read via `headers()`.</div></div><div class="item"><div class="l">A/B test via rewrite</div><pre><code>const bucket = Math.random() &lt; 0.5 ? 'a' : 'b'
+return NextResponse.rewrite(new URL(`/home-${bucket}`, request.url))</code></pre></div><h2>Selectively running middleware</h2><div class="item"><div class="l">Single path with wildcard</div><pre><code>export const config = { matcher: '/about/:path*' }</code></pre><div class="n">`:path*` = zero-or-more segments. `:path` = exactly one.</div></div><div class="item"><div class="l">Multiple matchers (array)</div><pre><code>export const config = {
+  matcher: ['/dashboard/:path*', '/api/:path*'],
+}</code></pre></div><div class="item"><div class="l">Match everything EXCEPT static/api (most common)</div><pre><code>export const config = {
+  matcher: ['/((?!api|_next/static|_next/image|favicon.ico).*)'],
+}</code></pre><div class="n">Negative lookahead skips assets &amp; _next internals — huge perf win.</div></div><div class="item"><div class="l">Conditional matcher (has / missing)</div><pre><code>export const config = {
+  matcher: [{
+    source: '/api/:path*',
+    has: [{ type: 'header', key: 'authorization' }],
+    missing: [{ type: 'cookie', key: 'session' }],
+  }],
+}</code></pre><div class="n">type: 'header' | 'cookie' | 'query' | 'host'.</div></div><div class="item"><div class="l">In-code branching (when matcher isn't enough)</div><pre><code>export function middleware(request: NextRequest) {
+  const { pathname } = request.nextUrl
+  if (pathname.startsWith('/admin')) return checkAdmin(request)
+  return NextResponse.next()
+}</code></pre></div>
+<h2>Quick tips &amp; gotchas</h2><ul class="tips"><li>Matcher values MUST be static string literals — they're analyzed at build time, so you can't compute them at runtime or import them from variables.</li><li>Always return a NextResponse (or nothing). Forgetting to `return NextResponse.next()` on the pass-through path silently breaks the request.</li><li>Edge runtime: no Node.js APIs (fs, net, most crypto). Keep middleware light — it runs on EVERY matching request, so no DB calls or heavy work.</li><li>Exclude _next/ and static assets in your matcher, otherwise middleware fires for every image/JS chunk and tanks performance.</li><li>Set cookies/headers on the RESPONSE object you return — mutating `request.cookies` only affects downstream reads, not the browser.</li><li>Build redirect/rewrite URLs with `new URL(path, request.url)` — a bare string like '/login' throws (needs absolute URL).</li><li>Only ONE middleware.ts per project. Compose multiple concerns by branching on `request.nextUrl.pathname` inside it (or chain helper functions).</li><li>`redirect` changes the browser URL (client sees it); `rewrite` keeps the URL but serves different content (invisible proxy). Pick deliberately.</li></ul>
+</div></body></html>

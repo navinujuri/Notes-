@@ -1,0 +1,104 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Cheat Sheet · Programs, Accounts and the Token Program</title><style>:root{--bg:#fff;--fg:#1a1a1a;--muted:#6b7280;--line:#e5e7eb;--accent:#0d9488;--card:#f9fafb;--code:#f3f4f6;--codefg:#111}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1115;--fg:#e6e6e6;--muted:#9aa0aa;--line:#242833;--accent:#2dd4bf;--card:#171a21;--code:#0b0e13;--codefg:#e6e6e6}}
+*{box-sizing:border-box}body{margin:0;font:16px/1.6 system-ui,Segoe UI,sans-serif;background:var(--bg);color:var(--fg)}
+.wrap{max-width:860px;margin:0 auto;padding:1.2rem}
+a.back{color:var(--accent);text-decoration:none;font-size:.9rem}
+h1{font-size:1.5rem;margin:.6rem 0 .2rem}.sub{color:var(--muted);margin:0 0 1.4rem}
+h2{font-size:1.1rem;margin:1.6rem 0 .5rem;color:var(--accent)}
+.item{border:1px solid var(--line);border-radius:10px;background:var(--card);padding:.6rem .8rem;margin:.5rem 0}
+.item .l{font-weight:700}
+.item .n{color:var(--muted);font-size:.92rem;margin-top:.2rem}
+pre{margin:.45rem 0 0;background:var(--code);color:var(--codefg);border:1px solid var(--line);border-radius:8px;padding:.6rem .8rem;overflow-x:auto}
+code,pre{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:.86rem}
+.tips{border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:10px;background:var(--card);padding:.6rem 1rem}
+.tips li{margin:.35rem 0}
+@media print{.back{display:none}}</style></head><body><div class="wrap">
+<a class="back" href="../revision.html">← Back to revision index</a>
+<h1>Programs, Accounts and the Token Program — Cheat Sheet</h1>
+<p class="sub">Cohort 3.0 · 11 lessons · quick reference</p>
+<h2>CLI Setup &amp; Config</h2><div class="item"><div class="l">Install Solana CLI (Anza)</div><pre><code>sh -c "$(curl -sSfL https://release.anza.xyz/stable/install)"
+solana --version</code></pre><div class="n">Ships solana, solana-keygen, spl-token. Windows: use WSL. Old release.solana.com URL still redirects.</div></div><div class="item"><div class="l">Point CLI at a cluster</div><pre><code>solana config set --url devnet   # -ul local | -ud devnet | -ut testnet | -um mainnet
+solana config get</code></pre><div class="n">Config lives at ~/.config/solana/cli/config.yml. Devnet endpoint: https://api.devnet.solana.com</div></div><div class="item"><div class="l">Generate a wallet / keypair</div><pre><code>solana-keygen new              # writes ~/.config/solana/id.json
+solana address</code></pre><div class="n">Keypair file is the ed25519 secret key JSON array. Back up the seed phrase.</div></div><div class="item"><div class="l">Fund &amp; check balance (devnet)</div><pre><code>solana airdrop 2
+solana balance</code></pre><div class="n">Devnet airdrop is rate-limited (~2 SOL); retry or use faucet.solana.com if throttled.</div></div><h2>Accounts &amp; the Solana Data Model</h2><div class="item"><div class="l">Everything is an account</div><pre><code>// Account layout
+{ lamports: u64,     // balance
+  owner: Pubkey,     // program that controls this account
+  data: [u8],        // opaque bytes (state)
+  executable: bool,  // true =&gt; it's a program
+  rent_epoch: u64 }</code></pre><div class="n">Only the owner program can mutate an account's data or debit lamports.</div></div><div class="item"><div class="l">Web2 vs Solana data model</div><div class="n">Web2: server code + DB rows live together, mutable in place. Solana: programs are STATELESS code; all state lives in separate accounts the program owns. Same program serves many state accounts.</div></div><div class="item"><div class="l">Programs are executable accounts</div><div class="n">A deployed program is an account with executable=true, owned by the BPF Loader. It reads/writes other accounts passed into each instruction.</div></div><div class="item"><div class="l">Rent exemption</div><pre><code>solana rent 165   # min lamports for a 165-byte account</code></pre><div class="n">Accounts must hold a min balance (~2 years rent) to persist, else they get purged. SDKs compute this via getMinimumBalanceForRentExemption.</div></div><div class="item"><div class="l">Why Solana</div><div class="n">Parallel execution (Sealevel) because txs declare which accounts they touch; ~400ms slots, sub-cent fees, PoH ordering. Contrast EVM's single-threaded state.</div></div><h2>SPL Token — CLI</h2><div class="item"><div class="l">Create a mint</div><pre><code>spl-token create-token --decimals 6
+# =&gt; Creating token &lt;MINT_ADDRESS&gt;</code></pre><div class="n">Mint account stores: supply, decimals, mint authority, freeze authority. It is NOT where balances live.</div></div><div class="item"><div class="l">Create a token account (ATA) to hold it</div><pre><code>spl-token create-account &lt;MINT&gt;</code></pre><div class="n">One token (ATA) account per (owner, mint) pair holds the balance.</div></div><div class="item"><div class="l">Mint supply into your ATA</div><pre><code>spl-token mint &lt;MINT&gt; 1000</code></pre><div class="n">Amount is in whole tokens; CLI scales by decimals. Requires you to hold mint authority.</div></div><div class="item"><div class="l">Transfer</div><pre><code>spl-token transfer &lt;MINT&gt; 100 &lt;RECIPIENT_WALLET&gt; --fund-recipient</code></pre><div class="n">--fund-recipient creates &amp; pays rent for the recipient ATA if missing.</div></div><div class="item"><div class="l">Inspect</div><pre><code>spl-token accounts
+spl-token supply &lt;MINT&gt;
+spl-token account-info &lt;MINT&gt;</code></pre></div><h2>Create a Token — JS (@solana/spl-token)</h2><div class="item"><div class="l">High-level helpers</div><pre><code>import { Connection, Keypair, clusterApiUrl } from "@solana/web3.js";
+import { createMint, getOrCreateAssociatedTokenAccount, mintTo }
+  from "@solana/spl-token";
+
+const conn  = new Connection(clusterApiUrl("devnet"));
+const payer = Keypair.generate();  // fund via airdrop first
+
+const mint = await createMint(conn, payer, payer.publicKey, null, 6);
+//                                      mintAuth      freezeAuth  decimals
+const ata = await getOrCreateAssociatedTokenAccount(
+  conn, payer, mint, payer.publicKey);
+await mintTo(conn, payer, mint, ata.address, payer, 100 * 10 ** 6);</code></pre><div class="n">createMint sends createAccount + initializeMint under the hood. Amounts are base units: multiply by 10**decimals.</div></div><div class="item"><div class="l">Low-level: build the mint manually</div><pre><code>import { SystemProgram, Transaction, sendAndConfirmTransaction } from "@solana/web3.js";
+import { MINT_SIZE, TOKEN_PROGRAM_ID, getMinimumBalanceForRentExemptMint,
+         createInitializeMint2Instruction } from "@solana/spl-token";
+
+const mint = Keypair.generate();
+const lamports = await getMinimumBalanceForRentExemptMint(conn);
+const tx = new Transaction().add(
+  SystemProgram.createAccount({
+    fromPubkey: payer.publicKey, newAccountPubkey: mint.publicKey,
+    space: MINT_SIZE, lamports, programId: TOKEN_PROGRAM_ID }),
+  createInitializeMint2Instruction(mint.publicKey, 6, payer.publicKey, null));
+await sendAndConfirmTransaction(conn, tx, [payer, mint]);</code></pre><div class="n">The mint keypair must sign createAccount. This is exactly what the CLI/createMint do.</div></div><h2>Other Language SDKs (Rust / Python / Go)</h2><div class="item"><div class="l">Rust (solana-sdk + spl-token)</div><pre><code>use spl_token::{state::Mint, instruction::initialize_mint, ID as TOKEN};
+use solana_sdk::system_instruction;
+
+let create = system_instruction::create_account(
+    &amp;payer.pubkey(), &amp;mint.pubkey(), rent, Mint::LEN as u64, &amp;TOKEN);
+let init = initialize_mint(&amp;TOKEN, &amp;mint.pubkey(), &amp;payer.pubkey(), None, 6)?;
+// send Transaction::new_signed_with_payer(&amp;[create, init], ...)</code></pre><div class="n">Cargo deps: solana-sdk, solana-client, spl-token. Same two-instruction pattern as JS.</div></div><div class="item"><div class="l">Python (solana-py / solders)</div><pre><code>from solana.rpc.api import Client
+from spl.token.client import Token
+from spl.token.constants import TOKEN_PROGRAM_ID
+
+token = Token.create_mint(Client(url), payer, payer.pubkey(), 6,
+                          TOKEN_PROGRAM_ID)
+token.mint_to(dest_ata, payer, 100_000000)</code></pre><div class="n">pip install solana. Newer versions back the types with solders (Rust bindings).</div></div><div class="item"><div class="l">Go (gagliardetto/solana-go)</div><pre><code>import token "github.com/gagliardetto/solana-go/programs/token"
+// token.NewInitializeMintInstruction(6, mintAuth, freezeAuth, mintPubkey, sysvarRent)
+//   .Build() -&gt; add to solana.NewTransaction(...)</code></pre><div class="n">Illustrative: assemble createAccount + initializeMint instructions, then sign &amp; send via rpc client.</div></div><h2>PDAs &amp; Associated Token Accounts</h2><div class="item"><div class="l">What a PDA is</div><div class="n">Program Derived Address: a deterministic address OFF the ed25519 curve, so it has no private key. Only the deriving program can 'sign' for it. Used for program-owned state.</div></div><div class="item"><div class="l">Derive a PDA (JS)</div><pre><code>import { PublicKey } from "@solana/web3.js";
+const [pda, bump] = PublicKey.findProgramAddressSync(
+  [Buffer.from("vault"), user.toBuffer()], programId);</code></pre><div class="n">Returns [address, bump]. Bump is the first byte (255..0) that pushes the hash off-curve; store/pass it to re-derive cheaply.</div></div><div class="item"><div class="l">Derive a PDA (Rust)</div><pre><code>let (pda, bump) = Pubkey::find_program_address(
+    &amp;[b"vault", user.as_ref()], &amp;program_id);</code></pre></div><div class="item"><div class="l">ATA is a PDA</div><pre><code>import { getAssociatedTokenAddressSync, TOKEN_PROGRAM_ID,
+         ASSOCIATED_TOKEN_PROGRAM_ID } from "@solana/spl-token";
+const ata = getAssociatedTokenAddressSync(mint, owner);
+// seeds = [owner, TOKEN_PROGRAM_ID, mint] under ASSOCIATED_TOKEN_PROGRAM_ID</code></pre><div class="n">For Token-2022 pass programId=TOKEN_2022_PROGRAM_ID (seed changes the derived address).</div></div><h2>Token-2022 (Token Extensions)</h2><div class="item"><div class="l">Program IDs</div><pre><code>Token:      TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA
+Token-2022: TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb
+ATA prog:   ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL</code></pre><div class="n">Token-2022 is a separate, backward-compatible program adding opt-in 'extensions'. A mint belongs to exactly one program.</div></div><div class="item"><div class="l">Create a Token-2022 mint (CLI)</div><pre><code>spl-token create-token --program-2022 --decimals 9
+# or explicit: -p TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb</code></pre><div class="n">All later spl-token cmds infer the program from the mint's owner.</div></div><div class="item"><div class="l">Common extensions</div><div class="n">MetadataPointer, TokenMetadata (embedded), TransferFee, NonTransferable ('soulbound'), InterestBearing, TransferHook, ConfidentialTransfer, DefaultAccountState, PermanentDelegate.</div></div><div class="item"><div class="l">JS: pick program + size for extensions</div><pre><code>import { TOKEN_2022_PROGRAM_ID, ExtensionType, getMintLen }
+  from "@solana/spl-token";
+const space = getMintLen([ExtensionType.MetadataPointer]);</code></pre><div class="n">Extensions grow the mint account; allocate the right space or initializeMint fails.</div></div><h2>Token-2022 with Metadata</h2><div class="item"><div class="l">CLI: metadata embedded in the mint</div><pre><code>spl-token create-token --program-2022 --enable-metadata --decimals 9
+spl-token initialize-metadata &lt;MINT&gt; "My Token" "MTK" https://.../meta.json</code></pre><div class="n">No separate Metaplex metadata account needed — metadata lives inside the mint via the TokenMetadata extension.</div></div><div class="item"><div class="l">JS: single tx (pointer + mint + metadata)</div><pre><code>import { TOKEN_2022_PROGRAM_ID, ExtensionType, getMintLen, LENGTH_SIZE,
+  TYPE_SIZE, createInitializeMintInstruction,
+  createInitializeMetadataPointerInstruction } from "@solana/spl-token";
+import { createInitializeInstruction, pack } from "@solana/spl-token-metadata";
+
+const md = { mint: mint.publicKey, name:"My Token", symbol:"MTK",
+             uri:"https://.../meta.json", additionalMetadata: [] };
+const mintLen = getMintLen([ExtensionType.MetadataPointer]);
+const mdLen   = TYPE_SIZE + LENGTH_SIZE + pack(md).length;
+const lamports = await conn.getMinimumBalanceForRentExemption(mintLen + mdLen);
+
+const tx = new Transaction().add(
+  SystemProgram.createAccount({ fromPubkey: payer.publicKey,
+    newAccountPubkey: mint.publicKey, space: mintLen, lamports,
+    programId: TOKEN_2022_PROGRAM_ID }),
+  createInitializeMetadataPointerInstruction(mint.publicKey,
+    payer.publicKey, mint.publicKey, TOKEN_2022_PROGRAM_ID), // pointer -&gt; self
+  createInitializeMintInstruction(mint.publicKey, 9,
+    payer.publicKey, null, TOKEN_2022_PROGRAM_ID),
+  createInitializeInstruction({ programId: TOKEN_2022_PROGRAM_ID,
+    mint: mint.publicKey, metadata: mint.publicKey,
+    name: md.name, symbol: md.symbol, uri: md.uri,
+    mintAuthority: payer.publicKey, updateAuthority: payer.publicKey }));
+await sendAndConfirmTransaction(conn, tx, [payer, mint]);</code></pre><div class="n">Order matters: createAccount -&gt; initMetadataPointer -&gt; initMint -&gt; initMetadata. Rent must cover mint + packed metadata; the metadata init writes past mintLen so fund for the sum.</div></div>
+<h2>Quick tips &amp; gotchas</h2><ul class="tips"><li>Rent: every account must be rent-exempt or it gets reaped. Always fund via getMinimumBalanceForRentExemption before createAccount.</li><li>Token amounts are ALWAYS base units. 1 token at 6 decimals = 1_000_000. The CLI scales for you; the SDK does not.</li><li>Mint account holds supply/authority; balances live in separate token (ATA) accounts — one per (owner, mint). Don't confuse the two.</li><li>Set mint authority to null (freeze mint) to make supply permanently fixed; set freeze authority to null if you never want to freeze holders.</li><li>A mint is owned by ONE program. Token vs Token-2022 accounts are not interchangeable — pass the correct programId to every helper (getOrCreateAssociatedTokenAccount, getAssociatedTokenAddressSync, mintTo).</li><li>PDAs have no private key (off-curve). A program signs for its PDA with invoke_signed + the stored bump; clients can't sign for a PDA.</li><li>Token-2022 extensions must be chosen at mint creation and change the account size — use getMintLen([...extensions]) or initializeMint reverts.</li><li>Devnet airdrops are rate-limited; if `solana airdrop` fails, wait and retry or use the web faucet. Use --fund-recipient on transfers to auto-create the destination ATA.</li></ul>
+</div></body></html>

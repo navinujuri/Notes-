@@ -1,0 +1,78 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Cheat Sheet · Upgradable contracts</title><style>:root{--bg:#fff;--fg:#1a1a1a;--muted:#6b7280;--line:#e5e7eb;--accent:#0d9488;--card:#f9fafb;--code:#f3f4f6;--codefg:#111}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1115;--fg:#e6e6e6;--muted:#9aa0aa;--line:#242833;--accent:#2dd4bf;--card:#171a21;--code:#0b0e13;--codefg:#e6e6e6}}
+*{box-sizing:border-box}body{margin:0;font:16px/1.6 system-ui,Segoe UI,sans-serif;background:var(--bg);color:var(--fg)}
+.wrap{max-width:860px;margin:0 auto;padding:1.2rem}
+a.back{color:var(--accent);text-decoration:none;font-size:.9rem}
+h1{font-size:1.5rem;margin:.6rem 0 .2rem}.sub{color:var(--muted);margin:0 0 1.4rem}
+h2{font-size:1.1rem;margin:1.6rem 0 .5rem;color:var(--accent)}
+.item{border:1px solid var(--line);border-radius:10px;background:var(--card);padding:.6rem .8rem;margin:.5rem 0}
+.item .l{font-weight:700}
+.item .n{color:var(--muted);font-size:.92rem;margin-top:.2rem}
+pre{margin:.45rem 0 0;background:var(--code);color:var(--codefg);border:1px solid var(--line);border-radius:8px;padding:.6rem .8rem;overflow-x:auto}
+code,pre{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:.86rem}
+.tips{border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:10px;background:var(--card);padding:.6rem 1rem}
+.tips li{margin:.35rem 0}
+@media print{.back{display:none}}</style></head><body><div class="wrap">
+<a class="back" href="../revision.html">← Back to revision index</a>
+<h1>Upgradable contracts — Cheat Sheet</h1>
+<p class="sub">Cohort 3.0 · 19 lessons · quick reference</p>
+<h2>Why upgrade + delegatecall core</h2><div class="item"><div class="l">The problem: deployed bytecode is immutable</div><div class="n">You cannot patch a bug or add features once a contract is on-chain. Naive fixes are costly.</div></div><div class="item"><div class="l">Naive approach 1: redeploy + migrate state</div><div class="n">New address breaks every reference/integration; copying storage on-chain is gas-expensive and error-prone.</div></div><div class="item"><div class="l">Naive approach 2: registry / data-separation</div><div class="n">Logic contract CALLs a separate storage contract via a lookup registry. Works but clumsy, extra gas, no shared context.</div></div><div class="item"><div class="l">Real solution: delegatecall — run OTHER code in THIS context</div><pre><code>(bool ok, bytes memory ret) = impl.delegatecall(msg.data);
+require(ok);
+// storage, msg.sender, msg.value, address(this) all stay the PROXY's</code></pre><div class="n">call = callee's context/storage; delegatecall = caller's context/storage. This is the whole trick behind proxies.</div></div><div class="item"><div class="l">delegatecall silent-fail gotcha</div><pre><code>// delegatecall to an EOA / empty address returns success=true!
+require(impl.code.length &gt; 0, "no code");</code></pre><div class="n">Always check the target has code before delegatecalling — otherwise it 'succeeds' doing nothing.</div></div><h2>Proxy = storage + fallback that delegates</h2><div class="item"><div class="l">Split into Proxy (holds state, permanent address) + Implementation (logic, swappable)</div><div class="n">Users only ever interact with the proxy address. Upgrade = point proxy at new impl.</div></div><div class="item"><div class="l">fallback() forwards every unknown call to the impl</div><pre><code>fallback() external payable { _delegate(_implementation()); }
+receive() external payable { _delegate(_implementation()); }</code></pre><div class="n">fallback catches any selector the proxy itself doesn't define, then delegates it.</div></div><div class="item"><div class="l">Canonical assembly delegate (preserves calldata + return/revert data)</div><pre><code>function _delegate(address impl) internal {
+    assembly {
+        calldatacopy(0, 0, calldatasize())
+        let ok := delegatecall(gas(), impl, 0, calldatasize(), 0, 0)
+        returndatacopy(0, 0, returndatasize())
+        switch ok
+        case 0 { revert(0, returndatasize()) }
+        default { return(0, returndatasize()) }
+    }
+}</code></pre><div class="n">Must be raw assembly — Solidity can't return a dynamic value whose type isn't known at compile time.</div></div><div class="item"><div class="l">Upgrade function (gate it!)</div><pre><code>function upgradeTo(address newImpl) external onlyOwner {
+    _setImplementation(newImpl);
+}</code></pre><div class="n">Without onlyOwner ANYONE can repoint the proxy to malicious logic and drain it.</div></div><h2>Storage layout — the #1 way to brick a proxy</h2><div class="item"><div class="l">Proxy &amp; impl SHARE the same storage slots</div><div class="n">delegatecall writes into the proxy's storage by slot index, using the IMPL's variable layout. They must agree.</div></div><div class="item"><div class="l">Storage collision: naive `address public implementation` at slot 0</div><pre><code>// PROXY:  slot0 = implementation
+// IMPL:   slot0 = uint256 count   &lt;-- COLLISION
+// writing count overwrites the implementation address</code></pre><div class="n">This is 'Problem with current proxy' — proxy's own vars overlap the impl's vars.</div></div><div class="item"><div class="l">Fix: unstructured storage — stash proxy vars at a random hashed slot</div><div class="n">Pick a slot no normal variable will ever occupy. Standardized as ERC-1967 (below).</div></div><div class="item"><div class="l">Upgrade rule: append-only</div><pre><code>// V1: uint a; uint b;
+// V2 OK:   uint a; uint b; uint c;   (append)
+// V2 BAD:  uint b; uint a;          (reorder -&gt; corrupt)
+// V2 BAD:  bool a; uint b;          (retype  -&gt; corrupt)</code></pre><div class="n">Never reorder, remove, or change the type of existing state vars between versions.</div></div><div class="item"><div class="l">Reserve space in base contracts with a gap</div><pre><code>uint256[50] private __gap;</code></pre><div class="n">Lets you add fields to an inherited base later without shifting child storage.</div></div><h2>ERC-1967 standard storage slots</h2><div class="item"><div class="l">Implementation slot</div><pre><code>// bytes32(uint256(keccak256("eip1967.proxy.implementation")) - 1)
+bytes32 internal constant _IMPL_SLOT =
+  0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc;</code></pre></div><div class="item"><div class="l">Admin slot</div><pre><code>// keccak256("eip1967.proxy.admin") - 1
+0xb53127684a568b3173ae13b9f8a6016e243e63b6e8ee1178d6a717850b5d6103</code></pre></div><div class="item"><div class="l">Beacon slot</div><pre><code>// keccak256("eip1967.proxy.beacon") - 1
+0xa3f0ad74e5423aebfd80d3ef4346578335a9a72aeaee59ff6cb3582b35133d50</code></pre></div><div class="item"><div class="l">Read/write via assembly</div><pre><code>function _getImplementation() internal view returns (address a) {
+    assembly { a := sload(_IMPL_SLOT) }
+}
+function _setImplementation(address newImpl) internal {
+    require(newImpl.code.length &gt; 0);
+    assembly { sstore(_IMPL_SLOT, newImpl) }
+}</code></pre><div class="n">Block explorers &amp; tooling detect proxies by reading these exact slots. -1 keeps the slot off any keccak-derived mapping.</div></div><h2>The three common proxy patterns</h2><div class="item"><div class="l">Transparent Proxy (TPP)</div><pre><code>// admin  -&gt; calls handled by proxy (upgrade)
+// non-admin -&gt; everything delegates to impl
+import "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";</code></pre><div class="n">Upgrade logic in the PROXY. A separate ProxyAdmin owns it. Routing by msg.sender avoids selector clashes but adds an SLOAD to every call. Admin can't call impl functions.</div></div><div class="item"><div class="l">UUPS (EIP-1822) — upgrade logic in the IMPLEMENTATION</div><pre><code>import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+contract MyV1 is Initializable, OwnableUpgradeable, UUPSUpgradeable {
+    function initialize(address o) public initializer {
+        __Ownable_init(o);
+        __UUPSUpgradeable_init();
+    }
+    function _authorizeUpgrade(address) internal override onlyOwner {}
+}</code></pre><div class="n">Cheaper deploy + calls (proxy is minimal, no admin routing). DANGER: ship an impl without upgrade code and the proxy is permanently bricked.</div></div><div class="item"><div class="l">Beacon Proxy — many proxies, one upgrade point</div><pre><code>import "@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol";
+import "@openzeppelin/contracts/proxy/beacon/BeaconProxy.sol";
+// beacon holds impl address; each BeaconProxy reads it
+new BeaconProxy(address(beacon), initData);
+beacon.upgradeTo(newImpl); // upgrades ALL proxies at once</code></pre><div class="n">Best for factories deploying N identical instances you want to upgrade in one tx. Extra SLOAD to fetch beacon then impl.</div></div><h2>Initializers — no constructors in logic contracts</h2><div class="item"><div class="l">Why: constructor runs in the IMPL's context, so its state never lands in the proxy</div><div class="n">State set by a constructor lives in the implementation's own storage — the proxy never sees it.</div></div><div class="item"><div class="l">Use an initializer instead (runs via delegatecall = proxy storage)</div><pre><code>function initialize(address o) public initializer {
+    __Ownable_init(o);
+}</code></pre><div class="n">`initializer` modifier ensures it runs exactly once.</div></div><div class="item"><div class="l">Lock the implementation's own initializers</div><pre><code>/// @custom:oz-upgrades-unsafe-allow constructor
+constructor() { _disableInitializers(); }</code></pre><div class="n">Prevents an attacker from initializing the bare impl contract directly and hijacking it.</div></div><div class="item"><div class="l">Versioned re-init for new state added in an upgrade</div><pre><code>function initializeV2(uint x) public reinitializer(2) { newVar = x; }</code></pre><div class="n">`reinitializer(n)` runs once per version; `onlyInitializing` for internal __init_ helpers of parents.</div></div><h2>OpenZeppelin Upgrades tooling</h2><div class="item"><div class="l">Install</div><pre><code>npm i @openzeppelin/contracts-upgradeable @openzeppelin/hardhat-upgrades
+# foundry:
+forge install OpenZeppelin/openzeppelin-contracts-upgradeable</code></pre></div><div class="item"><div class="l">Deploy proxy (Hardhat)</div><pre><code>const { ethers, upgrades } = require("hardhat");
+const Box = await ethers.getContractFactory("Box");
+const box = await upgrades.deployProxy(Box, [42], { kind: "uups" });
+await box.waitForDeployment();</code></pre></div><div class="item"><div class="l">Upgrade proxy</div><pre><code>const BoxV2 = await ethers.getContractFactory("BoxV2");
+await upgrades.upgradeProxy(await box.getAddress(), BoxV2);
+// plugin auto-validates storage layout compatibility before upgrading</code></pre><div class="n">It aborts if you reordered/retyped storage or used unsafe delegatecall/selfdestruct.</div></div><div class="item"><div class="l">Beacon deploy</div><pre><code>const beacon = await upgrades.deployBeacon(Box);
+const proxy  = await upgrades.deployBeaconProxy(beacon, Box, [42]);
+await upgrades.upgradeBeacon(beacon, BoxV2);</code></pre></div><div class="item"><div class="l">Foundry: OZ Upgrades + validation</div><pre><code>import {Upgrades} from "openzeppelin-foundry-upgrades/Upgrades.sol";
+Upgrades.deployUUPSProxy("BoxV1.sol", abi.encodeCall(Box.initialize, (42)));
+// build with: forge build --ast   (needed for layout checks)</code></pre></div>
+<h2>Quick tips &amp; gotchas</h2><ul class="tips"><li>No constructors in logic contracts: use `initialize()` + `initializer`, and call `_disableInitializers()` in the impl's constructor so the bare implementation can't be seized.</li><li>Storage is append-only across versions — never reorder, remove, or retype existing vars. Add `uint256[50] private __gap;` to upgradeable base contracts to reserve room.</li><li>delegatecall to an address with no code returns success=true and does nothing. Always `require(impl.code.length &gt; 0)` before setting/using an implementation.</li><li>Gate every upgrade path (`onlyOwner` / `_authorizeUpgrade`). An ungated upgrade lets anyone repoint the proxy to a drain contract.</li><li>UUPS bricking risk: if a new implementation omits UUPSUpgradeable / `_authorizeUpgrade`, the proxy loses its only upgrade mechanism forever. Transparent proxies keep upgrade logic in the proxy, so they can't self-brick this way.</li><li>Deploy + initialize atomically (single tx via proxy constructor data) — a two-step deploy lets an attacker front-run the initializer.</li><li>Explorers detect proxies via ERC-1967 slots; the `keccak(...) - 1` offset keeps those slots from ever colliding with a real mapping/array slot.</li><li>Transparent adds an SLOAD + admin check to every call; UUPS is cheapest at runtime; Beacon adds an extra hop but upgrades N proxies in one tx — pick per use case.</li></ul>
+</div></body></html>

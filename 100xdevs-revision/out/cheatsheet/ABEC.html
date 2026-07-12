@@ -1,0 +1,86 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Cheat Sheet · Advance BE communication</title><style>:root{--bg:#fff;--fg:#1a1a1a;--muted:#6b7280;--line:#e5e7eb;--accent:#0d9488;--card:#f9fafb;--code:#f3f4f6;--codefg:#111}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1115;--fg:#e6e6e6;--muted:#9aa0aa;--line:#242833;--accent:#2dd4bf;--card:#171a21;--code:#0b0e13;--codefg:#e6e6e6}}
+*{box-sizing:border-box}body{margin:0;font:16px/1.6 system-ui,Segoe UI,sans-serif;background:var(--bg);color:var(--fg)}
+.wrap{max-width:860px;margin:0 auto;padding:1.2rem}
+a.back{color:var(--accent);text-decoration:none;font-size:.9rem}
+h1{font-size:1.5rem;margin:.6rem 0 .2rem}.sub{color:var(--muted);margin:0 0 1.4rem}
+h2{font-size:1.1rem;margin:1.6rem 0 .5rem;color:var(--accent)}
+.item{border:1px solid var(--line);border-radius:10px;background:var(--card);padding:.6rem .8rem;margin:.5rem 0}
+.item .l{font-weight:700}
+.item .n{color:var(--muted);font-size:.92rem;margin-top:.2rem}
+pre{margin:.45rem 0 0;background:var(--code);color:var(--codefg);border:1px solid var(--line);border-radius:8px;padding:.6rem .8rem;overflow-x:auto}
+code,pre{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:.86rem}
+.tips{border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:10px;background:var(--card);padding:.6rem 1rem}
+.tips li{margin:.35rem 0}
+@media print{.back{display:none}}</style></head><body><div class="wrap">
+<a class="back" href="../revision.html">← Back to revision index</a>
+<h1>Advance BE communication — Cheat Sheet</h1>
+<p class="sub">Cohort 2.0 · 8 lessons · quick reference</p>
+<h2>Communication models</h2><div class="item"><div class="l">Request/Response (HTTP)</div><div class="n">Client initiates, server responds once. Stateless, short-lived. REST/GraphQL. No server push.</div></div><div class="item"><div class="l">Short polling</div><pre><code>setInterval(() =&gt; fetch('/updates'), 3000)</code></pre><div class="n">Client re-asks on a timer. Simple, but wasteful + high latency between polls.</div></div><div class="item"><div class="l">Long polling</div><div class="n">Server holds request open until data ready, then client re-requests. Fallback when WS unavailable.</div></div><div class="item"><div class="l">Server-Sent Events (SSE)</div><pre><code>const es = new EventSource('/stream');
+es.onmessage = e =&gt; console.log(e.data);</code></pre><div class="n">One-way server→client over HTTP, auto-reconnect built in. No client→server channel.</div></div><div class="item"><div class="l">WebSockets</div><div class="n">Full-duplex, persistent, bidirectional over a single TCP connection. Use for chat, live cursors, games, real-time dashboards.</div></div><div class="item"><div class="l">WebRTC</div><div class="n">Peer-to-peer (browser↔browser) for media/data. Needs a signaling server (often WS) to establish.</div></div><h2>WebSocket protocol</h2><div class="item"><div class="l">Upgrade handshake</div><pre><code>GET /chat HTTP/1.1
+Upgrade: websocket
+Connection: Upgrade
+Sec-WebSocket-Key: &lt;base64&gt;
+Sec-WebSocket-Version: 13</code></pre><div class="n">Starts as HTTP GET; server replies 101 Switching Protocols. Same TCP socket is reused after.</div></div><div class="item"><div class="l">Schemes</div><pre><code>ws://host:port   // plain
+wss://host:port  // TLS (use in prod)</code></pre></div><div class="item"><div class="l">Frames, not messages</div><div class="n">Protocol is frame-based (text/binary/ping/pong/close). Long-lived and stateful — no per-message HTTP overhead.</div></div><div class="item"><div class="l">Stays open</div><div class="n">No new handshake per message = low latency. Cost: server holds a connection/memory per client — plan for scale.</div></div><h2>ws server (Node.js)</h2><div class="item"><div class="l">Install</div><pre><code>npm i ws            # runtime
+npm i -D @types/ws  # TS types</code></pre></div><div class="item"><div class="l">Standalone server</div><pre><code>import { WebSocketServer } from 'ws';
+const wss = new WebSocketServer({ port: 8080 });
+
+wss.on('connection', (socket) =&gt; {
+  socket.on('message', (data) =&gt; {
+    // data is a Buffer -&gt; convert
+    console.log(data.toString());
+    socket.send('pong');
+  });
+  socket.on('close', () =&gt; console.log('gone'));
+  socket.on('error', console.error);
+});</code></pre></div><div class="item"><div class="l">Attach to existing HTTP server</div><pre><code>import { createServer } from 'http';
+import { WebSocketServer } from 'ws';
+const server = createServer();
+const wss = new WebSocketServer({ server });
+server.listen(8080);</code></pre><div class="n">Lets WS and REST share one port. Use { noServer:true } + server.on('upgrade') for path/auth-based routing.</div></div><div class="item"><div class="l">Broadcast to all clients</div><pre><code>for (const client of wss.clients) {
+  if (client.readyState === WebSocket.OPEN) client.send(msg);
+}</code></pre></div><div class="item"><div class="l">JSON message protocol</div><pre><code>socket.on('message', (raw) =&gt; {
+  const { type, payload } = JSON.parse(raw.toString());
+  if (type === 'join') rooms[payload.room].add(socket);
+});
+socket.send(JSON.stringify({ type:'ack' }));</code></pre><div class="n">Wrap everything in a { type, payload } envelope; parse defensively in try/catch.</div></div><div class="item"><div class="l">Auth on upgrade</div><pre><code>wss.on('connection', (socket, req) =&gt; {
+  const token = new URL(req.url, 'ws://x').searchParams.get('token');
+  if (!verify(token)) return socket.close(1008, 'unauthorized');
+});</code></pre><div class="n">Browsers can't set custom headers on WS — pass tokens via query string or a post-connect auth message.</div></div><h2>Client side</h2><div class="item"><div class="l">Browser WebSocket API</div><pre><code>const ws = new WebSocket('wss://api.example.com/chat');
+ws.onopen  = () =&gt; ws.send(JSON.stringify({ type:'join' }));
+ws.onmessage = (e) =&gt; console.log(JSON.parse(e.data));
+ws.onclose = () =&gt; console.log('closed');
+ws.onerror = (e) =&gt; console.error(e);</code></pre></div><div class="item"><div class="l">Guard sends until OPEN</div><pre><code>if (ws.readyState === WebSocket.OPEN) ws.send(msg);</code></pre><div class="n">readyState: 0 CONNECTING, 1 OPEN, 2 CLOSING, 3 CLOSED. Sending before OPEN throws.</div></div><div class="item"><div class="l">React (useEffect cleanup)</div><pre><code>useEffect(() =&gt; {
+  const ws = new WebSocket(URL);
+  ws.onmessage = (e) =&gt; setMsgs(m =&gt; [...m, e.data]);
+  return () =&gt; ws.close();
+}, []);</code></pre><div class="n">Always close on unmount. In StrictMode dev double-invoke, guard against duplicate connections.</div></div><div class="item"><div class="l">Reconnect with backoff</div><pre><code>function connect(retry = 0) {
+  const ws = new WebSocket(URL);
+  ws.onclose = () =&gt; setTimeout(
+    () =&gt; connect(retry + 1),
+    Math.min(1000 * 2 ** retry, 30000));
+}</code></pre><div class="n">Native WS does NOT auto-reconnect. Cap the delay; reset retry counter on successful open.</div></div><h2>Next.js integration</h2><div class="item"><div class="l">Can't run WS in route handlers</div><div class="n">App Router / API routes are serverless/short-lived — no long-lived socket. Run the WS server as a separate process.</div></div><div class="item"><div class="l">Separate ws service pattern</div><div class="n">Deploy Next.js (frontend/HTTP) and a standalone Node `ws` server independently; client connects to the ws service URL via env var.</div></div><div class="item"><div class="l">Custom server (self-hosted only)</div><pre><code>// server.js
+import next from 'next';
+import { createServer } from 'http';
+import { WebSocketServer } from 'ws';
+const app = next({ dev });
+const server = createServer(app.getRequestHandler());
+const wss = new WebSocketServer({ server });</code></pre><div class="n">Only works when you control the Node process. NOT supported on Vercel serverless — use a dedicated host (Render/Railway/EC2).</div></div><div class="item"><div class="l">Client URL via env</div><pre><code>const ws = new WebSocket(process.env.NEXT_PUBLIC_WS_URL!);</code></pre><div class="n">NEXT_PUBLIC_ prefix exposes it to the browser bundle.</div></div><h2>Scaling WS servers</h2><div class="item"><div class="l">The problem</div><div class="n">Sockets are stateful + sticky to one instance. With N servers, a user on server A can't directly reach a user on server B.</div></div><div class="item"><div class="l">Sticky sessions at LB</div><div class="n">A client must keep hitting the same instance (the socket lives there). Enable session affinity / IP hash on the load balancer.</div></div><div class="item"><div class="l">Redis Pub/Sub fan-out</div><pre><code>import { createClient } from 'redis';
+const pub = createClient(); const sub = pub.duplicate();
+await pub.connect(); await sub.connect();
+
+sub.subscribe('room:1', (msg) =&gt; broadcastLocal(msg));
+// on incoming ws message:
+pub.publish('room:1', JSON.stringify(payload));</code></pre><div class="n">Every WS instance subscribes; a message published on any node reaches all nodes, which relay to their local sockets.</div></div><div class="item"><div class="l">Horizontal architecture</div><div class="n">LB → [ws-1, ws-2, ws-3] all connected to a Redis (or Kafka/NATS) pub/sub bus. Add instances to scale connections.</div></div><div class="item"><div class="l">Heartbeat / dead-connection reap</div><pre><code>const iv = setInterval(() =&gt; {
+  wss.clients.forEach(s =&gt; {
+    if (!s.isAlive) return s.terminate();
+    s.isAlive = false; s.ping();
+  });
+}, 30000);
+wss.on('connection', s =&gt; {
+  s.isAlive = true;
+  s.on('pong', () =&gt; s.isAlive = true);
+});</code></pre><div class="n">TCP can silently drop; ping/pong detects zombies so you free memory. Clear the interval on wss 'close'.</div></div><div class="item"><div class="l">Managed alternatives</div><div class="n">socket.io (rooms + @socket.io/redis-adapter), Ably, Pusher, or Redis for presence/state — skip hand-rolling scale.</div></div>
+<h2>Quick tips &amp; gotchas</h2><ul class="tips"><li>ws message events give you a Buffer, not a string — always .toString() (or JSON.parse(raw.toString())) before use.</li><li>Wrap JSON.parse in try/catch: a single malformed frame from a client shouldn't crash the whole server.</li><li>Browsers can't set custom headers (e.g. Authorization) on a WebSocket — authenticate via query param or a first post-connect message.</li><li>Native WebSocket has zero built-in reconnection — implement exponential backoff yourself or use reconnecting-websocket / socket.io.</li><li>Vercel and most serverless platforms can't host long-lived WS — run the socket server on a persistent host (Render, Railway, Fly, EC2).</li><li>One process = one CPU core; sockets don't share memory across instances. Use Redis pub/sub + sticky sessions to scale out.</li><li>Always ws.close() on client unmount and clean up server timers on 'close' — leaked sockets/intervals exhaust memory fast.</li><li>Use wss:// (TLS) in production; ws:// is blocked from https:// pages by mixed-content rules.</li></ul>
+</div></body></html>

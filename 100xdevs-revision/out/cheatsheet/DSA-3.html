@@ -1,0 +1,61 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Cheat Sheet · Arrays</title><style>:root{--bg:#fff;--fg:#1a1a1a;--muted:#6b7280;--line:#e5e7eb;--accent:#0d9488;--card:#f9fafb;--code:#f3f4f6;--codefg:#111}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1115;--fg:#e6e6e6;--muted:#9aa0aa;--line:#242833;--accent:#2dd4bf;--card:#171a21;--code:#0b0e13;--codefg:#e6e6e6}}
+*{box-sizing:border-box}body{margin:0;font:16px/1.6 system-ui,Segoe UI,sans-serif;background:var(--bg);color:var(--fg)}
+.wrap{max-width:860px;margin:0 auto;padding:1.2rem}
+a.back{color:var(--accent);text-decoration:none;font-size:.9rem}
+h1{font-size:1.5rem;margin:.6rem 0 .2rem}.sub{color:var(--muted);margin:0 0 1.4rem}
+h2{font-size:1.1rem;margin:1.6rem 0 .5rem;color:var(--accent)}
+.item{border:1px solid var(--line);border-radius:10px;background:var(--card);padding:.6rem .8rem;margin:.5rem 0}
+.item .l{font-weight:700}
+.item .n{color:var(--muted);font-size:.92rem;margin-top:.2rem}
+pre{margin:.45rem 0 0;background:var(--code);color:var(--codefg);border:1px solid var(--line);border-radius:8px;padding:.6rem .8rem;overflow-x:auto}
+code,pre{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:.86rem}
+.tips{border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:10px;background:var(--card);padding:.6rem 1rem}
+.tips li{margin:.35rem 0}
+@media print{.back{display:none}}</style></head><body><div class="wrap">
+<a class="back" href="../revision.html">← Back to revision index</a>
+<h1>Arrays — Cheat Sheet</h1>
+<p class="sub">Cohort 2.0 · 6 lessons · quick reference</p>
+<h2>Arrays: declare &amp; operation costs</h2><div class="item"><div class="l">Create / init (JS)</div><pre><code>const a = [1, 2, 3];
+const b = new Array(5).fill(0);      // [0,0,0,0,0]
+const c = Array.from({length: 5}, (_, i) =&gt; i); // [0..4]</code></pre><div class="n">new Array(5) alone makes 5 empty slots, not zeros — always .fill().</div></div><div class="item"><div class="l">Access by index — O(1)</div><pre><code>a[2]; // random access via base + i*size</code></pre><div class="n">Contiguous memory is what makes indexing constant-time.</div></div><div class="item"><div class="l">Push / pop (end) — O(1) amortized</div><pre><code>a.push(4);  // append
+a.pop();    // remove last</code></pre><div class="n">Amortized: occasional resize copies all n elements but averages to O(1).</div></div><div class="item"><div class="l">Shift / unshift (front) — O(n)</div><pre><code>a.unshift(0); // insert front, shifts all right
+a.shift();    // remove front, shifts all left</code></pre><div class="n">Every element re-indexed → avoid in hot loops; use a deque instead.</div></div><div class="item"><div class="l">Insert / delete middle — O(n)</div><pre><code>a.splice(i, 0, x); // insert x at i
+a.splice(i, 1);    // delete at i</code></pre><div class="n">Cost is from shifting the n-i trailing elements.</div></div><div class="item"><div class="l">Linear search — O(n)</div><pre><code>a.indexOf(x);
+a.find(v =&gt; v &gt; 10);</code></pre></div><h2>Asymptotic notations</h2><div class="item"><div class="l">Big-O — upper bound (worst case)</div><pre><code>f(n) = O(g(n))  iff  f(n) &lt;= c*g(n) for all n &gt;= n0</code></pre><div class="n">"At most this fast-growing." The one you almost always quote.</div></div><div class="item"><div class="l">Big-Omega Ω — lower bound (best case)</div><pre><code>f(n) = Ω(g(n))  iff  f(n) &gt;= c*g(n) for n &gt;= n0</code></pre><div class="n">"At least this much work."</div></div><div class="item"><div class="l">Big-Theta Θ — tight bound</div><pre><code>f(n) = Θ(g(n))  iff  f = O(g) AND f = Ω(g)</code></pre><div class="n">Upper and lower match → the true growth rate.</div></div><div class="item"><div class="l">little-o / little-ω — strict bounds</div><pre><code>f = o(g): f grows strictly slower (ratio -&gt; 0)</code></pre><div class="n">o/ω exclude the tight case; O/Ω allow equality.</div></div><div class="item"><div class="l">Growth ranking</div><pre><code>1 &lt; log n &lt; n &lt; n log n &lt; n^2 &lt; n^3 &lt; 2^n &lt; n!</code></pre><div class="n">Compare by dominant term as n -&gt; infinity; constants don't affect the class.</div></div><h2>Complexity analysis rules</h2><div class="item"><div class="l">Drop constants</div><pre><code>O(2n)   -&gt; O(n)
+O(n/2)  -&gt; O(n)</code></pre><div class="n">Big-O ignores multiplicative constants.</div></div><div class="item"><div class="l">Drop lower-order terms</div><pre><code>O(n^2 + n + 100) -&gt; O(n^2)</code></pre><div class="n">Keep only the fastest-growing term.</div></div><div class="item"><div class="l">Sequential code → ADD</div><pre><code>loop A: O(n)
+loop B: O(m)
+// total O(n + m)</code></pre></div><div class="item"><div class="l">Nested loops → MULTIPLY</div><pre><code>for i in n:
+  for j in n:   // O(n * n) = O(n^2)</code></pre><div class="n">Watch inner bounds: for j in i gives n(n+1)/2 = O(n^2) still.</div></div><div class="item"><div class="l">Halving the input → log n</div><pre><code>while (n &gt; 1) n = n / 2;  // O(log n)</code></pre><div class="n">Doubling/halving each step ⇒ log2(n) iterations.</div></div><div class="item"><div class="l">Separate variables stay separate</div><pre><code>// two different arrays sizes
+O(a + b), NOT O(n)</code></pre><div class="n">Don't collapse independent inputs into one n.</div></div><div class="item"><div class="l">Analyze worst case by default</div><div class="n">Best/average also exist, but O() interviews mean worst case unless stated.</div></div><h2>Popular complexity classes</h2><div class="item"><div class="l">O(1) constant</div><pre><code>arr[i]; map.get(k); push/pop</code></pre><div class="n">Independent of n.</div></div><div class="item"><div class="l">O(log n) logarithmic</div><pre><code>binary search; balanced BST op</code></pre><div class="n">Input cut by a constant factor each step.</div></div><div class="item"><div class="l">O(n) linear</div><pre><code>single pass / scan</code></pre><div class="n">One touch per element.</div></div><div class="item"><div class="l">O(n log n) linearithmic</div><pre><code>merge sort, heap sort, Array.sort()</code></pre><div class="n">Best possible for comparison sorting.</div></div><div class="item"><div class="l">O(n^2) quadratic</div><pre><code>nested loop, bubble/insertion sort, all pairs</code></pre><div class="n">n up to ~10^4 is usually the ceiling for O(n^2).</div></div><div class="item"><div class="l">O(2^n) exponential</div><pre><code>naive subsets, recursive fib without memo</code></pre><div class="n">Feasible only for n ~ 20-25.</div></div><div class="item"><div class="l">O(n!) factorial</div><pre><code>permutations, brute-force TSP</code></pre><div class="n">n ~ 10-12 max.</div></div><h2>Master Theorem (divide &amp; conquer)</h2><div class="item"><div class="l">Recurrence form</div><pre><code>T(n) = a*T(n/b) + f(n)
+// a &gt;= 1 subproblems, each size n/b, f(n) = split+merge cost</code></pre><div class="n">Compare f(n) against n^(log_b a) = the "watershed" term.</div></div><div class="item"><div class="l">Case 1 — leaves dominate</div><pre><code>if f(n) = O(n^(log_b a - e)),  e&gt;0
+=&gt; T(n) = Θ(n^(log_b a))</code></pre><div class="n">Work grows toward the bottom of the recursion tree.</div></div><div class="item"><div class="l">Case 2 — balanced</div><pre><code>if f(n) = Θ(n^(log_b a))
+=&gt; T(n) = Θ(n^(log_b a) * log n)</code></pre><div class="n">Every level does equal work; +log n from the level count.</div></div><div class="item"><div class="l">Case 3 — root dominates</div><pre><code>if f(n) = Ω(n^(log_b a + e)) and regularity a*f(n/b) &lt;= c*f(n)
+=&gt; T(n) = Θ(f(n))</code></pre></div><div class="item"><div class="l">Merge sort</div><pre><code>T(n) = 2T(n/2) + O(n)
+log_2 2 = 1, f = n = n^1  -&gt; Case 2
+=&gt; Θ(n log n)</code></pre></div><div class="item"><div class="l">Binary search</div><pre><code>T(n) = 1*T(n/2) + O(1)
+log_2 1 = 0, f = 1 = n^0  -&gt; Case 2
+=&gt; Θ(log n)</code></pre></div><div class="item"><div class="l">Doesn't apply when</div><div class="n">a&lt;1, non-polynomial gap between f and n^(log_b a), or uneven splits — use recursion-tree / Akra–Bazzi instead.</div></div><h2>Core array problem patterns</h2><div class="item"><div class="l">Two pointers — O(n)</div><pre><code>let l = 0, r = a.length - 1;
+while (l &lt; r) {
+  if (a[l] + a[r] === t) return [l, r];
+  a[l] + a[r] &lt; t ? l++ : r--;
+}</code></pre><div class="n">Requires sorted input for the sum/target variant.</div></div><div class="item"><div class="l">Sliding window — O(n)</div><pre><code>let sum = 0, best = 0, l = 0;
+for (let r = 0; r &lt; a.length; r++) {
+  sum += a[r];
+  while (sum &gt; k) sum -= a[l++];
+  best = Math.max(best, r - l + 1);
+}</code></pre><div class="n">Turns an O(n^2) subarray scan into one pass.</div></div><div class="item"><div class="l">Prefix sum — O(n) build, O(1) range query</div><pre><code>const p = [0];
+for (const x of a) p.push(p.at(-1) + x);
+// sum(i..j) = p[j+1] - p[i]</code></pre></div><div class="item"><div class="l">Kadane — max subarray, O(n)</div><pre><code>let cur = a[0], best = a[0];
+for (let i = 1; i &lt; a.length; i++) {
+  cur = Math.max(a[i], cur + a[i]);
+  best = Math.max(best, cur);
+}</code></pre></div><div class="item"><div class="l">Binary search — O(log n)</div><pre><code>let lo = 0, hi = a.length - 1;
+while (lo &lt;= hi) {
+  const m = (lo + hi) &gt;&gt; 1;
+  if (a[m] === t) return m;
+  a[m] &lt; t ? lo = m + 1 : hi = m - 1;
+}</code></pre><div class="n">(lo+hi)&gt;&gt;1 avoids overflow vs (lo+hi)/2 in fixed-width langs.</div></div><div class="item"><div class="l">Frequency / hashing — O(n)</div><pre><code>const freq = new Map();
+for (const x of a) freq.set(x, (freq.get(x) ?? 0) + 1);</code></pre><div class="n">Trades O(n) space to drop time from O(n^2) to O(n).</div></div>
+<h2>Quick tips &amp; gotchas</h2><ul class="tips"><li>Big-O measures growth rate, not runtime — a well-tuned O(n^2) can beat O(n log n) for tiny n; asymptotics only win as n grows.</li><li>unshift/shift/splice at the front are O(n) because every element is re-indexed — reach for a deque or index pointer in hot paths.</li><li>push/pop is O(1) amortized, not strictly O(1): a resize copies all n elements, but it averages out.</li><li>Map input size to a target complexity: n&lt;=10 → O(n!)/O(2^n) ok; n&lt;=10^4 → O(n^2); n&lt;=10^6 → O(n log n)/O(n).</li><li>Master Theorem needs the a*T(n/b) shape; unequal splits (e.g. T(n)=T(n/3)+T(2n/3)+n) need a recursion tree or Akra–Bazzi.</li><li>In Master Theorem the pivot is n^(log_b a): compare f(n) against it — smaller ⇒ Case 1, equal ⇒ Case 2 (adds log n), larger ⇒ Case 3.</li><li>Space complexity counts too — recursion depth (call stack) and auxiliary arrays are part of the cost, not free.</li><li>Don't collapse independent inputs: two loops over different arrays are O(a+b), not O(n) — only merge variables that are actually the same size.</li></ul>
+</div></body></html>

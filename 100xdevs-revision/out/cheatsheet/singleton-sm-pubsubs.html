@@ -1,0 +1,86 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Cheat Sheet · Singleton Pattern, Backend State management and Pub Subs</title><style>:root{--bg:#fff;--fg:#1a1a1a;--muted:#6b7280;--line:#e5e7eb;--accent:#0d9488;--card:#f9fafb;--code:#f3f4f6;--codefg:#111}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1115;--fg:#e6e6e6;--muted:#9aa0aa;--line:#242833;--accent:#2dd4bf;--card:#171a21;--code:#0b0e13;--codefg:#e6e6e6}}
+*{box-sizing:border-box}body{margin:0;font:16px/1.6 system-ui,Segoe UI,sans-serif;background:var(--bg);color:var(--fg)}
+.wrap{max-width:860px;margin:0 auto;padding:1.2rem}
+a.back{color:var(--accent);text-decoration:none;font-size:.9rem}
+h1{font-size:1.5rem;margin:.6rem 0 .2rem}.sub{color:var(--muted);margin:0 0 1.4rem}
+h2{font-size:1.1rem;margin:1.6rem 0 .5rem;color:var(--accent)}
+.item{border:1px solid var(--line);border-radius:10px;background:var(--card);padding:.6rem .8rem;margin:.5rem 0}
+.item .l{font-weight:700}
+.item .n{color:var(--muted);font-size:.92rem;margin-top:.2rem}
+pre{margin:.45rem 0 0;background:var(--code);color:var(--codefg);border:1px solid var(--line);border-radius:8px;padding:.6rem .8rem;overflow-x:auto}
+code,pre{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:.86rem}
+.tips{border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:10px;background:var(--card);padding:.6rem 1rem}
+.tips li{margin:.35rem 0}
+@media print{.back{display:none}}</style></head><body><div class="wrap">
+<a class="back" href="../revision.html">← Back to revision index</a>
+<h1>Singleton Pattern, Backend State management and Pub Subs — Cheat Sheet</h1>
+<p class="sub">Cohort 2.0 · 6 lessons · quick reference</p>
+<h2>Stateful vs Stateless Backends</h2><div class="item"><div class="l">Stateless — no memory between requests; every request self-contained</div><pre><code>// REST handler: state lives in DB/Redis, not RAM
+app.get('/balance/:id', async (req, res) =&gt; {
+  const bal = await db.balance(req.params.id); // fetch every time
+  res.json({ bal });
+});</code></pre><div class="n">Scales horizontally trivially — any instance can serve any request. Default choice for HTTP APIs.</div></div><div class="item"><div class="l">Stateful — holds data in process memory across requests</div><pre><code>// WebSocket game server keeps rooms in RAM
+const rooms = new Map&lt;string, Game&gt;();
+wss.on('connection', ws =&gt; rooms.get(roomId)?.addPlayer(ws));</code></pre><div class="n">Used for real-time (WS), low-latency, ephemeral data. WS connection object CANNOT be serialized to a DB — must stay in memory.</div></div><div class="item"><div class="l">The scaling problem: N instances don't share memory</div><div class="n">Instance A's `rooms` Map is invisible to instance B. Two players on different pods can't see each other → need sticky sessions or a shared bus (Redis pub/sub).</div></div><div class="item"><div class="l">Sticky sessions — pin a client to one instance</div><pre><code># nginx: hash on client IP so a socket always hits same backend
+upstream ws { ip_hash; server a:8080; server b:8080; }</code></pre><div class="n">Band-aid for stateful WS. Breaks on pod restart; doesn't help cross-room broadcast. Real fix = pub/sub layer.</div></div><h2>State in the JS Process</h2><div class="item"><div class="l">Module-level variable = persists for process lifetime</div><pre><code>// counter.ts
+let count = 0;
+export const inc = () =&gt; ++count; // survives across requests</code></pre><div class="n">Node keeps the module loaded; the closure variable lives as long as the process.</div></div><div class="item"><div class="l">Single-threaded event loop → no locks for simple state</div><pre><code>let seats = 100;
+app.post('/book', (req, res) =&gt; {
+  if (seats &gt; 0) { seats--; res.send('ok'); } // no race: JS is single-threaded
+  else res.send('sold out');
+});</code></pre><div class="n">Safe because no two handlers run truly in parallel. BUT an `await` in the middle yields the loop — check-then-act across an await CAN race.</div></div><div class="item"><div class="l">Restart / redeploy wipes everything</div><div class="n">In-memory state is ephemeral. Never keep durable data (payments, user records) only in RAM.</div></div><div class="item"><div class="l">worker_threads / cluster do NOT share memory</div><div class="n">Each worker has its own heap → its own copy of your 'singleton'. Memory sharing needs SharedArrayBuffer or an external store.</div></div><h2>Classes &amp; Singleton Pattern (TS)</h2><div class="item"><div class="l">Class basics — fields, private, constructor, methods</div><pre><code>class UserManager {
+  private users: Map&lt;string, User&gt; = new Map();
+  addUser(u: User) { this.users.set(u.id, u); }
+  getUser(id: string) { return this.users.get(id); }
+}</code></pre></div><div class="item"><div class="l">Classic Singleton — private ctor + static getInstance()</div><pre><code>class Store {
+  private static instance: Store;
+  private state = new Map&lt;string, number&gt;();
+  private constructor() {}          // blocks `new Store()`
+  static getInstance(): Store {
+    if (!Store.instance) Store.instance = new Store();
+    return Store.instance;
+  }
+  set(k: string, v: number) { this.state.set(k, v); }
+}
+const s = Store.getInstance();      // always same object</code></pre><div class="n">Lazy init. Guarantees one instance app-wide within a single process.</div></div><div class="item"><div class="l">Idiomatic Node singleton — export a live instance</div><pre><code>// store.ts
+class Store { /* ... */ }
+export const store = new Store();
+
+// anywhere.ts
+import { store } from './store'; // Node module cache → same instance</code></pre><div class="n">Simplest and most common in Node/TS. Module resolution caches the module, so every importer gets the one instance.</div></div><div class="item"><div class="l">Why singleton here: one shared source of truth for state</div><div class="n">Connection pool, config, in-memory store, pub/sub client — things that must be exactly one per process.</div></div><h2>Pub/Sub — Concept &amp; In-Process</h2><div class="item"><div class="l">Model: publishers → topic/channel → subscribers (decoupled)</div><div class="n">Publisher doesn't know who listens. Many subscribers per channel. Fire-and-forget, no reply.</div></div><div class="item"><div class="l">In-process bus — Node EventEmitter</div><pre><code>import { EventEmitter } from 'node:events';
+const bus = new EventEmitter();
+bus.on('order:created', (o) =&gt; sendEmail(o));   // subscribe
+bus.on('order:created', (o) =&gt; updateStats(o)); // 2nd subscriber
+bus.emit('order:created', { id: 42 });          // publish</code></pre><div class="n">Only works within ONE process. Listeners run synchronously in registration order.</div></div><div class="item"><div class="l">Cross-process pub/sub — Redis (the scaling fix)</div><pre><code>import { createClient } from 'redis';
+const pub = createClient();  const sub = createClient();
+await pub.connect(); await sub.connect();
+await sub.subscribe('room:1', (msg) =&gt; broadcast(JSON.parse(msg)));
+await pub.publish('room:1', JSON.stringify({ move: 'e4' }));</code></pre><div class="n">MUST use two clients: a connection in subscribe mode can't run normal commands. This lets instance A's publish reach subscribers on instance B.</div></div><h2>Pub/Sub + Singleton — Implementation</h2><div class="item"><div class="l">Singleton Redis manager (one pub, one sub per process)</div><pre><code>class PubSubManager {
+  private static instance: PubSubManager;
+  private pub = createClient();
+  private sub = createClient();
+  // channel -&gt; local sockets interested in it
+  private subs = new Map&lt;string, WebSocket[]&gt;();
+  private constructor() { this.pub.connect(); this.sub.connect(); }
+  static getInstance() {
+    if (!this.instance) this.instance = new PubSubManager();
+    return this.instance;
+  }
+}</code></pre><div class="n">Singleton so the whole process shares ONE Redis pub/sub pair + one subscription registry.</div></div><div class="item"><div class="l">Subscribe local client, and subscribe Redis only on first interest</div><pre><code>subscribe(userSock: WebSocket, channel: string) {
+  const list = this.subs.get(channel) ?? [];
+  if (list.length === 0)                 // first subscriber on THIS node
+    this.sub.subscribe(channel, (msg) =&gt; this.fanout(channel, msg));
+  this.subs.set(channel, [...list, userSock]);
+}</code></pre><div class="n">Only call Redis SUBSCRIBE once per channel per instance; track local sockets in the Map.</div></div><div class="item"><div class="l">Fan out Redis message to local sockets</div><pre><code>private fanout(channel: string, raw: string) {
+  this.subs.get(channel)?.forEach(ws =&gt; ws.send(raw));
+}
+publish(channel: string, payload: unknown) {
+  this.pub.publish(channel, JSON.stringify(payload));
+}</code></pre><div class="n">Any instance publishes → Redis broadcasts → every instance's fanout pushes to its own connected clients. Cross-node broadcast solved.</div></div><div class="item"><div class="l">Unsubscribe + cleanup on disconnect</div><pre><code>unsubscribe(userSock: WebSocket, channel: string) {
+  const rest = (this.subs.get(channel) ?? []).filter(w =&gt; w !== userSock);
+  this.subs.set(channel, rest);
+  if (rest.length === 0) this.sub.unsubscribe(channel); // last one left
+}</code></pre><div class="n">Leak guard: drop the Redis subscription when no local socket cares, else channels accumulate forever.</div></div>
+<h2>Quick tips &amp; gotchas</h2><ul class="tips"><li>`export const x = new X()` is a de-facto singleton via Node's module cache — but it's one-per-process, NOT one-per-cluster. Horizontal scaling breaks the illusion.</li><li>Redis pub/sub needs TWO connections: a client in subscribe mode rejects normal commands. Reuse a single publisher client for all publishes.</li><li>In-memory singleton state diverges across instances the moment you scale past 1 pod. Sync via Redis pub/sub, or keep truth in a shared DB/Redis.</li><li>Lazy `getInstance()` isn't thread-safe in general, but Node's single thread makes the null-check fine — unless you use worker_threads/cluster, where each worker gets its own instance.</li><li>A check-then-act (`if (seats&gt;0) { await ...; seats-- }`) with an `await` between IS racy even in single-threaded Node — the event loop yields at await. Decrement before awaiting, or use atomic Redis ops.</li><li>Singletons leak state between tests. Add a `reset()` method or prefer dependency injection so test cases start clean.</li><li>Duplicate module instances (mixed ESM/CJS, symlinked deps, different import paths/casing on Windows) create TWO 'singletons'. Import from one canonical path.</li><li>Never store durable data (orders, balances) only in a process-memory singleton — a deploy or crash wipes it. RAM state = ephemeral cache/session/room only.</li></ul>
+</div></body></html>

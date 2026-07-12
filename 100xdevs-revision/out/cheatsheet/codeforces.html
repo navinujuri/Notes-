@@ -1,0 +1,120 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Cheat Sheet · Building Codeforces (Project track)</title><style>:root{--bg:#fff;--fg:#1a1a1a;--muted:#6b7280;--line:#e5e7eb;--accent:#0d9488;--card:#f9fafb;--code:#f3f4f6;--codefg:#111}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1115;--fg:#e6e6e6;--muted:#9aa0aa;--line:#242833;--accent:#2dd4bf;--card:#171a21;--code:#0b0e13;--codefg:#e6e6e6}}
+*{box-sizing:border-box}body{margin:0;font:16px/1.6 system-ui,Segoe UI,sans-serif;background:var(--bg);color:var(--fg)}
+.wrap{max-width:860px;margin:0 auto;padding:1.2rem}
+a.back{color:var(--accent);text-decoration:none;font-size:.9rem}
+h1{font-size:1.5rem;margin:.6rem 0 .2rem}.sub{color:var(--muted);margin:0 0 1.4rem}
+h2{font-size:1.1rem;margin:1.6rem 0 .5rem;color:var(--accent)}
+.item{border:1px solid var(--line);border-radius:10px;background:var(--card);padding:.6rem .8rem;margin:.5rem 0}
+.item .l{font-weight:700}
+.item .n{color:var(--muted);font-size:.92rem;margin-top:.2rem}
+pre{margin:.45rem 0 0;background:var(--code);color:var(--codefg);border:1px solid var(--line);border-radius:8px;padding:.6rem .8rem;overflow-x:auto}
+code,pre{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:.86rem}
+.tips{border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:10px;background:var(--card);padding:.6rem 1rem}
+.tips li{margin:.35rem 0}
+@media print{.back{display:none}}</style></head><body><div class="wrap">
+<a class="back" href="../revision.html">← Back to revision index</a>
+<h1>Building Codeforces (Project track) — Cheat Sheet</h1>
+<p class="sub">Cohort 2.0 · 10 lessons · quick reference</p>
+<h2>Monorepo &amp; stack setup</h2><div class="item"><div class="l">Workspace layout (pnpm + turbo)</div><pre><code>apps/
+  web/        # Next.js — problems, submit UI, contests, leaderboard
+  setter/     # problem-authoring UI/CLI + boilerplate generator
+  judge/      # worker: pulls queue, runs code in Docker
+packages/
+  db/         # Prisma schema + client (shared)
+  common/     # zod types, verdict enum, language configs</code></pre><div class="n">Split web / setter / judge so the judge (untrusted-code runner) scales &amp; deploys independently.</div></div><div class="item"><div class="l">Scaffold</div><pre><code>pnpm create next-app apps/web --ts
+pnpm add -w prisma @prisma/client ioredis zod
+pnpm dlx turbo run dev   # runs all apps</code></pre></div><div class="item"><div class="l">Core stack</div><div class="n">Next.js (React) FE + API, Node/Express or Next route handlers BE, Postgres+Prisma (durable state), Redis (submission queue), Docker (per-submission sandbox).</div></div><h2>Database design (Prisma)</h2><div class="item"><div class="l">Core models</div><pre><code>model Problem {
+  id        String @id @default(cuid())
+  slug      String @unique
+  title     String
+  statement String
+  difficulty Int
+  timeLimitMs Int   @default(1000)
+  memoryKb    Int   @default(262144)
+  hidden    Boolean @default(true)
+  submissions Submission[]
+  defaultCode DefaultCode[]  // per-language boilerplate
+}
+
+model Submission {
+  id        String   @id @default(cuid())
+  userId    String
+  problemId String
+  contestId String?
+  code      String
+  language  String
+  status    SubmissionStatus @default(PENDING)
+  runtimeMs Int?
+  memoryKb  Int?
+  failedTest Int?
+  createdAt DateTime @default(now())
+  @@index([userId, problemId])
+  @@index([contestId])
+}
+
+enum SubmissionStatus { PENDING AC WA TLE MLE RE CE }</code></pre><div class="n">Contest / ContestParticipant / rating history are separate tables. Keep rows small.</div></div><div class="item"><div class="l">Big test data → object store</div><div class="n">Store test inputs/outputs in S3 (or a git-backed problems repo); keep only a pointer/path in Postgres — never BLOB megabytes of tests into a row.</div></div><div class="item"><div class="l">Migrate</div><pre><code>pnpm prisma migrate dev --name init
+pnpm prisma generate</code></pre></div><h2>Submit flow + Redis queue (Platform)</h2><div class="item"><div class="l">Submit endpoint (return fast)</div><pre><code>// POST /submissions
+const sub = await db.submission.create({
+  data: { userId, problemId, code, language, status: 'PENDING' }
+});
+await redis.lpush('submissions', JSON.stringify({ id: sub.id, language }));
+return Response.json({ id: sub.id }); // ~50ms, no judging inline</code></pre><div class="n">API writes PENDING + enqueues, then returns. Never run untrusted code in the request handler.</div></div><div class="item"><div class="l">Worker pulls (blocking pop)</div><pre><code>// judge worker loop
+while (true) {
+  const [, raw] = await redis.brpop('submissions', 0); // blocks
+  const { id, language } = JSON.parse(raw);
+  const verdict = await judge(id, language);            // Docker run
+  await db.submission.update({ where: { id }, data: verdict });
+  await pub.publish(`sub:${id}`, JSON.stringify(verdict)); // notify FE
+}</code></pre><div class="n">Redis list = simplest broker. BullMQ (`new Queue/Worker`) adds retries, rate-limit, priority (contest &gt; practice) for free.</div></div><h2>Judge worker &amp; Docker sandbox</h2><div class="item"><div class="l">Hardened container per submission</div><pre><code>docker run --rm \
+  --network none \                 # no internet / data exfil
+  --read-only --tmpfs /tmp:size=64m \ # ro rootfs, scratch only
+  --memory 256m --memory-swap 256m \  # MLE cap (swap==mem disables swap)
+  --pids-limit 64 \                # kill fork bombs
+  --cpus 1 --ulimit cpu=2 \        # CPU-TIME cap → SIGKILL
+  --cap-drop ALL --security-opt no-new-privileges \
+  -u 1000:1000 \                   # non-root
+  judge-cpp /run.sh</code></pre><div class="n">memory-swap MUST equal memory or MLE never fires. gVisor/Firecracker for stronger isolation than plain Docker.</div></div><div class="item"><div class="l">Compile once, then loop tests</div><pre><code>// CE first — bail before running any test
+if (compileExit !== 0) return { status: 'CE' };
+for (const t of tests) {
+  const { stdout, exitCode, timedOut, killedByOom } =
+    await run(binary, t.input, { timeoutMs: timeLimitMs });
+  if (timedOut)     return { status: 'TLE', failedTest: t.n };
+  if (killedByOom)  return { status: 'MLE', failedTest: t.n };
+  if (exitCode)     return { status: 'RE',  failedTest: t.n };
+  if (norm(stdout) !== norm(t.expected))
+    return { status: 'WA', failedTest: t.n };
+}
+return { status: 'AC', runtimeMs, memoryKb };</code></pre><div class="n">Compile once, reuse binary across all tests. norm() = trim trailing whitespace/newlines before diff.</div></div><h2>Problem setter &amp; boilerplate generator</h2><div class="item"><div class="l">Problem folder = source of truth</div><pre><code>problems/two-sum/
+  Problem.md        # statement (markdown)
+  Structure.md      # I/O signature (parsed)
+  tests/
+    0.in  0.out
+    1.in  1.out
+  boilerplate/      # generated per language
+    function.cpp function.js ...</code></pre></div><div class="item"><div class="l">Structure.md format</div><pre><code>Problem Name: "Sum of Two"
+Function Name: sumOfTwo
+Input Structure:
+Input Field: int a
+Input Field: int b
+Input Field: list&lt;int&gt; arr
+Output Structure:
+Output Field: int result</code></pre></div><div class="item"><div class="l">Generate stubs + I/O harness</div><pre><code>const parser = new ProblemDefinitionParser();
+parser.parse(readFileSync('Structure.md','utf8'));
+// full = harness that reads stdin, calls fn, prints stdout
+// partial = the stub shown to the user
+new FullGenerator(parser).generateCpp()  -&gt; boilerplate/function.cpp
+new FullGenerator(parser).generateJs()   -&gt; boilerplate/function.js</code></pre><div class="n">One canonical I/O contract → add a language or problem without hand-writing a harness per pair. A parser/test mismatch shows up as bogus WA that looks like a platform bug.</div></div><h2>Verdict delivery (poll / SSE / WS)</h2><div class="item"><div class="l">Polling (MVP — do this first)</div><pre><code>// FE polls until terminal status
+while (true) {
+  const { status } = await fetch(`/submissions/${id}`).then(r=&gt;r.json());
+  if (status !== 'PENDING') break;
+  await sleep(1000);
+}</code></pre><div class="n">Stateless, trivially scalable, good enough for MVP. Cost is redundant requests.</div></div><div class="item"><div class="l">SSE (one-way push)</div><pre><code>// GET /submissions/:id/stream
+const sub = redis.duplicate();
+await sub.subscribe(`sub:${id}`);
+sub.on('message', (_c, msg) =&gt; controller.enqueue(`data: ${msg}\n\n`));</code></pre></div><div class="item"><div class="l">WebSocket + Redis pub/sub</div><div class="n">Needed for live leaderboard/bidirectional. Worker publishes to Redis; the web node holding the socket subscribes — pub/sub bridges worker → correct socket across instances.</div></div><h2>Fairness, limits &amp; rating</h2><div class="item"><div class="l">CPU time, not wall time</div><div class="n">Measure CPU time (ulimit cpu / cgroup cpuacct) so an overloaded host doesn't unfairly TLE a correct solution — keep a wall-clock backstop to kill infinite loops.</div></div><div class="item"><div class="l">Per-language limit multiplier</div><pre><code>const limit = base * ({ cpp:1, java:2, python:3 }[lang] ?? 1);</code></pre><div class="n">Slower runtimes get a higher/multiplied limit for the same problem. Warm the runtime to keep JIT/cold-start out of the budget.</div></div><div class="item"><div class="l">Rating = post-contest batch</div><pre><code>// after system tests + anti-cheat freeze standings:
+for (const p of finalStandings) applyElo(p, field);
+// store ratingHistory row per user (graphs + recompute)</code></pre><div class="n">Update once results are settled — NOT live during the round. Elo/Glicko-style: beat higher-rated → gain more.</div></div><div class="item"><div class="l">Live leaderboard</div><pre><code>redis.zadd(`contest:${cid}`, score, userId);
+redis.zrevrange(`contest:${cid}`, 0, 49, 'WITHSCORES');</code></pre><div class="n">Redis sorted set for live standings; denormalized standings table for durable ranking — avoid full-table scans of submissions.</div></div>
+<h2>Quick tips &amp; gotchas</h2><ul class="tips"><li>--memory-swap MUST equal --memory or the OOM killer never fires and MLE submissions silently swap instead of failing.</li><li>Enforce limits with CPU time (ulimit cpu / cgroups), not wall-clock — wall time makes verdicts flaky under host load. Always keep a wall backstop.</li><li>Fresh, short-lived container per submission; never reuse one — sharing leaks state and hidden test data between users.</li><li>Never judge inline in the request handler: write PENDING + enqueue, return in ~50ms. Judging is CPU-bound and would collapse a web worker under a contest spike.</li><li>Compile once, reuse the binary across all tests; a compile failure is CE and must short-circuit before any test runs.</li><li>A boilerplate-generator / test-file I/O mismatch surfaces as spurious WA that looks like a platform bug — the setter's output is a load-bearing correctness surface.</li><li>Store test data in object storage with pointers in Postgres; keep Submission rows small and index (userId, problemId) + (contestId).</li><li>Compute leaderboards from a denormalized standings table / Redis sorted set — never rank by scanning the full submissions table per request.</li></ul>
+</div></body></html>

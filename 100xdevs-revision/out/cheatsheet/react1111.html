@@ -1,0 +1,111 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Cheat Sheet · React</title><style>:root{--bg:#fff;--fg:#1a1a1a;--muted:#6b7280;--line:#e5e7eb;--accent:#0d9488;--card:#f9fafb;--code:#f3f4f6;--codefg:#111}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1115;--fg:#e6e6e6;--muted:#9aa0aa;--line:#242833;--accent:#2dd4bf;--card:#171a21;--code:#0b0e13;--codefg:#e6e6e6}}
+*{box-sizing:border-box}body{margin:0;font:16px/1.6 system-ui,Segoe UI,sans-serif;background:var(--bg);color:var(--fg)}
+.wrap{max-width:860px;margin:0 auto;padding:1.2rem}
+a.back{color:var(--accent);text-decoration:none;font-size:.9rem}
+h1{font-size:1.5rem;margin:.6rem 0 .2rem}.sub{color:var(--muted);margin:0 0 1.4rem}
+h2{font-size:1.1rem;margin:1.6rem 0 .5rem;color:var(--accent)}
+.item{border:1px solid var(--line);border-radius:10px;background:var(--card);padding:.6rem .8rem;margin:.5rem 0}
+.item .l{font-weight:700}
+.item .n{color:var(--muted);font-size:.92rem;margin-top:.2rem}
+pre{margin:.45rem 0 0;background:var(--code);color:var(--codefg);border:1px solid var(--line);border-radius:8px;padding:.6rem .8rem;overflow-x:auto}
+code,pre{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:.86rem}
+.tips{border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:10px;background:var(--card);padding:.6rem 1rem}
+.tips li{margin:.35rem 0}
+@media print{.back{display:none}}</style></head><body><div class="wrap">
+<a class="back" href="../revision.html">← Back to revision index</a>
+<h1>React — Cheat Sheet</h1>
+<p class="sub">Cohort 3.0 · 24 lessons · quick reference</p>
+<h2>Setup &amp; Project Bootstrap</h2><div class="item"><div class="l">Create app with Vite (recommended, fast)</div><pre><code>npm create vite@latest my-app -- --template react
+cd my-app
+npm install
+npm run dev</code></pre><div class="n">Use react-ts template for TypeScript. Vite dev server has HMR out of the box.</div></div><div class="item"><div class="l">Create React App (legacy, slower)</div><pre><code>npx create-react-app my-app
+npm start</code></pre><div class="n">CRA is deprecated; prefer Vite or a framework (Next.js) for new projects.</div></div><div class="item"><div class="l">Entry point wiring</div><pre><code>// main.jsx
+import { createRoot } from 'react-dom/client';
+import App from './App';
+
+createRoot(document.getElementById('root')).render(&lt;App /&gt;);</code></pre><div class="n">React 18+ uses createRoot, not the old ReactDOM.render.</div></div><div class="item"><div class="l">StrictMode double-invokes in dev</div><pre><code>createRoot(el).render(&lt;StrictMode&gt;&lt;App /&gt;&lt;/StrictMode&gt;);</code></pre><div class="n">Renders/effects run twice in dev only to surface impure logic. Not in production.</div></div><h2>Components, Props, Children, Fragments</h2><div class="item"><div class="l">Function component + destructured props</div><pre><code>function Card({ title, onClick }) {
+  return &lt;div onClick={onClick}&gt;{title}&lt;/div&gt;;
+}
+// usage: &lt;Card title="Hi" onClick={() =&gt; {}} /&gt;</code></pre><div class="n">Props are read-only. Component names MUST be capitalized or React treats them as HTML tags.</div></div><div class="item"><div class="l">Default props via destructuring defaults</div><pre><code>function Btn({ variant = 'primary', children }) { ... }</code></pre></div><div class="item"><div class="l">children — content between tags</div><pre><code>function Panel({ children }) {
+  return &lt;div className="panel"&gt;{children}&lt;/div&gt;;
+}
+// &lt;Panel&gt;&lt;h1&gt;Hi&lt;/h1&gt;&lt;/Panel&gt;</code></pre><div class="n">children is a special prop; enables composition/slot patterns.</div></div><div class="item"><div class="l">Fragment — group without extra DOM node</div><pre><code>return (
+  &lt;&gt;
+    &lt;td&gt;A&lt;/td&gt;
+    &lt;td&gt;B&lt;/td&gt;
+  &lt;/&gt;
+);</code></pre><div class="n">Use &lt;React.Fragment key={id}&gt; when you need a key in a list.</div></div><div class="item"><div class="l">Spread + rest props</div><pre><code>function Input({ label, ...rest }) {
+  return &lt;input {...rest} /&gt;;
+}</code></pre></div><h2>State &amp; Effects (useState, useEffect)</h2><div class="item"><div class="l">useState — local reactive state</div><pre><code>const [count, setCount] = useState(0);
+setCount(count + 1);</code></pre><div class="n">State updates are async &amp; batched; the variable doesn't change until re-render.</div></div><div class="item"><div class="l">Functional update (avoid stale state)</div><pre><code>setCount(c =&gt; c + 1);</code></pre><div class="n">Use updater form when new state depends on previous, esp. in loops/handlers firing rapidly.</div></div><div class="item"><div class="l">Never mutate — replace objects/arrays</div><pre><code>setUser(u =&gt; ({ ...u, name: 'Al' }));
+setList(l =&gt; [...l, item]);</code></pre><div class="n">Mutating in place won't trigger a re-render; React compares by reference.</div></div><div class="item"><div class="l">Lazy initial state (expensive init)</div><pre><code>const [v] = useState(() =&gt; heavyCompute());</code></pre><div class="n">Pass a function so it runs only on first render, not every render.</div></div><div class="item"><div class="l">useEffect — side effects after render</div><pre><code>useEffect(() =&gt; {
+  const id = setInterval(tick, 1000);
+  return () =&gt; clearInterval(id); // cleanup
+}, []);</code></pre><div class="n">[] = run once on mount. [dep] = run when dep changes. No array = run every render.</div></div><div class="item"><div class="l">Data fetching in effect</div><pre><code>useEffect(() =&gt; {
+  let active = true;
+  fetch(`/api/${id}`).then(r =&gt; r.json())
+    .then(d =&gt; active &amp;&amp; setData(d));
+  return () =&gt; { active = false; };
+}, [id]);</code></pre><div class="n">Guard against race conditions / setting state after unmount.</div></div><h2>Rendering: Conditional, Lists, Styles, Re-renders</h2><div class="item"><div class="l">Conditional rendering</div><pre><code>{isLoading &amp;&amp; &lt;Spinner /&gt;}
+{user ? &lt;Profile /&gt; : &lt;Login /&gt;}
+{count &gt; 0 ? &lt;List /&gt; : null}</code></pre><div class="n">Beware {count &amp;&amp; &lt;X/&gt;} — if count is 0, React renders the literal 0. Use count &gt; 0.</div></div><div class="item"><div class="l">Lists + keys</div><pre><code>{items.map(item =&gt; (
+  &lt;li key={item.id}&gt;{item.name}&lt;/li&gt;
+))}</code></pre><div class="n">key must be stable &amp; unique among siblings. NEVER use array index if list reorders/filters.</div></div><div class="item"><div class="l">Inline styling (object, camelCase)</div><pre><code>&lt;div style={{ backgroundColor: 'red', fontSize: 14 }} /&gt;</code></pre><div class="n">Values are strings or numbers (px assumed). Prefer className/CSS for anything reusable.</div></div><div class="item"><div class="l">className, not class</div><pre><code>&lt;div className="card active" /&gt;</code></pre><div class="n">class is reserved in JS; htmlFor replaces the label 'for' attribute.</div></div><div class="item"><div class="l">Tracking re-renders (debug)</div><pre><code>console.log('Rendered:', Component.name);
+// or React DevTools -&gt; Profiler / 'Highlight updates'</code></pre><div class="n">A component re-renders when its state changes, its parent re-renders, or its context changes.</div></div><div class="item"><div class="l">Prevent unnecessary re-renders</div><pre><code>const Memoized = React.memo(Child);
+const cb = useCallback(() =&gt; f(a), [a]);
+const val = useMemo(() =&gt; calc(x), [x]);</code></pre><div class="n">memo skips re-render if props are shallow-equal. Pair with useCallback/useMemo for reference stability.</div></div><h2>Class Components, Lifecycle, Error Boundaries</h2><div class="item"><div class="l">Class component (legacy)</div><pre><code>class Counter extends React.Component {
+  state = { n: 0 };
+  inc = () =&gt; this.setState(s =&gt; ({ n: s.n + 1 }));
+  render() { return &lt;button onClick={this.inc}&gt;{this.state.n}&lt;/button&gt;; }
+}</code></pre><div class="n">Prefer function components + hooks. Classes still needed for error boundaries.</div></div><div class="item"><div class="l">Lifecycle -&gt; hook mapping</div><pre><code>componentDidMount    -&gt; useEffect(fn, [])
+componentDidUpdate   -&gt; useEffect(fn, [deps])
+componentWillUnmount -&gt; return cleanup in useEffect</code></pre><div class="n">One useEffect can express mount+update+unmount together.</div></div><div class="item"><div class="l">Error boundary (class only)</div><pre><code>class ErrorBoundary extends React.Component {
+  state = { hasError: false };
+  static getDerivedStateFromError() { return { hasError: true }; }
+  componentDidCatch(err, info) { log(err, info); }
+  render() {
+    return this.state.hasError ? &lt;Fallback/&gt; : this.props.children;
+  }
+}</code></pre><div class="n">Catches render-phase errors in children only. NOT event handlers, async, or SSR.</div></div><h2>Routing, Layouts &amp; SPA (react-router-dom v6+)</h2><div class="item"><div class="l">Install &amp; set up router</div><pre><code>npm i react-router-dom</code></pre><div class="n">SPA = one HTML page; router swaps components client-side without full reloads.</div></div><div class="item"><div class="l">Route config</div><pre><code>&lt;BrowserRouter&gt;
+  &lt;Routes&gt;
+    &lt;Route path="/" element={&lt;Home /&gt;} /&gt;
+    &lt;Route path="/users/:id" element={&lt;User /&gt;} /&gt;
+    &lt;Route path="*" element={&lt;NotFound /&gt;} /&gt;
+  &lt;/Routes&gt;
+&lt;/BrowserRouter&gt;</code></pre></div><div class="item"><div class="l">Navigation (no page reload)</div><pre><code>import { Link, useNavigate } from 'react-router-dom';
+&lt;Link to="/about"&gt;About&lt;/Link&gt;
+const nav = useNavigate(); nav('/login');</code></pre><div class="n">Use &lt;Link&gt;/useNavigate, NOT &lt;a href&gt; — &lt;a&gt; triggers a full reload and loses state.</div></div><div class="item"><div class="l">Read route params / search</div><pre><code>const { id } = useParams();
+const [params] = useSearchParams();</code></pre></div><div class="item"><div class="l">Layout via nested routes + Outlet</div><pre><code>&lt;Route element={&lt;Layout /&gt;}&gt;
+  &lt;Route path="/" element={&lt;Home /&gt;} /&gt;
+  &lt;Route path="/settings" element={&lt;Settings /&gt;} /&gt;
+&lt;/Route&gt;
+// Layout: &lt;nav/&gt; + &lt;Outlet /&gt; renders the matched child</code></pre><div class="n">Shared chrome (navbar/sidebar) stays mounted while &lt;Outlet/&gt; swaps the page.</div></div><div class="item"><div class="l">Lazy-load routes</div><pre><code>const About = lazy(() =&gt; import('./About'));
+&lt;Suspense fallback={&lt;Loading/&gt;}&gt;&lt;About/&gt;&lt;/Suspense&gt;</code></pre><div class="n">Code-splitting keeps initial bundle small.</div></div><h2>useRef &amp; Custom Hooks</h2><div class="item"><div class="l">useRef — DOM access</div><pre><code>const inputRef = useRef(null);
+&lt;input ref={inputRef} /&gt;;
+inputRef.current.focus();</code></pre></div><div class="item"><div class="l">useRef — mutable value that survives renders</div><pre><code>const renders = useRef(0);
+renders.current++;</code></pre><div class="n">Changing ref.current does NOT trigger a re-render (unlike state).</div></div><div class="item"><div class="l">Custom hook — extract reusable stateful logic</div><pre><code>function useToggle(init = false) {
+  const [on, setOn] = useState(init);
+  const toggle = useCallback(() =&gt; setOn(v =&gt; !v), []);
+  return [on, toggle];
+}</code></pre><div class="n">Must start with 'use' and may call other hooks. Shares logic, not state — each call gets its own state.</div></div><div class="item"><div class="l">Rules of Hooks</div><pre><code>// ✅ top level of component/hook
+// ❌ not inside if/for/nested fns</code></pre><div class="n">Call hooks in the same order every render so React can track them.</div></div><h2>State Sharing: Lift, Prop Drilling, Context, Recoil</h2><div class="item"><div class="l">Lift state up (rolling up state)</div><pre><code>// Move shared state to closest common parent,
+// pass value + setter down as props.</code></pre><div class="n">Lifting can cause a big subtree to re-render — split components / memoize to limit blast radius.</div></div><div class="item"><div class="l">Prop drilling (the problem)</div><pre><code>&lt;A user={user}&gt;
+  &lt;B user={user}&gt;
+    &lt;C user={user} /&gt; // passed through B just to reach C</code></pre><div class="n">Passing props through intermediate components that don't use them → Context/state lib.</div></div><div class="item"><div class="l">Context API — avoid drilling</div><pre><code>const UserCtx = createContext(null);
+
+&lt;UserCtx.Provider value={user}&gt;
+  &lt;App /&gt;
+&lt;/UserCtx.Provider&gt;
+
+const user = useContext(UserCtx);</code></pre><div class="n">Every consumer re-renders when the Provider value changes. Memoize the value object.</div></div><div class="item"><div class="l">Context re-render gotcha (testing/perf)</div><pre><code>const value = useMemo(() =&gt; ({ user, setUser }), [user]);
+&lt;Ctx.Provider value={value}&gt;</code></pre><div class="n">New object literal each render = all consumers re-render even if data is unchanged.</div></div><div class="item"><div class="l">Recoil — atom-level state (granular re-renders)</div><pre><code>npm i recoil
+
+const countAtom = atom({ key: 'count', default: 0 });
+
+// wrap app: &lt;RecoilRoot&gt;&lt;App/&gt;&lt;/RecoilRoot&gt;
+const [c, setC] = useRecoilState(countAtom);
+const v = useRecoilValue(countAtom);   // read only
+const set = useSetRecoilState(countAtom); // write only</code></pre><div class="n">Only components subscribed to a specific atom re-render — fixes Context's over-rendering. selector() for derived state.</div></div>
+<h2>Quick tips &amp; gotchas</h2><ul class="tips"><li>State updates are async and batched — read the new value after re-render or use the functional updater setX(prev =&gt; ...).</li><li>Never mutate state/props directly; always create a new object/array so React's reference comparison detects the change.</li><li>{value &amp;&amp; &lt;Comp/&gt;} renders a literal 0 when value is 0 — use value &gt; 0 &amp;&amp; ... or a ternary.</li><li>useEffect with a missing/wrong dependency array is the #1 bug source: [] runs once, [deps] on change, no array every render. Return a cleanup fn for subscriptions/timers.</li><li>List keys must be stable and unique; using the array index breaks when items are reordered, inserted, or filtered.</li><li>Context Provider re-renders ALL consumers when its value changes — wrap the value in useMemo; reach for Recoil/Zustand when re-render granularity matters.</li><li>Error boundaries only catch errors during rendering of children — not in event handlers, async code, or SSR (wrap those in try/catch).</li><li>Use &lt;Link&gt;/useNavigate for SPA navigation; a plain &lt;a href&gt; forces a full page reload and wipes React state.</li></ul>
+</div></body></html>

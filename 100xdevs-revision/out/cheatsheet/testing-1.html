@@ -1,0 +1,116 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Cheat Sheet · Testing in the MERN Stack</title><style>:root{--bg:#fff;--fg:#1a1a1a;--muted:#6b7280;--line:#e5e7eb;--accent:#0d9488;--card:#f9fafb;--code:#f3f4f6;--codefg:#111}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1115;--fg:#e6e6e6;--muted:#9aa0aa;--line:#242833;--accent:#2dd4bf;--card:#171a21;--code:#0b0e13;--codefg:#e6e6e6}}
+*{box-sizing:border-box}body{margin:0;font:16px/1.6 system-ui,Segoe UI,sans-serif;background:var(--bg);color:var(--fg)}
+.wrap{max-width:860px;margin:0 auto;padding:1.2rem}
+a.back{color:var(--accent);text-decoration:none;font-size:.9rem}
+h1{font-size:1.5rem;margin:.6rem 0 .2rem}.sub{color:var(--muted);margin:0 0 1.4rem}
+h2{font-size:1.1rem;margin:1.6rem 0 .5rem;color:var(--accent)}
+.item{border:1px solid var(--line);border-radius:10px;background:var(--card);padding:.6rem .8rem;margin:.5rem 0}
+.item .l{font-weight:700}
+.item .n{color:var(--muted);font-size:.92rem;margin-top:.2rem}
+pre{margin:.45rem 0 0;background:var(--code);color:var(--codefg);border:1px solid var(--line);border-radius:8px;padding:.6rem .8rem;overflow-x:auto}
+code,pre{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:.86rem}
+.tips{border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:10px;background:var(--card);padding:.6rem 1rem}
+.tips li{margin:.35rem 0}
+@media print{.back{display:none}}</style></head><body><div class="wrap">
+<a class="back" href="../revision.html">← Back to revision index</a>
+<h1>Testing in the MERN Stack — Cheat Sheet</h1>
+<p class="sub">Cohort 2.0 · 13 lessons · quick reference</p>
+<h2>Setup &amp; Commands</h2><div class="item"><div class="l">Install Jest + supertest</div><pre><code>npm i -D jest supertest
+# ESM: add cross-env &amp; flag, or use babel-jest / ts-jest</code></pre></div><div class="item"><div class="l">Install Vitest + supertest</div><pre><code>npm i -D vitest supertest
+npm i -D @vitest/coverage-v8</code></pre></div><div class="item"><div class="l">package.json scripts</div><pre><code>"scripts": {
+  "test": "vitest",           // watch mode
+  "test:run": "vitest run",   // one-shot (CI)
+  "coverage": "vitest run --coverage"
+}</code></pre><div class="n">Jest equivalent: "test": "jest --watch", CI uses plain `jest`.</div></div><div class="item"><div class="l">vitest.config.ts</div><pre><code>import { defineConfig } from 'vitest/config'
+export default defineConfig({
+  test: { globals: true, environment: 'node' }
+})</code></pre><div class="n">globals:true lets you skip imports of describe/it/expect (Jest-like).</div></div><div class="item"><div class="l">Jest config (jest.config.js)</div><pre><code>export default {
+  testEnvironment: 'node',
+  coveragePathIgnorePatterns: ['/node_modules/']
+}</code></pre><div class="n">Jest ESM needs `node --experimental-vm-modules` or babel-jest; Vitest handles ESM natively.</div></div><div class="item"><div class="l">Run subsets / filters</div><pre><code>vitest run auth           # files matching 'auth'
+vitest -t "creates user"  # by test name
+jest -t "creates user"</code></pre></div><h2>Structure, Hooks &amp; Assertions</h2><div class="item"><div class="l">Suite / test</div><pre><code>describe('userService', () =&gt; {
+  it('returns a user', () =&gt; { expect(1 + 1).toBe(2) })
+  test.skip('todo', () =&gt; {})
+  it.only('focus this', () =&gt; {})
+})</code></pre></div><div class="item"><div class="l">Lifecycle hooks</div><pre><code>beforeAll(async () =&gt; { /* once */ })
+afterAll(async () =&gt; { /* once */ })
+beforeEach(() =&gt; {})
+afterEach(() =&gt; {})</code></pre></div><div class="item"><div class="l">Value matchers</div><pre><code>expect(x).toBe(5)            // Object.is / referential
+expect(obj).toEqual({a:1})   // deep, ignores undefined
+expect(obj).toStrictEqual({a:1}) // deep + types + undefined
+expect(arr).toContain('x')
+expect(s).toMatch(/regex/)</code></pre></div><div class="item"><div class="l">Async assertions</div><pre><code>await expect(fetchUser()).resolves.toEqual({id:1})
+await expect(boom()).rejects.toThrow('fail')</code></pre></div><div class="item"><div class="l">Error assertion</div><pre><code>expect(() =&gt; parse('')).toThrow(TypeError)</code></pre><div class="n">Wrap the call in a fn — passing parse('') throws before expect runs.</div></div><div class="item"><div class="l">Mock-call matchers</div><pre><code>expect(fn).toHaveBeenCalledTimes(1)
+expect(fn).toHaveBeenCalledWith('a', 2)
+expect(fn).toHaveReturnedWith(42)</code></pre></div><h2>Testing Express Endpoints (supertest)</h2><div class="item"><div class="l">Separate app from listen</div><pre><code>// app.js  -&gt; export the app, no listen here
+export const app = express()
+// server.js
+import { app } from './app.js'
+app.listen(3000)</code></pre><div class="n">Critical: import `app` in tests so supertest can bind an ephemeral port itself.</div></div><div class="item"><div class="l">GET request</div><pre><code>import request from 'supertest'
+import { app } from '../app.js'
+it('GET /health', async () =&gt; {
+  const res = await request(app).get('/health')
+  expect(res.status).toBe(200)
+  expect(res.body).toEqual({ ok: true })
+})</code></pre></div><div class="item"><div class="l">POST with JSON body</div><pre><code>const res = await request(app)
+  .post('/users')
+  .send({ name: 'ada' })
+  .set('Authorization', `Bearer ${token}`)
+expect(res.status).toBe(201)
+expect(res.body).toHaveProperty('id')</code></pre></div><div class="item"><div class="l">Chained expectations</div><pre><code>await request(app)
+  .get('/users/1')
+  .expect('Content-Type', /json/)
+  .expect(200)</code></pre><div class="n">.expect() throws on mismatch — no separate assertion needed.</div></div><div class="item"><div class="l">Validation / error path</div><pre><code>const res = await request(app).post('/users').send({})
+expect(res.status).toBe(400)
+expect(res.body.error).toMatch(/name required/)</code></pre></div><h2>Mocking, Spies &amp; Return Values</h2><div class="item"><div class="l">Create a mock fn</div><pre><code>const fn = vi.fn()          // jest.fn()
+fn.mockReturnValue(42)
+expect(fn()).toBe(42)</code></pre></div><div class="item"><div class="l">Mock a whole module</div><pre><code>vi.mock('../db.js')  // auto-mock, factory optional
+vi.mock('../mailer.js', () =&gt; ({
+  sendMail: vi.fn().mockResolvedValue(true)
+}))</code></pre><div class="n">vi.mock/jest.mock is HOISTED to top of file — factory can't close over outer vars; use vi.hoisted() if needed.</div></div><div class="item"><div class="l">Return-value control</div><pre><code>fn.mockReturnValue(1)          // every call
+fn.mockReturnValueOnce(1)      // next call only, queued
+fn.mockResolvedValue(user)     // Promise.resolve
+fn.mockRejectedValue(new Error('x'))
+fn.mockImplementation((a) =&gt; a * 2)</code></pre></div><div class="item"><div class="l">Spy on existing method</div><pre><code>const spy = vi.spyOn(mathUtils, 'add')
+mathUtils.add(2, 3)
+expect(spy).toHaveBeenCalledWith(2, 3) // REAL impl still runs
+spy.mockReturnValue(99)                // now overridden</code></pre></div><div class="item"><div class="l">Spy vs Mock</div><div class="n">Spy: wraps a real fn, records calls, real code runs unless you override. Mock: fully synthetic replacement, no real impl. Use spy to observe, mock to isolate/replace.</div></div><div class="item"><div class="l">Deep mocking nested objects</div><pre><code>import { mockDeep } from 'vitest-mock-extended' // jest-mock-extended
+const prisma = mockDeep&lt;PrismaClient&gt;()
+prisma.user.findUnique.mockResolvedValue({ id: 1 })</code></pre><div class="n">mockDeep auto-mocks every nested method/property — ideal for ORMs/clients.</div></div><div class="item"><div class="l">Reset between tests</div><pre><code>afterEach(() =&gt; {
+  vi.clearAllMocks()   // clears calls, keeps impl
+  // vi.resetAllMocks() // clears calls + impl
+  // vi.restoreAllMocks() // restore spies to original
+})</code></pre><div class="n">Or config `clearMocks: true`. clear≠reset≠restore — mixing them up leaks state across tests.</div></div><h2>Adding a Database</h2><div class="item"><div class="l">In-memory Mongo (integration)</div><pre><code>npm i -D mongodb-memory-server</code></pre><div class="n">Spins a real MongoDB in RAM — tests real queries without a shared server.</div></div><div class="item"><div class="l">Wire up memory server</div><pre><code>import { MongoMemoryServer } from 'mongodb-memory-server'
+import mongoose from 'mongoose'
+let mongo
+beforeAll(async () =&gt; {
+  mongo = await MongoMemoryServer.create()
+  await mongoose.connect(mongo.getUri())
+})
+afterAll(async () =&gt; {
+  await mongoose.disconnect(); await mongo.stop()
+})</code></pre></div><div class="item"><div class="l">Clean state per test</div><pre><code>afterEach(async () =&gt; {
+  const { collections } = mongoose.connection
+  for (const key in collections) await collections[key].deleteMany()
+})</code></pre><div class="n">Prevents order-dependent flakiness from leftover docs.</div></div><div class="item"><div class="l">Mock the DB (unit test)</div><pre><code>vi.mock('../models/User.js')
+User.findById.mockResolvedValue({ _id: '1', name: 'ada' })</code></pre><div class="n">Mock the model when unit-testing a service in isolation; use memory-server when the query itself is under test.</div></div><h2>Jest → Vitest Migration</h2><div class="item"><div class="l">API is near drop-in</div><pre><code>jest.fn()      -&gt; vi.fn()
+jest.mock()    -&gt; vi.mock()
+jest.spyOn()   -&gt; vi.spyOn()
+jest.useFakeTimers() -&gt; vi.useFakeTimers()
+jest.clearAllMocks() -&gt; vi.clearAllMocks()</code></pre></div><div class="item"><div class="l">Keep Jest globals</div><div class="n">Set test.globals:true in vitest config so describe/it/expect need no import — otherwise `import { describe, it, expect } from 'vitest'`.</div></div><div class="item"><div class="l">Why switch</div><div class="n">Vitest: native ESM/TS, no babel, faster HMR watch, shares Vite config. Jest ESM needs experimental flags + transforms.</div></div><div class="item"><div class="l">Timers &amp; mocks import</div><pre><code>import { vi } from 'vitest'  // replaces global `jest`</code></pre><div class="n">`jest` global doesn't exist in Vitest — rename or alias.</div></div><div class="item"><div class="l">Gotchas</div><div class="n">Snapshot format differs slightly; `jest.requireActual` -&gt; `vi.importActual` (async). Mock hoisting semantics match.</div></div><h2>CI/CD &amp; Test Pyramid</h2><div class="item"><div class="l">GitHub Actions workflow</div><pre><code>.github/workflows/test.yml:
+name: CI
+on: [push, pull_request]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20, cache: npm }
+      - run: npm ci
+      - run: npm run test:run -- --coverage</code></pre><div class="n">Use `vitest run` / `jest` (non-watch) in CI — watch mode hangs the runner.</div></div><div class="item"><div class="l">Fail fast / gate merges</div><pre><code>- run: npm run lint
+- run: npm run test:run</code></pre><div class="n">Make the job a required status check on the branch protection rule so red tests block merge.</div></div><div class="item"><div class="l">Unit tests</div><div class="n">One module in isolation, deps mocked. Fast, many. E.g. a pure service function with mocked repo.</div></div><div class="item"><div class="l">Integration tests</div><div class="n">Multiple real units together (route + service + in-memory DB). Supertest + mongodb-memory-server lives here.</div></div><div class="item"><div class="l">E2E tests</div><div class="n">Full stack via HTTP/browser (Playwright/Cypress), real-ish env. Slowest, fewest — run in separate CI job/stage.</div></div><div class="item"><div class="l">Pyramid ratio</div><div class="n">Many unit &gt; some integration &gt; few E2E. Push logic down to fast unit tests; reserve E2E for critical user flows.</div></div>
+<h2>Quick tips &amp; gotchas</h2><ul class="tips"><li>Export `app` separately from `app.listen()` — supertest binds its own ephemeral port, so a listening server in the module causes port conflicts and open handles.</li><li>toBe = Object.is (references/primitives); toEqual = deep, ignores undefined; toStrictEqual = deep + checks undefined props and types. Wrong choice = false pass/fail.</li><li>vi.mock / jest.mock are hoisted above imports — the factory runs before any top-level const, so it can't reference outer variables. Use vi.hoisted() to share values.</li><li>clearAllMocks (wipe calls), resetAllMocks (calls + implementations), restoreAllMocks (undo spies). Set clearMocks:true in config or call in afterEach to stop state leaking between tests.</li><li>Use mockResolvedValue/mockRejectedValue for async deps — mockReturnValue(Promise.resolve()) works but is noisier and easy to forget to await.</li><li>Clean DB collections in afterEach with mongodb-memory-server; leftover docs cause order-dependent flaky tests that pass alone but fail in the suite.</li><li>In CI always run the non-watch command (`vitest run`, plain `jest`) or the job hangs forever waiting for file changes.</li><li>Prefer spyOn when you need the real implementation to run while asserting it was called; reach for a full mock only when you must replace behavior or cut a slow/external dependency.</li></ul>
+</div></body></html>

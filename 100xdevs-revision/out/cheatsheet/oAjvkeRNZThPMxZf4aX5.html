@@ -1,0 +1,135 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Cheat Sheet · PayTM project</title><style>:root{--bg:#fff;--fg:#1a1a1a;--muted:#6b7280;--line:#e5e7eb;--accent:#0d9488;--card:#f9fafb;--code:#f3f4f6;--codefg:#111}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1115;--fg:#e6e6e6;--muted:#9aa0aa;--line:#242833;--accent:#2dd4bf;--card:#171a21;--code:#0b0e13;--codefg:#e6e6e6}}
+*{box-sizing:border-box}body{margin:0;font:16px/1.6 system-ui,Segoe UI,sans-serif;background:var(--bg);color:var(--fg)}
+.wrap{max-width:860px;margin:0 auto;padding:1.2rem}
+a.back{color:var(--accent);text-decoration:none;font-size:.9rem}
+h1{font-size:1.5rem;margin:.6rem 0 .2rem}.sub{color:var(--muted);margin:0 0 1.4rem}
+h2{font-size:1.1rem;margin:1.6rem 0 .5rem;color:var(--accent)}
+.item{border:1px solid var(--line);border-radius:10px;background:var(--card);padding:.6rem .8rem;margin:.5rem 0}
+.item .l{font-weight:700}
+.item .n{color:var(--muted);font-size:.92rem;margin-top:.2rem}
+pre{margin:.45rem 0 0;background:var(--code);color:var(--codefg);border:1px solid var(--line);border-radius:8px;padding:.6rem .8rem;overflow-x:auto}
+code,pre{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:.86rem}
+.tips{border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:10px;background:var(--card);padding:.6rem 1rem}
+.tips li{margin:.35rem 0}
+@media print{.back{display:none}}</style></head><body><div class="wrap">
+<a class="back" href="../revision.html">← Back to revision index</a>
+<h1>PayTM project — Cheat Sheet</h1>
+<p class="sub">Cohort 2.0 · 21 lessons · quick reference</p>
+<h2>Setup &amp; structure</h2><div class="item"><div class="l">Clone + install both apps</div><pre><code>git clone &lt;repo-url&gt; paytm &amp;&amp; cd paytm
+cd backend  &amp;&amp; npm install
+cd ../frontend &amp;&amp; npm install</code></pre></div><div class="item"><div class="l">Backend deps</div><pre><code>npm i express mongoose jsonwebtoken zod cors
+# bcrypt optional for hashing</code></pre></div><div class="item"><div class="l">Backend layout</div><pre><code>backend/
+  index.js        # app + mount /api/v1
+  db.js           # mongoose models
+  config.js       # JWT_SECRET
+  middleware.js   # authMiddleware
+  routes/
+    index.js      # rootRouter
+    user.js
+    account.js</code></pre><div class="n">Keep secrets in config.js (or .env), never inline in routes.</div></div><div class="item"><div class="l">App entry (index.js)</div><pre><code>const express=require('express'); const cors=require('cors');
+const rootRouter=require('./routes/index');
+const app=express();
+app.use(cors());
+app.use(express.json());
+app.use('/api/v1', rootRouter);
+app.listen(3000);</code></pre><div class="n">express.json() BEFORE routers or req.body is undefined.</div></div><h2>Mongoose schemas (db.js)</h2><div class="item"><div class="l">Connect</div><pre><code>const mongoose=require('mongoose');
+mongoose.connect('mongodb+srv://.../paytm');</code></pre></div><div class="item"><div class="l">User schema</div><pre><code>const userSchema=new mongoose.Schema({
+  username:{type:String,required:true,unique:true,trim:true,lowercase:true,minLength:3,maxLength:30},
+  password:{type:String,required:true,minLength:6},
+  firstName:{type:String,required:true,trim:true,maxLength:50},
+  lastName:{type:String,required:true,trim:true,maxLength:50}
+});</code></pre><div class="n">unique:true builds an index; existing dupes must be cleared first.</div></div><div class="item"><div class="l">Account schema (separate collection)</div><pre><code>const accountSchema=new mongoose.Schema({
+  userId:{type:mongoose.Schema.Types.ObjectId, ref:'User', required:true},
+  balance:{type:Number, required:true}
+});</code></pre><div class="n">Store money in its own collection, referenced by userId — not on User.</div></div><div class="item"><div class="l">Export models</div><pre><code>const User=mongoose.model('User', userSchema);
+const Account=mongoose.model('Account', accountSchema);
+module.exports={User, Account};</code></pre></div><h2>Routers &amp; mounting</h2><div class="item"><div class="l">rootRouter (routes/index.js)</div><pre><code>const router=require('express').Router();
+router.use('/user',    require('./user'));
+router.use('/account', require('./account'));
+module.exports=router;</code></pre><div class="n">Full path = /api/v1 + /user + /signup → /api/v1/user/signup.</div></div><div class="item"><div class="l">Per-file router</div><pre><code>const router=require('express').Router();
+router.post('/signup', async (req,res)=&gt;{ /* ... */ });
+module.exports=router;</code></pre><div class="n">express.Router() lets each resource live in its own file.</div></div><div class="item"><div class="l">Read query / body / params</div><pre><code>const filter=req.query.filter || '';   // ?filter=abc
+const {amount,to}=req.body;            // JSON body
+const id=req.params.id;                // /:id</code></pre></div><h2>Auth routes + validation (routes/user.js)</h2><div class="item"><div class="l">zod input schema</div><pre><code>const zod=require('zod');
+const signupBody=zod.object({
+  username:zod.string().email(),
+  firstName:zod.string(), lastName:zod.string(),
+  password:zod.string()
+});</code></pre></div><div class="item"><div class="l">Signup → create user + account + JWT</div><pre><code>router.post('/signup', async (req,res)=&gt;{
+  const {success}=signupBody.safeParse(req.body);
+  if(!success) return res.status(411).json({message:'Incorrect inputs'});
+  if(await User.findOne({username:req.body.username}))
+    return res.status(411).json({message:'Email already taken'});
+  const user=await User.create(req.body);
+  await Account.create({userId:user._id, balance:1+Math.random()*10000});
+  const token=jwt.sign({userId:user._id}, JWT_SECRET);
+  res.json({message:'User created', token});
+});</code></pre><div class="n">safeParse returns {success,data} — never throws. Give random starting balance.</div></div><div class="item"><div class="l">Signin → verify + JWT</div><pre><code>router.post('/signin', async (req,res)=&gt;{
+  const {success}=signinBody.safeParse(req.body);
+  if(!success) return res.status(411).json({message:'Incorrect inputs'});
+  const user=await User.findOne({username:req.body.username, password:req.body.password});
+  if(user) return res.json({token: jwt.sign({userId:user._id}, JWT_SECRET)});
+  res.status(411).json({message:'Error while logging in'});
+});</code></pre><div class="n">jwt.sign({userId}) — put the id in the payload; read it back in middleware.</div></div><div class="item"><div class="l">Update (protected)</div><pre><code>router.put('/', authMiddleware, async (req,res)=&gt;{
+  await User.updateOne({_id:req.userId}, req.body);
+  res.json({message:'Updated successfully'});
+});</code></pre></div><div class="item"><div class="l">Bulk search (for send-money list)</div><pre><code>router.get('/bulk', async (req,res)=&gt;{
+  const filter=req.query.filter||'';
+  const users=await User.find({$or:[
+    {firstName:{$regex:filter}}, {lastName:{$regex:filter}}
+  ]});
+  res.json({user: users.map(u=&gt;({username:u.username,firstName:u.firstName,lastName:u.lastName,_id:u._id}))});
+});</code></pre></div><h2>Middleware &amp; JWT</h2><div class="item"><div class="l">config.js</div><pre><code>module.exports={ JWT_SECRET:'your-super-secret' };</code></pre></div><div class="item"><div class="l">authMiddleware</div><pre><code>const jwt=require('jsonwebtoken');
+const {JWT_SECRET}=require('./config');
+function authMiddleware(req,res,next){
+  const h=req.headers.authorization;
+  if(!h || !h.startsWith('Bearer ')) return res.status(403).json({});
+  try{
+    const {userId}=jwt.verify(h.split(' ')[1], JWT_SECRET);
+    req.userId=userId;
+    next();
+  }catch(e){ return res.status(403).json({}); }
+}
+module.exports={authMiddleware};</code></pre><div class="n">Token comes as 'Bearer &lt;token&gt;' — split on space. Attach userId to req, then next().</div></div><h2>Account &amp; transactions (routes/account.js)</h2><div class="item"><div class="l">Get balance (protected)</div><pre><code>router.get('/balance', authMiddleware, async (req,res)=&gt;{
+  const acc=await Account.findOne({userId:req.userId});
+  res.json({balance: acc.balance});
+});</code></pre></div><div class="item"><div class="l">Transfer with a DB transaction</div><pre><code>const {default:mongoose}=require('mongoose');
+router.post('/transfer', authMiddleware, async (req,res)=&gt;{
+  const session=await mongoose.startSession();
+  session.startTransaction();
+  const {amount,to}=req.body;
+  const acc=await Account.findOne({userId:req.userId}).session(session);
+  if(!acc || acc.balance&lt;amount){ await session.abortTransaction(); return res.status(400).json({message:'Insufficient balance'}); }
+  const toAcc=await Account.findOne({userId:to}).session(session);
+  if(!toAcc){ await session.abortTransaction(); return res.status(400).json({message:'Invalid account'}); }
+  await Account.updateOne({userId:req.userId},{$inc:{balance:-amount}}).session(session);
+  await Account.updateOne({userId:to},   {$inc:{balance: amount}}).session(session);
+  await session.commitTransaction();
+  res.json({message:'Transfer successful'});
+});</code></pre><div class="n">All reads/writes must use .session(session). Any abort rolls back both $inc — no half-transfers.</div></div><div class="item"><div class="l">Why $inc, not read-then-set</div><pre><code>{$inc:{balance:-amount}}  // atomic</code></pre><div class="n">read → subtract → save races under concurrency; $inc is a single atomic op.</div></div><h2>React frontend — routing &amp; wiring</h2><div class="item"><div class="l">Frontend deps</div><pre><code>npm i react-router-dom axios
+# tailwind for styling (optional)</code></pre></div><div class="item"><div class="l">App.jsx routes</div><pre><code>import {BrowserRouter,Routes,Route} from 'react-router-dom';
+&lt;BrowserRouter&gt;
+  &lt;Routes&gt;
+    &lt;Route path='/signup'    element={&lt;Signup/&gt;}/&gt;
+    &lt;Route path='/signin'    element={&lt;Signin/&gt;}/&gt;
+    &lt;Route path='/dashboard' element={&lt;Dashboard/&gt;}/&gt;
+    &lt;Route path='/send'      element={&lt;SendMoney/&gt;}/&gt;
+  &lt;/Routes&gt;
+&lt;/BrowserRouter&gt;</code></pre><div class="n">BrowserRouter wraps Routes; each Route maps a path to an element.</div></div><div class="item"><div class="l">Signup/Signin submit → store token → redirect</div><pre><code>import {useNavigate} from 'react-router-dom';
+const navigate=useNavigate();
+const res=await axios.post('http://localhost:3000/api/v1/user/signin',{username,password});
+localStorage.setItem('token', res.data.token);
+navigate('/dashboard');</code></pre><div class="n">Persist JWT in localStorage; useNavigate for programmatic redirect.</div></div><div class="item"><div class="l">Send auth header on protected calls</div><pre><code>axios.get('http://localhost:3000/api/v1/account/balance',{
+  headers:{ Authorization:'Bearer '+localStorage.getItem('token') }
+});</code></pre><div class="n">Must match middleware's 'Bearer ' prefix exactly.</div></div><div class="item"><div class="l">Users list — filter + debounce</div><pre><code>const [users,setUsers]=useState([]);
+const [filter,setFilter]=useState('');
+useEffect(()=&gt;{
+  axios.get('http://localhost:3000/api/v1/user/bulk?filter='+filter)
+    .then(r=&gt;setUsers(r.data.user));
+},[filter]);</code></pre><div class="n">Re-fetch on every filter change; wrap in setTimeout to debounce keystrokes.</div></div><div class="item"><div class="l">SendMoney — read recipient from URL</div><pre><code>import {useSearchParams} from 'react-router-dom';
+const [params]=useSearchParams();
+const id=params.get('id'); const name=params.get('name');
+// navigate here via /send?id=&lt;userId&gt;&amp;name=&lt;firstName&gt;</code></pre><div class="n">Users 'Send money' button links to /send?id=..&amp;name=.. ; read with useSearchParams.</div></div>
+<h2>Quick tips &amp; gotchas</h2><ul class="tips"><li>req.body is undefined unless app.use(express.json()) runs before your routers — and app.use(cors()) is required or the React app's fetches get blocked.</li><li>zod safeParse returns {success,data} and never throws; check !success and return 411 before touching the DB.</li><li>Keep money in a separate Account collection keyed by userId — don't put balance on the User doc.</li><li>Transfers MUST use mongoose.startSession()/startTransaction() with .session() on every op; abortTransaction on any failure so you never debit without crediting.</li><li>Use $inc for balance changes — read-modify-write loses updates under concurrent transfers.</li><li>JWT flow: sign {userId} on signup/signin, send as 'Bearer &lt;token&gt;', verify + set req.userId in authMiddleware. The 'Bearer ' prefix must match on both ends.</li><li>Frontend keeps the token in localStorage and attaches Authorization headers manually; there are no cookies in this project.</li><li>MongoDB transactions require a replica set (Atlas works by default; a bare local mongod does not) — otherwise startTransaction throws.</li><li>unique:true on username only enforces after the index builds; wipe duplicate docs before relying on it, and still do a findOne pre-check for a clean 411.</li></ul>
+</div></body></html>

@@ -1,0 +1,134 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Cheat Sheet · Rust for Solana contracts</title><style>:root{--bg:#fff;--fg:#1a1a1a;--muted:#6b7280;--line:#e5e7eb;--accent:#0d9488;--card:#f9fafb;--code:#f3f4f6;--codefg:#111}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1115;--fg:#e6e6e6;--muted:#9aa0aa;--line:#242833;--accent:#2dd4bf;--card:#171a21;--code:#0b0e13;--codefg:#e6e6e6}}
+*{box-sizing:border-box}body{margin:0;font:16px/1.6 system-ui,Segoe UI,sans-serif;background:var(--bg);color:var(--fg)}
+.wrap{max-width:860px;margin:0 auto;padding:1.2rem}
+a.back{color:var(--accent);text-decoration:none;font-size:.9rem}
+h1{font-size:1.5rem;margin:.6rem 0 .2rem}.sub{color:var(--muted);margin:0 0 1.4rem}
+h2{font-size:1.1rem;margin:1.6rem 0 .5rem;color:var(--accent)}
+.item{border:1px solid var(--line);border-radius:10px;background:var(--card);padding:.6rem .8rem;margin:.5rem 0}
+.item .l{font-weight:700}
+.item .n{color:var(--muted);font-size:.92rem;margin-top:.2rem}
+pre{margin:.45rem 0 0;background:var(--code);color:var(--codefg);border:1px solid var(--line);border-radius:8px;padding:.6rem .8rem;overflow-x:auto}
+code,pre{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:.86rem}
+.tips{border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:10px;background:var(--card);padding:.6rem 1rem}
+.tips li{margin:.35rem 0}
+@media print{.back{display:none}}</style></head><body><div class="wrap">
+<a class="back" href="../revision.html">← Back to revision index</a>
+<h1>Rust for Solana contracts — Cheat Sheet</h1>
+<p class="sub">Cohort 3.0 · 26 lessons · quick reference</p>
+<h2>Setup &amp; Toolchain</h2><div class="item"><div class="l">Install Rust (rustup)</div><pre><code>curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+rustup update &amp;&amp; rustc --version &amp;&amp; cargo --version</code></pre></div><div class="item"><div class="l">Install Solana / Agave CLI</div><pre><code>sh -c "$(curl -sSfL https://release.anza.xyz/stable/install)"
+solana --version</code></pre><div class="n">Anza's agave replaces the old solana-labs installer.</div></div><div class="item"><div class="l">Install Anchor via AVM</div><pre><code>cargo install --git https://github.com/coral-xyz/anchor avm --force
+avm install latest &amp;&amp; avm use latest &amp;&amp; anchor --version</code></pre></div><div class="item"><div class="l">Configure cluster + wallet</div><pre><code>solana config set --url devnet
+solana-keygen new            # ~/.config/solana/id.json
+solana airdrop 2 &amp;&amp; solana balance</code></pre></div><div class="item"><div class="l">New program + build/test/deploy</div><pre><code>anchor init my_prog &amp;&amp; cd my_prog
+anchor build      # -&gt; target/deploy/*.so + target/idl/*.json
+anchor test       # spins local validator
+anchor deploy</code></pre><div class="n">anchor keys sync writes the real program id into declare_id! and Anchor.toml.</div></div><div class="item"><div class="l">Plain cargo (non-Anchor)</div><pre><code>cargo new --lib hello &amp;&amp; cargo build --release
+cargo add borsh solana-program</code></pre></div><h2>Core Syntax: Variables, Types, Control Flow</h2><div class="item"><div class="l">Immutable by default; mut to reassign</div><pre><code>let x = 5;          // immutable
+let mut y = 5;      // mutable
+y += 1;
+let x = x + 1;      // shadowing (new binding, type may change)</code></pre></div><div class="item"><div class="l">Scalar + compound types</div><pre><code>let n: u64 = 42;         // i8..i128, u8..u128, usize
+let f: f64 = 3.14;
+let b: bool = true;
+let c: char = 'A';
+let t: (i32, f64) = (1, 2.0);   // tuple -&gt; t.0
+let a: [u8; 3] = [1, 2, 3];      // fixed array</code></pre></div><div class="item"><div class="l">String vs &amp;str</div><pre><code>let owned: String = String::from("hi");
+let slice: &amp;str = &amp;owned[0..1];
+let n: u64 = "42".parse().unwrap();</code></pre><div class="n">String = heap-owned, growable; &amp;str = borrowed view.</div></div><div class="item"><div class="l">if / else are expressions</div><pre><code>let sign = if n &gt;= 0 { "pos" } else { "neg" };</code></pre></div><div class="item"><div class="l">Loops: loop / while / for</div><pre><code>let v = loop { break 10; };          // loop returns value
+for i in 0..5 { }                    // 0..=5 inclusive
+for (i, x) in arr.iter().enumerate() { }
+while cond { }</code></pre></div><div class="item"><div class="l">Functions</div><pre><code>fn add(a: i32, b: i32) -&gt; i32 { a + b }  // last expr = return, no ;
+fn noop() {}                              // returns ()</code></pre></div><h2>Ownership, Borrowing, Lifetimes</h2><div class="item"><div class="l">Move semantics (heap values)</div><pre><code>let s1 = String::from("x");
+let s2 = s1;          // s1 MOVED, no longer valid
+let s3 = s2.clone();  // deep copy if you need both</code></pre><div class="n">Copy types (i32, bool, char, fixed arrays of Copy) are copied, not moved.</div></div><div class="item"><div class="l">Borrowing: shared (&amp;) vs mutable (&amp;mut)</div><pre><code>fn len(s: &amp;String) -&gt; usize { s.len() }        // read-only borrow
+fn push(s: &amp;mut String) { s.push('!'); }       // mut borrow</code></pre><div class="n">Rule: any number of &amp;, OR exactly one &amp;mut, never both at once.</div></div><div class="item"><div class="l">Lifetimes tie reference validity</div><pre><code>fn longest&lt;'a&gt;(x: &amp;'a str, y: &amp;'a str) -&gt; &amp;'a str {
+    if x.len() &gt; y.len() { x } else { y }
+}</code></pre><div class="n">Anchor account structs are generic over &lt;'info&gt;: Account&lt;'info, T&gt;.</div></div><h2>Structs, Enums, Pattern Matching</h2><div class="item"><div class="l">Struct + impl (methods &amp; associated fn)</div><pre><code>struct Point { x: i32, y: i32 }
+impl Point {
+    fn new(x: i32, y: i32) -&gt; Self { Self { x, y } }  // associated
+    fn dist2(&amp;self) -&gt; i32 { self.x*self.x + self.y*self.y } // method
+}
+let p = Point::new(3, 4);</code></pre></div><div class="item"><div class="l">Enums with data</div><pre><code>enum Shape {
+    Circle(f64),
+    Rect { w: f64, h: f64 },
+    None,
+}</code></pre></div><div class="item"><div class="l">match (exhaustive)</div><pre><code>let area = match shape {
+    Shape::Circle(r) =&gt; 3.14 * r * r,
+    Shape::Rect { w, h } =&gt; w * h,
+    Shape::None =&gt; 0.0,
+};</code></pre><div class="n">_ =&gt; is the catch-all arm; compiler forces you to cover every variant.</div></div><div class="item"><div class="l">if let / while let (concise match)</div><pre><code>if let Some(v) = maybe { use_it(v); }
+while let Some(x) = stack.pop() { }</code></pre></div><h2>Traits &amp; Generics</h2><div class="item"><div class="l">Define + implement a trait</div><pre><code>trait Area {
+    fn area(&amp;self) -&gt; f64;
+    fn name(&amp;self) -&gt; &amp;str { "shape" }  // default method
+}
+impl Area for Point { fn area(&amp;self) -&gt; f64 { 0.0 } }</code></pre></div><div class="item"><div class="l">Derive common traits via macro</div><pre><code>#[derive(Debug, Clone, Copy, PartialEq, Default)]
+struct Config { retries: u8 }</code></pre><div class="n">#[derive(...)] auto-generates trait impls at compile time.</div></div><div class="item"><div class="l">Generics + trait bounds</div><pre><code>fn largest&lt;T: PartialOrd + Copy&gt;(list: &amp;[T]) -&gt; T {
+    let mut m = list[0];
+    for &amp;x in list { if x &gt; m { m = x; } }
+    m
+}
+// where-clause form: fn f&lt;T&gt;(t: T) where T: Display + Clone {}</code></pre></div><div class="item"><div class="l">Generic struct / enum</div><pre><code>struct Wrapper&lt;T&gt; { value: T }
+enum Either&lt;L, R&gt; { Left(L), Right(R) }
+let w = Wrapper { value: 5u64 };</code></pre></div><h2>Error Handling, Option, Iterators, Crates</h2><div class="item"><div class="l">Result + ? operator</div><pre><code>fn read(s: &amp;str) -&gt; Result&lt;u64, std::num::ParseIntError&gt; {
+    let n = s.parse::&lt;u64&gt;()?;   // early-return Err
+    Ok(n * 2)
+}</code></pre><div class="n">unwrap()/expect("msg") panic on Err; use ? to propagate instead.</div></div><div class="item"><div class="l">Option enum</div><pre><code>fn first(v: &amp;[u8]) -&gt; Option&lt;u8&gt; { v.first().copied() }
+let x = first(&amp;data).unwrap_or(0);
+match first(&amp;data) { Some(b) =&gt; .., None =&gt; .. }</code></pre></div><div class="item"><div class="l">Iterators (lazy; chain then collect)</div><pre><code>let evens: Vec&lt;i32&gt; = (1..=10)
+    .filter(|n| n % 2 == 0)
+    .map(|n| n * n)
+    .collect();
+let total: u64 = nums.iter().sum();
+let found = nums.iter().find(|&amp;&amp;n| n &gt; 5);</code></pre><div class="n">iter() borrows, into_iter() consumes, iter_mut() mutably borrows.</div></div><div class="item"><div class="l">External crates (Cargo.toml)</div><pre><code>[dependencies]
+borsh = "1"
+serde = { version = "1", features = ["derive"] }
+anchor-lang = "0.31"</code></pre><div class="n">cargo add &lt;crate&gt;; features gate optional functionality.</div></div><h2>Serialization: Serde &amp; Borsh</h2><div class="item"><div class="l">Serde (JSON / off-chain, human-facing)</div><pre><code>use serde::{Serialize, Deserialize};
+#[derive(Serialize, Deserialize)]
+struct User { id: u64, name: String }
+let j = serde_json::to_string(&amp;u)?;
+let u: User = serde_json::from_str(&amp;j)?;</code></pre></div><div class="item"><div class="l">Borsh (on-chain, deterministic binary)</div><pre><code>use borsh::{BorshSerialize, BorshDeserialize};
+#[derive(BorshSerialize, BorshDeserialize)]
+struct State { count: u64 }
+let bytes = state.try_to_vec()?;
+let s = State::try_from_slice(&amp;bytes)?;</code></pre><div class="n">Solana/Anchor account &amp; instruction data use Borsh — compact, no self-describing schema, order-dependent.</div></div><h2>Solana Program: Anchor, Context, Accounts, IDL</h2><div class="item"><div class="l">Program skeleton (#[program])</div><pre><code>use anchor_lang::prelude::*;
+declare_id!("Fg6PaFpo...zPFsLnS");
+
+#[program]
+pub mod counter {
+    use super::*;
+    pub fn increment(ctx: Context&lt;Increment&gt;) -&gt; Result&lt;()&gt; {
+        let c = &amp;mut ctx.accounts.counter;
+        c.count = c.count.checked_add(1).unwrap();
+        msg!("count = {}", c.count);
+        Ok(())
+    }
+}</code></pre></div><div class="item"><div class="l">Context&lt;T&gt; — the accounts + metadata bag</div><pre><code>// ctx.accounts.&lt;name&gt;   the validated accounts
+// ctx.program_id        &amp;Pubkey of this program
+// ctx.bumps.&lt;pda&gt;       canonical PDA bump
+// ctx.remaining_accounts extra AccountInfos</code></pre><div class="n">Context&lt;T&gt; is generic over your #[derive(Accounts)] struct.</div></div><div class="item"><div class="l">Accounts validation struct</div><pre><code>#[derive(Accounts)]
+pub struct Increment&lt;'info&gt; {
+    #[account(mut)]
+    pub counter: Account&lt;'info, Counter&gt;,
+    pub authority: Signer&lt;'info&gt;,
+    pub system_program: Program&lt;'info, System&gt;,
+}</code></pre></div><div class="item"><div class="l">init + PDA + space</div><pre><code>#[account(
+    init, payer = authority, space = 8 + 8,
+    seeds = [b"counter", authority.key().as_ref()], bump
+)]
+pub counter: Account&lt;'info, Counter&gt;,</code></pre><div class="n">space = 8 (Anchor discriminator) + sum of field sizes.</div></div><div class="item"><div class="l">State account (#[account] adds discriminator + Borsh)</div><pre><code>#[account]
+pub struct Counter { pub count: u64 }</code></pre></div><div class="item"><div class="l">Custom errors</div><pre><code>#[error_code]
+pub enum MyError {
+    #[msg("value too large")] TooBig,
+}
+require!(v &lt; 100, MyError::TooBig);
+return err!(MyError::TooBig);</code></pre></div><div class="item"><div class="l">Transaction &amp; IDL (concepts)</div><pre><code>// Transaction: 1+ instructions, signed, executed ATOMICALLY
+//   instruction = { program_id, accounts[], data (Borsh) }
+// IDL: JSON at target/idl/&lt;prog&gt;.json describing
+//   instructions, accounts, types -&gt; drives TS client codegen</code></pre><div class="n">Client: new Program(idl, provider).methods.increment().accounts({..}).rpc().</div></div><div class="item"><div class="l">Native (no Anchor) entrypoint</div><pre><code>use solana_program::{entrypoint, entrypoint::ProgramResult,
+    account_info::AccountInfo, pubkey::Pubkey};
+entrypoint!(process_instruction);
+fn process_instruction(id: &amp;Pubkey, accounts: &amp;[AccountInfo],
+    data: &amp;[u8]) -&gt; ProgramResult { Ok(()) }</code></pre></div>
+<h2>Quick tips &amp; gotchas</h2><ul class="tips"><li>Variables are immutable by default — reach for `let mut` only when you truly reassign; prefer shadowing (`let x = ...`) to change type.</li><li>Borrow checker mantra: many `&amp;` XOR one `&amp;mut`, and no reference may outlive its owner. Anchor account structs carry this as the `'info` lifetime.</li><li>On-chain data is Borsh, not Serde/JSON — order and types must match exactly across program and client, and Borsh has no self-describing schema.</li><li>Always budget 8 bytes for the Anchor discriminator: `space = 8 + &lt;fields&gt;`; forgetting it is the classic init size bug.</li><li>Do arithmetic with `checked_add`/`checked_mul` (or enable `overflow-checks = true`) — silent wraparound on lamports/counters is an exploit vector.</li><li>Use `msg!("...")` for on-chain logging; `println!` does nothing in a BPF program.</li><li>Propagate errors with `?` and typed `Result`; reserve `unwrap()`/`expect()` for truly-impossible cases since they panic (and abort the instruction).</li><li>After `anchor build`, run `anchor keys sync` so `declare_id!` and Anchor.toml match the deployed program keypair, then redeploy.</li></ul>
+</div></body></html>

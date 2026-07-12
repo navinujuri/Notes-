@@ -1,0 +1,76 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Cheat Sheet · Authentication</title><style>:root{--bg:#fff;--fg:#1a1a1a;--muted:#6b7280;--line:#e5e7eb;--accent:#0d9488;--card:#f9fafb;--code:#f3f4f6;--codefg:#111}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1115;--fg:#e6e6e6;--muted:#9aa0aa;--line:#242833;--accent:#2dd4bf;--card:#171a21;--code:#0b0e13;--codefg:#e6e6e6}}
+*{box-sizing:border-box}body{margin:0;font:16px/1.6 system-ui,Segoe UI,sans-serif;background:var(--bg);color:var(--fg)}
+.wrap{max-width:860px;margin:0 auto;padding:1.2rem}
+a.back{color:var(--accent);text-decoration:none;font-size:.9rem}
+h1{font-size:1.5rem;margin:.6rem 0 .2rem}.sub{color:var(--muted);margin:0 0 1.4rem}
+h2{font-size:1.1rem;margin:1.6rem 0 .5rem;color:var(--accent)}
+.item{border:1px solid var(--line);border-radius:10px;background:var(--card);padding:.6rem .8rem;margin:.5rem 0}
+.item .l{font-weight:700}
+.item .n{color:var(--muted);font-size:.92rem;margin-top:.2rem}
+pre{margin:.45rem 0 0;background:var(--code);color:var(--codefg);border:1px solid var(--line);border-radius:8px;padding:.6rem .8rem;overflow-x:auto}
+code,pre{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:.86rem}
+.tips{border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:10px;background:var(--card);padding:.6rem 1rem}
+.tips li{margin:.35rem 0}
+@media print{.back{display:none}}</style></head><body><div class="wrap">
+<a class="back" href="../revision.html">← Back to revision index</a>
+<h1>Authentication — Cheat Sheet</h1>
+<p class="sub">Cohort 2.0 · 8 lessons · quick reference</p>
+<h2>Concepts &amp; Setup</h2><div class="item"><div class="l">Authentication vs Authorization</div><div class="n">AuthN = who are you (login). AuthZ = what can you do (roles/permissions). Different concerns.</div></div><div class="item"><div class="l">Install the usual stack</div><pre><code>npm i express jsonwebtoken bcrypt cookie-parser cors</code></pre></div><div class="item"><div class="l">Never store plaintext passwords — hash with bcrypt</div><pre><code>const bcrypt = require("bcrypt");
+const hash = await bcrypt.hash(password, 10); // salt rounds
+const ok   = await bcrypt.compare(password, hash); // -&gt; bool</code></pre><div class="n">bcrypt auto-salts. Never use md5/sha256 for passwords.</div></div><div class="item"><div class="l">Keep the secret out of code</div><pre><code>// .env
+JWT_SECRET=super-long-random-string
+// usage: process.env.JWT_SECRET</code></pre><div class="n">Leaking the secret = anyone can forge valid tokens.</div></div><h2>JWT Basics</h2><div class="item"><div class="l">Sign a token (login success)</div><pre><code>const jwt = require("jsonwebtoken");
+const token = jwt.sign(
+  { id: user._id },              // payload
+  process.env.JWT_SECRET,
+  { expiresIn: "1h" }
+);</code></pre></div><div class="item"><div class="l">Verify a token (protected route)</div><pre><code>const decoded = jwt.verify(token, process.env.JWT_SECRET);
+// decoded.id  -&gt; throws if invalid/expired</code></pre></div><div class="item"><div class="l">Structure: header.payload.signature</div><div class="n">3 base64url parts joined by '.'. Payload is only ENCODED, not encrypted — anyone can read it. Never put secrets/passwords in it.</div></div><div class="item"><div class="l">Decode without verifying (debug only)</div><pre><code>jwt.decode(token); // no signature check — never trust for auth</code></pre></div><h2>Approach 1 — JWT + localStorage</h2><div class="item"><div class="l">Store token after login (frontend)</div><pre><code>localStorage.setItem("token", token);</code></pre></div><div class="item"><div class="l">Send on every request via Authorization header</div><pre><code>const token = localStorage.getItem("token");
+axios.get("/me", {
+  headers: { Authorization: "Bearer " + token }
+});</code></pre><div class="n">Convention is the 'Bearer &lt;token&gt;' prefix.</div></div><div class="item"><div class="l">Set a default header once</div><pre><code>axios.defaults.headers.common["Authorization"] = "Bearer " + token;</code></pre></div><div class="item"><div class="l">Logout = remove it</div><pre><code>localStorage.removeItem("token");</code></pre></div><div class="item"><div class="l">Tradeoff</div><div class="n">Simple, works cross-domain/mobile. But JS-readable → any XSS can steal it. Not auto-sent by browser.</div></div><h2>Approach 2 — Cookies</h2><div class="item"><div class="l">Set an httpOnly cookie on login</div><pre><code>res.cookie("token", token, {
+  httpOnly: true,   // JS can't read via document.cookie
+  secure: true,     // HTTPS only
+  sameSite: "lax",  // CSRF mitigation
+  maxAge: 3600000   // ms (1h)
+});</code></pre></div><div class="item"><div class="l">Read cookies with cookie-parser</div><pre><code>const cookieParser = require("cookie-parser");
+app.use(cookieParser());
+// later:
+const token = req.cookies.token;</code></pre></div><div class="item"><div class="l">Clear on logout</div><pre><code>res.clearCookie("token");</code></pre></div><div class="item"><div class="l">Tradeoff</div><div class="n">Auto-sent by browser every request; httpOnly blocks XSS token theft. But vulnerable to CSRF → use sameSite + CSRF tokens.</div></div><h2>Cookie Properties (cheat)</h2><div class="item"><div class="l">httpOnly</div><div class="n">Blocks document.cookie access from JS. Defeats XSS token exfiltration.</div></div><div class="item"><div class="l">secure</div><div class="n">Cookie only sent over HTTPS. Required when sameSite: 'none'.</div></div><div class="item"><div class="l">sameSite</div><pre><code>sameSite: "strict" | "lax" | "none"</code></pre><div class="n">strict = never cross-site; lax = sent on top-level GET nav (default-ish); none = always but needs secure.</div></div><div class="item"><div class="l">maxAge / expires</div><pre><code>maxAge: 3600000            // relative ms
+expires: new Date(Date.now()+3600000)</code></pre><div class="n">No maxAge/expires = session cookie (dies on browser close).</div></div><div class="item"><div class="l">domain / path</div><pre><code>domain: ".example.com", path: "/"</code></pre><div class="n">Controls scope — which hosts/routes the cookie is sent to.</div></div><div class="item"><div class="l">signed cookies</div><pre><code>app.use(cookieParser("secret"));
+res.cookie("t", v, { signed: true });
+req.signedCookies.t // tamper-detected</code></pre><div class="n">Signs value so client tampering is detectable.</div></div><h2>Express Backend — full example</h2><div class="item"><div class="l">Signup: hash + store</div><pre><code>app.post("/signup", async (req, res) =&gt; {
+  const { email, password } = req.body;
+  const hash = await bcrypt.hash(password, 10);
+  await User.create({ email, password: hash });
+  res.json({ msg: "created" });
+});</code></pre></div><div class="item"><div class="l">Signin: compare + issue token</div><pre><code>app.post("/signin", async (req, res) =&gt; {
+  const user = await User.findOne({ email: req.body.email });
+  if (!user || !(await bcrypt.compare(req.body.password, user.password)))
+    return res.status(401).json({ msg: "bad creds" });
+  const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET);
+  // header approach:
+  res.json({ token });
+  // OR cookie approach:
+  // res.cookie("token", token, { httpOnly: true }).json({ msg: "ok" });
+});</code></pre></div><div class="item"><div class="l">Auth middleware (header)</div><pre><code>function auth(req, res, next) {
+  const token = (req.headers.authorization || "").split(" ")[1];
+  if (!token) return res.status(401).json({ msg: "no token" });
+  try {
+    req.userId = jwt.verify(token, process.env.JWT_SECRET).id;
+    next();
+  } catch {
+    res.status(403).json({ msg: "invalid token" });
+  }
+}</code></pre></div><div class="item"><div class="l">Auth middleware (cookie variant)</div><pre><code>const token = req.cookies.token; // rest identical</code></pre></div><div class="item"><div class="l">Protect a route</div><pre><code>app.get("/me", auth, (req, res) =&gt; res.json({ id: req.userId }));</code></pre></div><h2>Frontend (React) + CORS</h2><div class="item"><div class="l">CORS must allow credentials for cookies</div><pre><code>app.use(cors({
+  origin: "http://localhost:5173", // exact origin, not *
+  credentials: true
+}));</code></pre><div class="n">credentials:true + wildcard origin is rejected by browsers.</div></div><div class="item"><div class="l">Send cookies from React</div><pre><code>axios.get("/me", { withCredentials: true });
+// or global: axios.defaults.withCredentials = true;</code></pre><div class="n">fetch equivalent: credentials: 'include'.</div></div><div class="item"><div class="l">Login flow (header/localStorage)</div><pre><code>const { data } = await axios.post("/signin", { email, password });
+localStorage.setItem("token", data.token);</code></pre></div><div class="item"><div class="l">Protect a page</div><pre><code>useEffect(() =&gt; {
+  axios.get("/me", { headers: { Authorization: "Bearer " + localStorage.getItem("token") } })
+    .catch(() =&gt; navigate("/login"));
+}, []);</code></pre></div>
+<h2>Quick tips &amp; gotchas</h2><ul class="tips"><li>JWT payload is base64-encoded, NOT encrypted — decode it on jwt.io. Never store passwords/secrets in the payload.</li><li>localStorage token = exposed to XSS (any injected JS reads it). httpOnly cookie = exposed to CSRF instead. Pick your threat and mitigate it (sameSite/CSRF tokens for cookies, strict CSP for localStorage).</li><li>Always set expiresIn on tokens — a stolen token with no expiry is valid forever.</li><li>For cookie auth cross-origin: backend needs cors({ credentials:true, origin:&lt;exact&gt; }) AND frontend needs withCredentials:true. Both or it silently fails.</li><li>sameSite:'none' REQUIRES secure:true — browsers drop it otherwise. Localhost over http can bite you here.</li><li>Use bcrypt.compare (constant-time), never === on hashes; never hash passwords with md5/sha.</li><li>Return 401 for 'not authenticated' (no/bad token) and 403 for 'authenticated but not allowed'.</li><li>Keep JWT_SECRET in env, long and random; rotating it invalidates all existing tokens.</li></ul>
+</div></body></html>

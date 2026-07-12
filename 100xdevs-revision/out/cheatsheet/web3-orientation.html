@@ -1,0 +1,85 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Cheat Sheet · Web3 Cohort | Orientation</title><style>:root{--bg:#fff;--fg:#1a1a1a;--muted:#6b7280;--line:#e5e7eb;--accent:#0d9488;--card:#f9fafb;--code:#f3f4f6;--codefg:#111}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1115;--fg:#e6e6e6;--muted:#9aa0aa;--line:#242833;--accent:#2dd4bf;--card:#171a21;--code:#0b0e13;--codefg:#e6e6e6}}
+*{box-sizing:border-box}body{margin:0;font:16px/1.6 system-ui,Segoe UI,sans-serif;background:var(--bg);color:var(--fg)}
+.wrap{max-width:860px;margin:0 auto;padding:1.2rem}
+a.back{color:var(--accent);text-decoration:none;font-size:.9rem}
+h1{font-size:1.5rem;margin:.6rem 0 .2rem}.sub{color:var(--muted);margin:0 0 1.4rem}
+h2{font-size:1.1rem;margin:1.6rem 0 .5rem;color:var(--accent)}
+.item{border:1px solid var(--line);border-radius:10px;background:var(--card);padding:.6rem .8rem;margin:.5rem 0}
+.item .l{font-weight:700}
+.item .n{color:var(--muted);font-size:.92rem;margin-top:.2rem}
+pre{margin:.45rem 0 0;background:var(--code);color:var(--codefg);border:1px solid var(--line);border-radius:8px;padding:.6rem .8rem;overflow-x:auto}
+code,pre{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:.86rem}
+.tips{border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:10px;background:var(--card);padding:.6rem 1rem}
+.tips li{margin:.35rem 0}
+@media print{.back{display:none}}</style></head><body><div class="wrap">
+<a class="back" href="../revision.html">← Back to revision index</a>
+<h1>Web3 Cohort | Orientation — Cheat Sheet</h1>
+<p class="sub">Cohort 2.0 · 7 lessons · quick reference</p>
+<h2>Setup &amp; Tooling (Node.js)</h2><div class="item"><div class="l">Built-in crypto module (no install)</div><pre><code>const crypto = require('crypto');
+// or ESM: import crypto from 'node:crypto';</code></pre></div><div class="item"><div class="l">Elliptic-curve keys/signatures (secp256k1, Bitcoin's curve)</div><pre><code>npm i elliptic
+const EC = require('elliptic').ec;
+const ec = new EC('secp256k1');</code></pre><div class="n">secp256k1 is the exact curve Bitcoin &amp; Ethereum use.</div></div><div class="item"><div class="l">Quick REPL to experiment with hashes</div><pre><code>node -e "console.log(require('crypto').createHash('sha256').update('hi').digest('hex'))"</code></pre></div><h2>Hashing (SHA-256)</h2><div class="item"><div class="l">Hash any string to hex</div><pre><code>const hash = crypto.createHash('sha256')
+  .update('hello world')
+  .digest('hex');
+// b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9</code></pre><div class="n">digest() empties the hash object — call it once per createHash().</div></div><div class="item"><div class="l">Hash structured data deterministically</div><pre><code>const h = crypto.createHash('sha256')
+  .update(JSON.stringify(obj))
+  .digest('hex');</code></pre><div class="n">Same input -&gt; same 64-char (256-bit) hex, always. Key ordering must be stable.</div></div><div class="item"><div class="l">Core properties to memorize</div><div class="n">Deterministic, one-way (irreversible), avalanche (1-bit change -&gt; totally different hash), fixed-length output, collision-resistant.</div></div><div class="item"><div class="l">Hex vs raw length</div><pre><code>// 256 bits = 32 bytes = 64 hex chars
+crypto.createHash('sha256').update('').digest('hex').length // 64</code></pre><div class="n">SHA-256 output is always 64 hex chars regardless of input size.</div></div><h2>Proof of Work (mining)</h2><div class="item"><div class="l">Find a nonce so hash starts with N zeros</div><pre><code>function mine(input, difficulty) {
+  const prefix = '0'.repeat(difficulty);
+  let nonce = 0;
+  while (true) {
+    const hash = crypto.createHash('sha256')
+      .update(input + nonce).digest('hex');
+    if (hash.startsWith(prefix)) return { nonce, hash };
+    nonce++;
+  }
+}</code></pre><div class="n">The only way to find the nonce is brute-force guessing — that's the 'work'.</div></div><div class="item"><div class="l">Difficulty = number of leading zeros required</div><div class="n">Each extra leading zero makes it ~16x harder (hex). Verifying is instant; finding is expensive — asymmetric by design.</div></div><div class="item"><div class="l">Verify PoW (cheap)</div><pre><code>const ok = crypto.createHash('sha256')
+  .update(input + nonce).digest('hex')
+  .startsWith('0000');</code></pre></div><h2>Build a Blockchain / New Currency</h2><div class="item"><div class="l">Block structure</div><pre><code>class Block {
+  constructor(index, data, prevHash = '') {
+    this.index = index;
+    this.timestamp = Date.now();
+    this.data = data;        // transactions
+    this.prevHash = prevHash;
+    this.nonce = 0;
+    this.hash = this.computeHash();
+  }
+  computeHash() {
+    return crypto.createHash('sha256')
+      .update(this.index + this.timestamp +
+        JSON.stringify(this.data) + this.prevHash + this.nonce)
+      .digest('hex');
+  }
+}</code></pre><div class="n">prevHash is what chains blocks — tampering with block N breaks every block after it.</div></div><div class="item"><div class="l">Mine a block (embed PoW)</div><pre><code>mineBlock(difficulty) {
+  const prefix = '0'.repeat(difficulty);
+  while (!this.hash.startsWith(prefix)) {
+    this.nonce++;
+    this.hash = this.computeHash();
+  }
+}</code></pre></div><div class="item"><div class="l">Chain + genesis block + validation</div><pre><code>class Chain {
+  constructor() { this.blocks = [new Block(0, 'genesis')]; }
+  add(data, difficulty = 4) {
+    const prev = this.blocks[this.blocks.length - 1];
+    const b = new Block(this.blocks.length, data, prev.hash);
+    b.mineBlock(difficulty);
+    this.blocks.push(b);
+  }
+  isValid() {
+    for (let i = 1; i &lt; this.blocks.length; i++) {
+      const cur = this.blocks[i], prev = this.blocks[i - 1];
+      if (cur.hash !== cur.computeHash()) return false;
+      if (cur.prevHash !== prev.hash) return false;
+    }
+    return true;
+  }
+}</code></pre><div class="n">A 'currency' is just a chain whose data is a ledger of signed transactions.</div></div><div class="item"><div class="l">Transaction shape</div><pre><code>const tx = { from: senderPubKey, to: recipientPubKey, amount: 10 };</code></pre><div class="n">'from' = null for coinbase/mining reward (money creation).</div></div><h2>Digital Signatures &amp; Keys</h2><div class="item"><div class="l">Generate a keypair (your wallet)</div><pre><code>const key = ec.genKeyPair();
+const publicKey  = key.getPublic('hex'); // your address
+const privateKey = key.getPrivate('hex'); // NEVER share</code></pre><div class="n">Public key = who you are; private key = proof you're you. Ownership = knowing the private key.</div></div><div class="item"><div class="l">Sign a transaction</div><pre><code>const txHash = crypto.createHash('sha256')
+  .update(JSON.stringify(tx)).digest('hex');
+const sig = key.sign(txHash).toDER('hex');</code></pre></div><div class="item"><div class="l">Anyone can verify with only the public key</div><pre><code>const pub = ec.keyFromPublic(publicKey, 'hex');
+const valid = pub.verify(txHash, sig); // true/false</code></pre><div class="n">Signature proves the sender authorized it without revealing the private key. Can't be forged, can't be repudiated.</div></div><h2>Bitcoin Essentials</h2><div class="item"><div class="l">Double SHA-256 (Bitcoin's actual hash)</div><pre><code>const dsha = (buf) =&gt; crypto.createHash('sha256')
+  .update(crypto.createHash('sha256').update(buf).digest())
+  .digest('hex');</code></pre><div class="n">Bitcoin hashes block headers with SHA256(SHA256(x)).</div></div><div class="item"><div class="l">Hard-limit supply &amp; issuance</div><div class="n">21M BTC cap. Reward halves every 210,000 blocks (~4 yrs): 50 -&gt; 25 -&gt; 12.5 -&gt; 6.25 -&gt; 3.125 BTC (2024).</div></div><div class="item"><div class="l">Timing &amp; difficulty</div><div class="n">~10 min target block time. Difficulty re-adjusts every 2016 blocks (~2 weeks) to hold that 10-min average.</div></div><div class="item"><div class="l">UTXO model (not account balances)</div><div class="n">You spend whole 'unspent transaction outputs' and get change back; balance = sum of your UTXOs. Ethereum uses accounts instead.</div></div><div class="item"><div class="l">Units</div><div class="n">1 BTC = 100,000,000 satoshis (1e-8). Smallest unit = 1 sat.</div></div><div class="item"><div class="l">Merkle root</div><div class="n">All txs in a block hashed pairwise into one root hash stored in the header — lets you prove a tx is included without the full block.</div></div><div class="item"><div class="l">Coinbase transaction</div><div class="n">First tx in a block; has no input, creates the block reward + fees for the miner. This is how new BTC is minted.</div></div><h2>Why Blockchains — Core Concepts</h2><div class="item"><div class="l">The problem it solves</div><div class="n">Trust without a central authority (bank/gov). No single party can rewrite history or double-spend.</div></div><div class="item"><div class="l">Immutability</div><div class="n">Each block commits to prevHash, so editing old data forces re-mining every subsequent block faster than the network — practically impossible.</div></div><div class="item"><div class="l">Consensus (Nakamoto / longest chain)</div><div class="n">Honest nodes accept the chain with the most cumulative PoW. Attacker needs &gt;50% of hash power to rewrite it.</div></div><div class="item"><div class="l">Decentralization vs distribution</div><div class="n">Every full node keeps a full copy of the ledger; anyone can verify independently. No trusted intermediary.</div></div><div class="item"><div class="l">Double-spend prevention</div><div class="n">Ordering txs in mined blocks + signatures makes spending the same coin twice detectable and rejectable.</div></div>
+<h2>Quick tips &amp; gotchas</h2><ul class="tips"><li>digest() consumes the hash object — you must createHash() fresh for every hash; reusing one throws.</li><li>Higher difficulty = exponentially more work: adding one leading hex zero multiplies expected attempts by ~16.</li><li>Never log or commit a private key. Losing it = losing funds; leaking it = losing funds. There is no reset.</li><li>JSON.stringify is only deterministic if key order is stable — sort keys before hashing transactions or two nodes will disagree.</li><li>PoW is asymmetric: finding a valid nonce is brute-force expensive, but any node verifies it with a single hash.</li><li>Changing any field in a block changes its hash, which breaks prevHash of the next block — that cascade is what makes tampering detectable.</li><li>Bitcoin uses double SHA-256 and the secp256k1 curve specifically — match those if you're mimicking real Bitcoin behavior.</li><li>A 51% attack lets you reorder/reverse recent txs, but not steal coins you have no private key for or mint beyond the reward schedule.</li></ul>
+</div></body></html>

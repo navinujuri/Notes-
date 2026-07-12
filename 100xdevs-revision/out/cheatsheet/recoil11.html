@@ -1,0 +1,94 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Cheat Sheet · Recoil</title><style>:root{--bg:#fff;--fg:#1a1a1a;--muted:#6b7280;--line:#e5e7eb;--accent:#0d9488;--card:#f9fafb;--code:#f3f4f6;--codefg:#111}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1115;--fg:#e6e6e6;--muted:#9aa0aa;--line:#242833;--accent:#2dd4bf;--card:#171a21;--code:#0b0e13;--codefg:#e6e6e6}}
+*{box-sizing:border-box}body{margin:0;font:16px/1.6 system-ui,Segoe UI,sans-serif;background:var(--bg);color:var(--fg)}
+.wrap{max-width:860px;margin:0 auto;padding:1.2rem}
+a.back{color:var(--accent);text-decoration:none;font-size:.9rem}
+h1{font-size:1.5rem;margin:.6rem 0 .2rem}.sub{color:var(--muted);margin:0 0 1.4rem}
+h2{font-size:1.1rem;margin:1.6rem 0 .5rem;color:var(--accent)}
+.item{border:1px solid var(--line);border-radius:10px;background:var(--card);padding:.6rem .8rem;margin:.5rem 0}
+.item .l{font-weight:700}
+.item .n{color:var(--muted);font-size:.92rem;margin-top:.2rem}
+pre{margin:.45rem 0 0;background:var(--code);color:var(--codefg);border:1px solid var(--line);border-radius:8px;padding:.6rem .8rem;overflow-x:auto}
+code,pre{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:.86rem}
+.tips{border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:10px;background:var(--card);padding:.6rem 1rem}
+.tips li{margin:.35rem 0}
+@media print{.back{display:none}}</style></head><body><div class="wrap">
+<a class="back" href="../revision.html">← Back to revision index</a>
+<h1>Recoil — Cheat Sheet</h1>
+<p class="sub">Cohort 3.0 · 7 lessons · quick reference</p>
+<h2>Setup &amp; RecoilRoot</h2><div class="item"><div class="l">Install</div><pre><code>npm install recoil
+# or
+yarn add recoil</code></pre></div><div class="item"><div class="l">Wrap app in RecoilRoot (required provider)</div><pre><code>import { RecoilRoot } from 'recoil';
+
+function App() {
+  return (
+    &lt;RecoilRoot&gt;
+      &lt;Todos /&gt;
+    &lt;/RecoilRoot&gt;
+  );
+}</code></pre><div class="n">Every component using Recoil hooks must be inside a RecoilRoot. You can nest roots; inner root shadows outer state.</div></div><div class="item"><div class="l">Optional: initialize atoms via initializeState</div><pre><code>&lt;RecoilRoot initializeState={({ set }) =&gt; set(countAtom, 10)}&gt;</code></pre><div class="n">Handy for SSR / tests to seed atom values before first render.</div></div><h2>The Context API problem Recoil solves</h2><div class="item"><div class="l">Plain Context: create + provide + consume</div><pre><code>const CountContext = createContext(null);
+
+function Provider({ children }) {
+  const [count, setCount] = useState(0);
+  return (
+    &lt;CountContext.Provider value={{ count, setCount }}&gt;
+      {children}
+    &lt;/CountContext.Provider&gt;
+  );
+}
+
+const { count, setCount } = useContext(CountContext);</code></pre><div class="n">Context is for passing data down without prop-drilling — it is NOT a state manager.</div></div><div class="item"><div class="l">Gotcha: ANY context value change re-renders ALL consumers</div><div class="n">Every component calling useContext re-renders when the provider value changes, even if it only reads an unrelated field. This is the core pain Recoil fixes with fine-grained subscriptions.</div></div><div class="item"><div class="l">Object value = new reference every render</div><pre><code>// BAD: new object each render -&gt; all consumers re-render
+&lt;Ctx.Provider value={{ count, setCount }}&gt;</code></pre><div class="n">Wrap in useMemo to stabilize, but you still can't do per-field subscriptions like Recoil atoms.</div></div><h2>Recoil vs Context API</h2><div class="item"><div class="l">Subscription granularity</div><div class="n">Context: all consumers re-render on any change. Recoil: only components subscribed to the specific atom/selector that changed re-render.</div></div><div class="item"><div class="l">Derived state</div><div class="n">Context has no built-in derivation. Recoil selectors compute derived values with automatic caching + dependency tracking.</div></div><div class="item"><div class="l">Async</div><div class="n">Context: roll your own. Recoil: async selectors integrate with Suspense out of the box.</div></div><div class="item"><div class="l">Boilerplate / mental model</div><div class="n">Context = passing values through the tree. Recoil = a graph of atoms (state) and selectors (derived), consumed via hooks anywhere under RecoilRoot.</div></div><div class="item"><div class="l">When to just use Context</div><div class="n">Rarely-changing global values (theme, locale, auth user). Reach for Recoil when many components read/write shared, frequently-changing state.</div></div><h2>Atoms — units of state</h2><div class="item"><div class="l">Define an atom</div><pre><code>import { atom } from 'recoil';
+
+const countAtom = atom({
+  key: 'countAtom',   // globally unique string
+  default: 0,
+});</code></pre><div class="n">key MUST be unique across the whole app; duplicate keys throw in dev.</div></div><div class="item"><div class="l">useRecoilState — read + write (like useState)</div><pre><code>const [count, setCount] = useRecoilState(countAtom);
+setCount(c =&gt; c + 1);</code></pre></div><div class="item"><div class="l">useRecoilValue — read only (subscribes)</div><pre><code>const count = useRecoilValue(countAtom);</code></pre></div><div class="item"><div class="l">useSetRecoilState — write only (NO re-render on change)</div><pre><code>const setCount = useSetRecoilState(countAtom);</code></pre><div class="n">Use in components that update state but don't display it — avoids unnecessary re-renders.</div></div><div class="item"><div class="l">useResetRecoilState — reset to default</div><pre><code>const reset = useResetRecoilState(countAtom);</code></pre></div><div class="item"><div class="l">Object/array default</div><pre><code>const todosAtom = atom({
+  key: 'todos',
+  default: [],
+});
+setTodos(prev =&gt; [...prev, newTodo]);</code></pre><div class="n">Treat atom state as immutable — always return a new array/object, never mutate in place.</div></div><h2>Selectors — derived state</h2><div class="item"><div class="l">Read-only selector (get)</div><pre><code>import { selector } from 'recoil';
+
+const doubledCount = selector({
+  key: 'doubledCount',
+  get: ({ get }) =&gt; {
+    const c = get(countAtom);   // tracks dependency
+    return c * 2;
+  },
+});</code></pre><div class="n">Recompiles only when a get() dependency changes; result is cached (memoized) per input.</div></div><div class="item"><div class="l">Consume a selector</div><pre><code>const doubled = useRecoilValue(doubledCount);</code></pre><div class="n">useRecoilValue works for atoms AND selectors interchangeably.</div></div><div class="item"><div class="l">Writable selector (get + set)</div><pre><code>const tempF = selector({
+  key: 'tempF',
+  get: ({ get }) =&gt; get(tempC) * 9/5 + 32,
+  set: ({ set }, newF) =&gt;
+    set(tempC, (newF - 32) * 5/9),
+});
+const [f, setF] = useRecoilState(tempF);</code></pre><div class="n">set receives ({set,get,reset}, newValue). Use for two-way derived state.</div></div><div class="item"><div class="l">Async selector (Promise get)</div><pre><code>const userQuery = selector({
+  key: 'userQuery',
+  get: async ({ get }) =&gt; {
+    const id = get(userIdAtom);
+    const r = await fetch(`/api/user/${id}`);
+    return r.json();
+  },
+});</code></pre><div class="n">Suspends the component; wrap consumer in &lt;Suspense fallback={...}&gt;. Use useRecoilValueLoadable to handle loading/error without Suspense.</div></div><div class="item"><div class="l">Handle async without Suspense</div><pre><code>const loadable = useRecoilValueLoadable(userQuery);
+if (loadable.state === 'loading') return &lt;Spinner/&gt;;
+if (loadable.state === 'hasError') throw loadable.contents;
+return &lt;div&gt;{loadable.contents.name}&lt;/div&gt;;</code></pre><div class="n">loadable.state is 'hasValue' | 'loading' | 'hasError'.</div></div><h2>Re-render control: memo &amp; alternate approach</h2><div class="item"><div class="l">React.memo to stop prop-driven re-renders</div><pre><code>const Row = React.memo(function Row({ item }) {
+  return &lt;li&gt;{item.text}&lt;/li&gt;;
+});</code></pre><div class="n">Only skips re-render if props are shallow-equal. Recoil already scopes re-renders per subscribed atom; combine both to isolate expensive subtrees.</div></div><div class="item"><div class="l">Write-only hook = the 'alternate approach' to avoid re-renders</div><pre><code>// Button re-renders on every count change (bad):
+const [count, setCount] = useRecoilState(countAtom);
+
+// Button never re-renders on count change (good):
+const setCount = useSetRecoilState(countAtom);</code></pre><div class="n">Split display vs. mutation components so the setter component doesn't subscribe.</div></div><div class="item"><div class="l">Selector to isolate the changing slice</div><pre><code>// Instead of subscribing to a big object atom,
+// derive just the field a component needs:
+const titleSel = selector({
+  key: 'title',
+  get: ({ get }) =&gt; get(formAtom).title,
+});</code></pre><div class="n">Component re-renders only when title changes, not on every formAtom update.</div></div><div class="item"><div class="l">atomFamily / selectorFamily — parameterized state</div><pre><code>import { atomFamily } from 'recoil';
+
+const todoItem = atomFamily({
+  key: 'todoItem',
+  default: id =&gt; ({ id, done: false }),
+});
+const [item, setItem] = useRecoilState(todoItem(id));</code></pre><div class="n">Each id gets its own atom instance -&gt; editing one row re-renders only that row (classic list-perf fix vs one giant array atom).</div></div>
+<h2>Quick tips &amp; gotchas</h2><ul class="tips"><li>Every atom/selector key must be globally unique — a stray duplicate throws 'Duplicate atom key' in dev.</li><li>useRecoilValue subscribes (re-renders); useSetRecoilState does NOT. Pick the narrowest hook for the job.</li><li>All Recoil hooks must run under a &lt;RecoilRoot&gt;, or you get 'This component must be used inside a RecoilRoot'.</li><li>Never mutate atom state in place — spread/return new objects so Recoil detects the change.</li><li>Prefer selectors over computing derived values in render: selectors are cached and only recompute when a get() dependency changes.</li><li>Async selectors throw Promises — either wrap consumers in &lt;Suspense&gt; or read them with useRecoilValueLoadable.</li><li>For long lists, use atomFamily(id) instead of one array atom so a single item update re-renders only that item.</li><li>Context is for low-frequency global values (theme/auth); reach for Recoil when shared state changes often and many components read different slices.</li></ul>
+</div></body></html>

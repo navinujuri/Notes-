@@ -1,0 +1,82 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Cheat Sheet · C++ Part 1</title><style>:root{--bg:#fff;--fg:#1a1a1a;--muted:#6b7280;--line:#e5e7eb;--accent:#0d9488;--card:#f9fafb;--code:#f3f4f6;--codefg:#111}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1115;--fg:#e6e6e6;--muted:#9aa0aa;--line:#242833;--accent:#2dd4bf;--card:#171a21;--code:#0b0e13;--codefg:#e6e6e6}}
+*{box-sizing:border-box}body{margin:0;font:16px/1.6 system-ui,Segoe UI,sans-serif;background:var(--bg);color:var(--fg)}
+.wrap{max-width:860px;margin:0 auto;padding:1.2rem}
+a.back{color:var(--accent);text-decoration:none;font-size:.9rem}
+h1{font-size:1.5rem;margin:.6rem 0 .2rem}.sub{color:var(--muted);margin:0 0 1.4rem}
+h2{font-size:1.1rem;margin:1.6rem 0 .5rem;color:var(--accent)}
+.item{border:1px solid var(--line);border-radius:10px;background:var(--card);padding:.6rem .8rem;margin:.5rem 0}
+.item .l{font-weight:700}
+.item .n{color:var(--muted);font-size:.92rem;margin-top:.2rem}
+pre{margin:.45rem 0 0;background:var(--code);color:var(--codefg);border:1px solid var(--line);border-radius:8px;padding:.6rem .8rem;overflow-x:auto}
+code,pre{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:.86rem}
+.tips{border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:10px;background:var(--card);padding:.6rem 1rem}
+.tips li{margin:.35rem 0}
+@media print{.back{display:none}}</style></head><body><div class="wrap">
+<a class="back" href="../revision.html">← Back to revision index</a>
+<h1>C++ Part 1 — Cheat Sheet</h1>
+<p class="sub">Cohort 2.0 · 8 lessons · quick reference</p>
+<h2>Setup &amp; Compilation</h2><div class="item"><div class="l">Install compiler (Linux/macOS)</div><pre><code>sudo apt install g++      # Debian/Ubuntu
+xcode-select --install     # macOS (clang++)</code></pre><div class="n">g++ = GNU, clang++ = LLVM; both accept the same flags below.</div></div><div class="item"><div class="l">Install on Windows</div><pre><code># MSYS2 / MinGW-w64
+pacman -S mingw-w64-ucrt-x86_64-gcc</code></pre><div class="n">Add the ...\ucrt64\bin dir to PATH so g++ resolves.</div></div><div class="item"><div class="l">Compile a single file</div><pre><code>g++ main.cpp -o main
+./main            # .\main.exe on Windows</code></pre><div class="n">No -o -&gt; a.out (a.exe). Compiles AND links in one step.</div></div><div class="item"><div class="l">Recommended dev flags</div><pre><code>g++ -std=c++17 -Wall -Wextra -g main.cpp -o main</code></pre><div class="n">-std pins the standard; -Wall -Wextra surface bugs; -g adds debug symbols.</div></div><div class="item"><div class="l">Optimize for release</div><pre><code>g++ -std=c++17 -O2 main.cpp -o main</code></pre><div class="n">-O2 typical; -O3 aggressive. Don't mix -g and -O2 when debugging.</div></div><div class="item"><div class="l">Check version</div><pre><code>g++ --version</code></pre></div><h2>Program Structure &amp; I/O</h2><div class="item"><div class="l">Minimal program</div><pre><code>#include &lt;iostream&gt;
+using namespace std;
+
+int main() {
+    cout &lt;&lt; "Hello, World!" &lt;&lt; endl;
+    return 0;   // 0 = success
+}</code></pre><div class="n">main MUST return int. Falling off main implicitly returns 0.</div></div><div class="item"><div class="l">Output with cout</div><pre><code>cout &lt;&lt; "x = " &lt;&lt; x &lt;&lt; ", y = " &lt;&lt; y &lt;&lt; "\n";</code></pre><div class="n">&lt;&lt; chains left-to-right. Prefer \n over endl in loops (endl flushes = slow).</div></div><div class="item"><div class="l">Read input with cin</div><pre><code>int age; string name;
+cin &gt;&gt; age &gt;&gt; name;</code></pre><div class="n">&gt;&gt; skips leading whitespace and stops at the next whitespace.</div></div><div class="item"><div class="l">Read a whole line</div><pre><code>string line;
+getline(cin, line);</code></pre><div class="n">After cin &gt;&gt; x, a newline stays in the buffer — use cin.ignore() before getline.</div></div><div class="item"><div class="l">Avoid namespace pollution</div><pre><code>std::cout &lt;&lt; std::endl;</code></pre><div class="n">`using namespace std;` is fine in small programs; avoid in headers.</div></div><div class="item"><div class="l">Comments</div><pre><code>// single line
+/* multi
+   line */</code></pre></div><h2>Data Types &amp; Variables</h2><div class="item"><div class="l">Integer types</div><pre><code>int a = 42;          // usually 4 bytes
+long long big = 9e18; // 8 bytes, ~9.2e18 max
+unsigned int u = 3u; // no negatives</code></pre><div class="n">Use long long for values &gt; ~2.1e9 to avoid overflow.</div></div><div class="item"><div class="l">Floating point</div><pre><code>float f = 3.14f;   // ~7 digits
+double d = 3.14159265; // ~15 digits</code></pre><div class="n">Prefer double; float literals need the f suffix.</div></div><div class="item"><div class="l">Character &amp; bool</div><pre><code>char c = 'A';   // single quotes, 1 byte
+bool ok = true; // true/false -&gt; 1/0</code></pre><div class="n">"A" (double quotes) is a C-string, not a char.</div></div><div class="item"><div class="l">String (C++ std)</div><pre><code>#include &lt;string&gt;
+string s = "hello";
+s += " world";
+cout &lt;&lt; s.size() &lt;&lt; s[0];</code></pre><div class="n">std::string is dynamic; std::string is NOT included by &lt;iostream&gt; reliably — include &lt;string&gt;.</div></div><div class="item"><div class="l">const &amp; auto</div><pre><code>const double PI = 3.14159;  // immutable
+auto n = 10;                // deduced -&gt; int</code></pre><div class="n">auto needs an initializer; const must be initialized at declaration.</div></div><div class="item"><div class="l">Sizes &amp; casting</div><pre><code>cout &lt;&lt; sizeof(int);           // bytes
+double r = (double)a / b;      // C-style
+int x = static_cast&lt;int&gt;(3.9); // -&gt; 3 (truncates)</code></pre><div class="n">Int/int division truncates: 3/2 == 1. Cast one operand to get 1.5.</div></div><h2>Conditionals</h2><div class="item"><div class="l">if / else if / else</div><pre><code>if (score &gt;= 90) grade = 'A';
+else if (score &gt;= 80) grade = 'B';
+else grade = 'F';</code></pre><div class="n">Condition must be in (). Braces optional for single statements but recommended.</div></div><div class="item"><div class="l">Logical &amp; comparison ops</div><pre><code>if (a &gt; 0 &amp;&amp; b != 0) ...
+if (x &lt; 0 || y &lt; 0) ...
+if (!done) ...</code></pre><div class="n">&amp;&amp; / || short-circuit: RHS skipped if result already known.</div></div><div class="item"><div class="l">Ternary operator</div><pre><code>int max = (a &gt; b) ? a : b;</code></pre><div class="n">Great for simple assignments; don't nest deeply.</div></div><div class="item"><div class="l">switch</div><pre><code>switch (day) {
+    case 1: cout &lt;&lt; "Mon"; break;
+    case 2: cout &lt;&lt; "Tue"; break;
+    default: cout &lt;&lt; "?";
+}</code></pre><div class="n">Missing break = fall-through. Only works on int/char/enum, not strings/doubles.</div></div><div class="item"><div class="l">Common == vs = bug</div><pre><code>if (x == 5) ...  // compare
+x = 5;           // assign</code></pre><div class="n">if (x = 5) assigns then tests truthiness — always true here. -Wall warns.</div></div><h2>Loops</h2><div class="item"><div class="l">for loop</div><pre><code>for (int i = 0; i &lt; n; i++) {
+    cout &lt;&lt; i &lt;&lt; " ";
+}</code></pre><div class="n">init; condition; update. i declared in loop is scoped to it.</div></div><div class="item"><div class="l">while loop</div><pre><code>int i = 0;
+while (i &lt; n) { cout &lt;&lt; i; i++; }</code></pre><div class="n">Condition checked before body — may run 0 times.</div></div><div class="item"><div class="l">do-while loop</div><pre><code>int i = 0;
+do { cout &lt;&lt; i; i++; } while (i &lt; n);</code></pre><div class="n">Body runs at least once (condition checked after). Note trailing semicolon.</div></div><div class="item"><div class="l">Range-based for (C++11)</div><pre><code>int arr[] = {1,2,3};
+for (int x : arr) cout &lt;&lt; x;
+for (auto&amp; x : arr) x *= 2;  // modify in place</code></pre><div class="n">Use auto&amp; to mutate or avoid copies of large elements.</div></div><div class="item"><div class="l">break &amp; continue</div><pre><code>for (int i = 0; i &lt; n; i++) {
+    if (i == target) break;    // exit loop
+    if (i % 2) continue;       // skip to next iter
+}</code></pre></div><div class="item"><div class="l">Nested loops</div><pre><code>for (int i = 0; i &lt; r; i++)
+  for (int j = 0; j &lt; c; j++)
+    cout &lt;&lt; grid[i][j];</code></pre><div class="n">break/continue affect only the innermost loop.</div></div><h2>Functions</h2><div class="item"><div class="l">Definition &amp; call</div><pre><code>int add(int a, int b) {
+    return a + b;
+}
+int s = add(2, 3);   // 5</code></pre><div class="n">Return type before name; void = returns nothing.</div></div><div class="item"><div class="l">Prototype (declare before use)</div><pre><code>int add(int, int);   // declaration
+int main() { add(2,3); }
+int add(int a,int b){ return a+b; }</code></pre><div class="n">Needed if the definition appears after the call site.</div></div><div class="item"><div class="l">Pass by value vs reference</div><pre><code>void inc(int x)  { x++; }   // copy, no effect
+void inc(int&amp; x) { x++; }   // modifies caller's var</code></pre><div class="n">Use &amp; to modify the argument or avoid copying large objects.</div></div><div class="item"><div class="l">const reference (read-only, cheap)</div><pre><code>void print(const string&amp; s) { cout &lt;&lt; s; }</code></pre><div class="n">Idiomatic for passing big objects you won't modify.</div></div><div class="item"><div class="l">Default arguments</div><pre><code>int pow2(int base, int exp = 2) { ... }
+pow2(5);      // exp=2
+pow2(5, 3);   // exp=3</code></pre><div class="n">Defaults go in the declaration only; must be trailing params.</div></div><div class="item"><div class="l">Overloading</div><pre><code>int  area(int s)            { return s*s; }
+double area(double w,double h){ return w*h; }</code></pre><div class="n">Same name, different parameter types/count. Return type alone can't distinguish.</div></div><h2>Arrays</h2><div class="item"><div class="l">Declare &amp; initialize</div><pre><code>int a[5];               // uninitialized
+int b[5] = {1,2,3};     // rest = 0
+int c[] = {1,2,3,4};    // size deduced = 4</code></pre><div class="n">Fixed size must be a compile-time constant.</div></div><div class="item"><div class="l">Access &amp; bounds</div><pre><code>a[0] = 10;
+cout &lt;&lt; a[4];  // last valid index for size 5</code></pre><div class="n">Indices 0..size-1. Out-of-bounds is undefined behavior (no bounds check!).</div></div><div class="item"><div class="l">Length of a stack array</div><pre><code>int n = sizeof(a) / sizeof(a[0]);</code></pre><div class="n">Works only where the array's full type is visible — NOT after passing to a function.</div></div><div class="item"><div class="l">Iterate</div><pre><code>for (int i = 0; i &lt; n; i++) cout &lt;&lt; a[i];
+for (int x : a) cout &lt;&lt; x;   // range-based</code></pre></div><div class="item"><div class="l">Pass to function</div><pre><code>void fill(int arr[], int n) { ... }
+fill(a, 5);</code></pre><div class="n">Arrays decay to pointers — pass the size separately; sizeof inside gives pointer size.</div></div><div class="item"><div class="l">2D array</div><pre><code>int m[2][3] = {{1,2,3},{4,5,6}};
+cout &lt;&lt; m[1][2];  // 6</code></pre><div class="n">Row-major. All dimensions except the first are required in params: void f(int m[][3]).</div></div><div class="item"><div class="l">Prefer std::vector for dynamic size</div><pre><code>#include &lt;vector&gt;
+vector&lt;int&gt; v = {1,2,3};
+v.push_back(4);
+cout &lt;&lt; v.size();</code></pre><div class="n">Resizable, knows its own size, safer than raw arrays.</div></div>
+<h2>Quick tips &amp; gotchas</h2><ul class="tips"><li>Integer division truncates: 7/2 == 3. Cast an operand to double for real division: (double)7/2.</li><li>Use long long for sums/products that can exceed ~2.1e9; int silently overflows (undefined behavior).</li><li>Uninitialized local variables and arrays hold garbage — always initialize before reading.</li><li>Prefer \n over std::endl inside loops; endl forces a buffer flush and is much slower.</li><li>In switch, a missing break causes fall-through into the next case — a classic silent bug.</li><li>Arrays passed to functions decay to pointers, so sizeof(arr) no longer gives the array size — always pass the length too.</li><li>Pass large objects (string, vector) by const&amp; to avoid expensive copies; use &amp; when you need to modify the caller's value.</li><li>Compile with -Wall -Wextra: it catches == vs =, unused vars, and signed/unsigned mismatches before they bite.</li></ul>
+</div></body></html>

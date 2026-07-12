@@ -1,0 +1,52 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Cheat Sheet · NextJS (Client side)</title><style>:root{--bg:#fff;--fg:#1a1a1a;--muted:#6b7280;--line:#e5e7eb;--accent:#0d9488;--card:#f9fafb;--code:#f3f4f6;--codefg:#111}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1115;--fg:#e6e6e6;--muted:#9aa0aa;--line:#242833;--accent:#2dd4bf;--card:#171a21;--code:#0b0e13;--codefg:#e6e6e6}}
+*{box-sizing:border-box}body{margin:0;font:16px/1.6 system-ui,Segoe UI,sans-serif;background:var(--bg);color:var(--fg)}
+.wrap{max-width:860px;margin:0 auto;padding:1.2rem}
+a.back{color:var(--accent);text-decoration:none;font-size:.9rem}
+h1{font-size:1.5rem;margin:.6rem 0 .2rem}.sub{color:var(--muted);margin:0 0 1.4rem}
+h2{font-size:1.1rem;margin:1.6rem 0 .5rem;color:var(--accent)}
+.item{border:1px solid var(--line);border-radius:10px;background:var(--card);padding:.6rem .8rem;margin:.5rem 0}
+.item .l{font-weight:700}
+.item .n{color:var(--muted);font-size:.92rem;margin-top:.2rem}
+pre{margin:.45rem 0 0;background:var(--code);color:var(--codefg);border:1px solid var(--line);border-radius:8px;padding:.6rem .8rem;overflow-x:auto}
+code,pre{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:.86rem}
+.tips{border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:10px;background:var(--card);padding:.6rem 1rem}
+.tips li{margin:.35rem 0}
+@media print{.back{display:none}}</style></head><body><div class="wrap">
+<a class="back" href="../revision.html">← Back to revision index</a>
+<h1>NextJS (Client side) — Cheat Sheet</h1>
+<p class="sub">Cohort 2.0 · 14 lessons · quick reference</p>
+<h2>Bootstrap &amp; structure</h2><div class="item"><div class="l">Create an app</div><pre><code>npx create-next-app@latest my-app
+cd my-app &amp;&amp; npm run dev</code></pre></div><div class="item"><div class="l">App Router layout</div><pre><code>app/
+  layout.tsx      # shared shell (persists)
+  page.tsx        # UI for '/'
+  dashboard/
+    page.tsx      # UI for '/dashboard'</code></pre><div class="n">A folder = a route segment; page.tsx renders it.</div></div><h2>Routing</h2><div class="item"><div class="l">Static route</div><pre><code>app/about/page.tsx  -&gt;  /about</code></pre></div><div class="item"><div class="l">Dynamic route</div><pre><code>app/blog/[slug]/page.tsx
+
+export default function Page({ params }: { params: { slug: string } }) {
+  return &lt;h1&gt;{params.slug}&lt;/h1&gt;
+}</code></pre></div><div class="item"><div class="l">Route group (no URL segment)</div><pre><code>app/(marketing)/about/page.tsx  -&gt;  /about</code></pre><div class="n">Parentheses group files/layouts without adding to the URL.</div></div><div class="item"><div class="l">Navigate</div><pre><code>import Link from 'next/link'
+&lt;Link href="/dashboard"&gt;Go&lt;/Link&gt;
+
+// programmatic (client component):
+const router = useRouter(); router.push('/dashboard')</code></pre></div><h2>Server vs Client components</h2><div class="item"><div class="l">Server (default)</div><pre><code>// no directive needed
+export default async function Page() {
+  const data = await db.query(...)   // runs on server
+  return &lt;div&gt;{data.title}&lt;/div&gt;
+}</code></pre><div class="n">Ships zero JS, can touch DB/secrets, can be async.</div></div><div class="item"><div class="l">Client</div><pre><code>'use client'
+import { useState } from 'react'
+export default function Counter() {
+  const [n, setN] = useState(0)
+  return &lt;button onClick={() =&gt; setN(n+1)}&gt;{n}&lt;/button&gt;
+}</code></pre><div class="n">Needed for state, effects, event handlers, browser APIs.</div></div><div class="item"><div class="l">Rule</div><div class="n">Server can import Client; Client cannot import Server (pass server-rendered JSX as children instead). Keep 'use client' at the leaves.</div></div><h2>Layouts</h2><div class="item"><div class="l">Root layout</div><pre><code>// app/layout.tsx
+export default function RootLayout({ children }: { children: React.ReactNode }) {
+  return &lt;html&gt;&lt;body&gt;&lt;Nav /&gt;{children}&lt;/body&gt;&lt;/html&gt;
+}</code></pre><div class="n">Persists across navigation — Nav doesn't remount/refetch.</div></div><div class="item"><div class="l">Nested layout</div><pre><code>app/dashboard/layout.tsx  // wraps only /dashboard/*</code></pre></div><h2>SEO &amp; metadata</h2><div class="item"><div class="l">Static metadata</div><pre><code>export const metadata = {
+  title: 'Dashboard',
+  description: '...'
+}</code></pre></div><div class="item"><div class="l">Dynamic metadata</div><pre><code>export async function generateMetadata({ params }) {
+  const post = await getPost(params.slug)
+  return { title: post.title }
+}</code></pre></div>
+<h2>Quick tips &amp; gotchas</h2><ul class="tips"><li>'use client' does NOT mean client-only — the component still server-renders once, then hydrates.</li><li>Default to Server Components; only reach for Client Components at interactive leaves to keep the JS bundle small.</li><li>Fetching in a Client Component reintroduces waterfalls + exposes endpoints — prefer fetching in a Server Component.</li><li>Route groups (folder) organise layouts without changing the URL.</li><li>A hydration mismatch = server HTML ≠ first client render (often Date.now(), random, or window access during render).</li></ul>
+</div></body></html>

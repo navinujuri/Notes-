@@ -1,0 +1,82 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Cheat Sheet · Serverless Backends</title><style>:root{--bg:#fff;--fg:#1a1a1a;--muted:#6b7280;--line:#e5e7eb;--accent:#0d9488;--card:#f9fafb;--code:#f3f4f6;--codefg:#111}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1115;--fg:#e6e6e6;--muted:#9aa0aa;--line:#242833;--accent:#2dd4bf;--card:#171a21;--code:#0b0e13;--codefg:#e6e6e6}}
+*{box-sizing:border-box}body{margin:0;font:16px/1.6 system-ui,Segoe UI,sans-serif;background:var(--bg);color:var(--fg)}
+.wrap{max-width:860px;margin:0 auto;padding:1.2rem}
+a.back{color:var(--accent);text-decoration:none;font-size:.9rem}
+h1{font-size:1.5rem;margin:.6rem 0 .2rem}.sub{color:var(--muted);margin:0 0 1.4rem}
+h2{font-size:1.1rem;margin:1.6rem 0 .5rem;color:var(--accent)}
+.item{border:1px solid var(--line);border-radius:10px;background:var(--card);padding:.6rem .8rem;margin:.5rem 0}
+.item .l{font-weight:700}
+.item .n{color:var(--muted);font-size:.92rem;margin-top:.2rem}
+pre{margin:.45rem 0 0;background:var(--code);color:var(--codefg);border:1px solid var(--line);border-radius:8px;padding:.6rem .8rem;overflow-x:auto}
+code,pre{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:.86rem}
+.tips{border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:10px;background:var(--card);padding:.6rem 1rem}
+.tips li{margin:.35rem 0}
+@media print{.back{display:none}}</style></head><body><div class="wrap">
+<a class="back" href="../revision.html">← Back to revision index</a>
+<h1>Serverless Backends — Cheat Sheet</h1>
+<p class="sub">Cohort 2.0 · 12 lessons · quick reference</p>
+<h2>Servers vs Serverless</h2><div class="item"><div class="l">Traditional backend server</div><pre><code>node server.js  # one process, listens on a port, runs 24/7</code></pre><div class="n">Always-on: you provision, scale, patch, and pay for the box whether traffic exists or not.</div></div><div class="item"><div class="l">Serverless backend</div><div class="n">You ship functions; provider runs them on demand, auto-scales to zero, bills per request/CPU. No server/OS to manage.</div></div><div class="item"><div class="l">Core trade-off</div><div class="n">Pay-per-use + zero ops vs cold starts, execution/CPU limits, statelessness, and vendor lock-in.</div></div><div class="item"><div class="l">Cloudflare Workers model</div><div class="n">Runs on V8 isolates (not containers) at the edge -&gt; ~0ms cold start, global low latency, but limited Node APIs &amp; strict CPU-time caps.</div></div><h2>Providers &amp; When to Use</h2><div class="item"><div class="l">Famous providers</div><pre><code>AWS Lambda
+Cloudflare Workers
+Vercel / Netlify Functions
+Google Cloud Functions
+Azure Functions
+Deno Deploy</code></pre></div><div class="item"><div class="l">Use serverless when</div><div class="n">Spiky/unpredictable or low/intermittent traffic, small APIs / webhooks / cron, want autoscale + pay-per-use + global latency.</div></div><div class="item"><div class="l">Avoid serverless when</div><div class="n">Long-running jobs, websockets/stateful sockets, steady high throughput (a VM is cheaper), heavy compute, or need full Node + native libs.</div></div><div class="item"><div class="l">Limits to watch</div><div class="n">Cold starts (Lambda), CPU/wall-time caps (Workers ~10-50ms CPU on free tier), payload/memory limits, no persistent local state between requests.</div></div><h2>Cloudflare Workers - Setup &amp; Init</h2><div class="item"><div class="l">Scaffold new worker (recommended)</div><pre><code>npm create cloudflare@latest my-app
+# 'C3' - offers Hono/TS templates, installs wrangler for you</code></pre><div class="n">Fastest path; pick the Hono template to skip framework wiring.</div></div><div class="item"><div class="l">Install Wrangler CLI (existing project)</div><pre><code>npm i -D wrangler
+npx wrangler --version</code></pre></div><div class="item"><div class="l">Login to Cloudflare</div><pre><code>npx wrangler login</code></pre></div><div class="item"><div class="l">Init in current dir</div><pre><code>npx wrangler init</code></pre></div><div class="item"><div class="l">Local dev server</div><pre><code>npx wrangler dev   # http://localhost:8787, hot reload</code></pre><div class="n">Runs the real Workers runtime (workerd) locally, so behavior matches prod.</div></div><h2>Worker Anatomy &amp; Deploy</h2><div class="item"><div class="l">Minimal worker (module syntax)</div><pre><code>export default {
+  async fetch(request, env, ctx) {
+    return new Response('Hello World');
+  }
+};</code></pre><div class="n">env = bindings/secrets/vars; ctx = execution context. No app.listen() - the runtime calls fetch().</div></div><div class="item"><div class="l">Route by path + method</div><pre><code>const url = new URL(request.url);
+if (url.pathname === '/api' &amp;&amp; request.method === 'POST') { /* ... */ }</code></pre></div><div class="item"><div class="l">Background work after response</div><pre><code>ctx.waitUntil(logToAnalytics(request));</code></pre><div class="n">Keeps the worker alive to finish async work after the Response is returned.</div></div><div class="item"><div class="l">Deploy to production</div><pre><code>npx wrangler deploy
+# -&gt; https://my-app.&lt;subdomain&gt;.workers.dev</code></pre></div><div class="item"><div class="l">Tail live logs</div><pre><code>npx wrangler tail</code></pre></div><h2>Express vs Hono</h2><div class="item"><div class="l">Why Express doesn't fit Workers</div><div class="n">Express targets Node's http server (req/res, app.listen). Workers use a fetch(Request)-&gt;Response event model with no long-running server.</div></div><div class="item"><div class="l">Run Express anyway (compat)</div><pre><code># wrangler.toml
+compatibility_flags = ["nodejs_compat"]</code></pre><div class="n">Partial Node polyfill; heavier bundle, not idiomatic. Prefer Hono on Workers.</div></div><div class="item"><div class="l">Use Hono (Workers-native, Express-like API)</div><pre><code>npm i hono</code></pre></div><div class="item"><div class="l">Minimal Hono app</div><pre><code>import { Hono } from 'hono';
+const app = new Hono();
+app.get('/', (c) =&gt; c.text('Hello Hono!'));
+export default app;</code></pre><div class="n">Tiny, zero-dependency; same code runs on Workers/Bun/Deno/Node.</div></div><h2>Hono Routing &amp; Middlewares</h2><div class="item"><div class="l">Path params</div><pre><code>app.get('/user/:id', (c) =&gt; {
+  const id = c.req.param('id');
+  return c.json({ id });
+});</code></pre></div><div class="item"><div class="l">Query + JSON body</div><pre><code>app.post('/todo', async (c) =&gt; {
+  const sort = c.req.query('sort');
+  const body = await c.req.json();
+  return c.json(body, 201);
+});</code></pre></div><div class="item"><div class="l">Custom middleware</div><pre><code>app.use('*', async (c, next) =&gt; {
+  const start = Date.now();
+  await next();
+  console.log(`${c.req.method} ${Date.now() - start}ms`);
+});</code></pre><div class="n">await next() continues the chain; return early (skip next) to short-circuit.</div></div><div class="item"><div class="l">Auth guard (scoped path)</div><pre><code>app.use('/api/*', async (c, next) =&gt; {
+  const token = c.req.header('Authorization');
+  if (!token) return c.json({ error: 'unauthorized' }, 401);
+  await next();
+});</code></pre></div><div class="item"><div class="l">Built-in middleware</div><pre><code>import { cors } from 'hono/cors';
+import { logger } from 'hono/logger';
+import { jwt } from 'hono/jwt';
+app.use('*', logger(), cors());</code></pre></div><h2>Config, Env &amp; Bindings</h2><div class="item"><div class="l">wrangler.toml basics</div><pre><code>name = "my-worker"
+main = "src/index.ts"
+compatibility_date = "2024-09-01"
+
+[vars]
+API_BASE = "https://api.example.com"</code></pre></div><div class="item"><div class="l">Secrets (encrypted)</div><pre><code>npx wrangler secret put DATABASE_URL
+# prompts for the value; never commit it</code></pre><div class="n">Use for keys/DB URLs. [vars] is plaintext and bundled - not for secrets.</div></div><div class="item"><div class="l">Local secrets/vars</div><pre><code># .dev.vars  (gitignored)
+DATABASE_URL="postgres://..."</code></pre><div class="n">Auto-loaded by wrangler dev.</div></div><div class="item"><div class="l">Access env in Hono</div><pre><code>app.get('/', (c) =&gt; c.text(c.env.API_BASE));</code></pre><div class="n">In a raw worker it's the 2nd fetch arg (env). There is no process.env at runtime.</div></div><div class="item"><div class="l">KV / D1 bindings</div><pre><code>[[kv_namespaces]]
+binding = "CACHE"
+id = "xxxx"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "prod"
+database_id = "xxxx"</code></pre></div><h2>Connecting to a DB</h2><div class="item"><div class="l">Problem: no raw TCP</div><div class="n">Workers can't open arbitrary TCP sockets, so classic pg/mysql drivers fail. Use HTTP-based drivers or a pooling proxy.</div></div><div class="item"><div class="l">Prisma + Accelerate (edge)</div><pre><code>npm i @prisma/client @prisma/extension-accelerate
+npx prisma generate --no-engine</code></pre></div><div class="item"><div class="l">Instantiate per-request</div><pre><code>import { PrismaClient } from '@prisma/client/edge';
+import { withAccelerate } from '@prisma/extension-accelerate';
+
+app.get('/users', async (c) =&gt; {
+  const prisma = new PrismaClient({
+    datasourceUrl: c.env.DATABASE_URL,
+  }).$extends(withAccelerate());
+  const users = await prisma.user.findMany();
+  return c.json(users);
+});</code></pre><div class="n">DATABASE_URL is the prisma:// Accelerate URL. Build the client INSIDE the handler, not at module top level.</div></div><div class="item"><div class="l">D1 (native SQLite)</div><pre><code>const { results } = await c.env.DB.prepare(
+  'SELECT * FROM users WHERE id = ?'
+).bind(id).all();</code></pre></div><div class="item"><div class="l">Other edge-friendly options</div><div class="n">Neon serverless driver (@neondatabase/serverless over HTTP), Turso/libSQL, Supabase REST, Upstash Redis (HTTP).</div></div>
+<h2>Quick tips &amp; gotchas</h2><ul class="tips"><li>Create the Prisma client inside the request handler - Workers isolates don't persist DB connections across requests like a Node server does.</li><li>No process.env at runtime: read config from env (raw worker) or c.env (Hono), populated only from bindings/vars/secrets.</li><li>Workers bill CPU time, not wall time - avoid heavy sync loops; push slow/async work into ctx.waitUntil.</li><li>Secrets go through `wrangler secret put` (encrypted); [vars] is plaintext and shipped in the bundle - never put keys there.</li><li>Bump compatibility_date deliberately: it pins runtime behavior and changing it can alter available APIs.</li><li>Prefer Hono over Express on Workers; Express via nodejs_compat works but bloats the bundle and isn't idiomatic.</li><li>Type Hono bindings for autocomplete: `new Hono&lt;{ Bindings: { DATABASE_URL: string } }&gt;()`.</li><li>`wrangler dev` runs the actual workerd runtime, so local behavior mirrors prod far better than a Node mock server.</li></ul>
+</div></body></html>

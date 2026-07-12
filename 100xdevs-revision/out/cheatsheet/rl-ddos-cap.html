@@ -1,0 +1,70 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Cheat Sheet · Rate limitting, DDoS and Captcha</title><style>:root{--bg:#fff;--fg:#1a1a1a;--muted:#6b7280;--line:#e5e7eb;--accent:#0d9488;--card:#f9fafb;--code:#f3f4f6;--codefg:#111}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1115;--fg:#e6e6e6;--muted:#9aa0aa;--line:#242833;--accent:#2dd4bf;--card:#171a21;--code:#0b0e13;--codefg:#e6e6e6}}
+*{box-sizing:border-box}body{margin:0;font:16px/1.6 system-ui,Segoe UI,sans-serif;background:var(--bg);color:var(--fg)}
+.wrap{max-width:860px;margin:0 auto;padding:1.2rem}
+a.back{color:var(--accent);text-decoration:none;font-size:.9rem}
+h1{font-size:1.5rem;margin:.6rem 0 .2rem}.sub{color:var(--muted);margin:0 0 1.4rem}
+h2{font-size:1.1rem;margin:1.6rem 0 .5rem;color:var(--accent)}
+.item{border:1px solid var(--line);border-radius:10px;background:var(--card);padding:.6rem .8rem;margin:.5rem 0}
+.item .l{font-weight:700}
+.item .n{color:var(--muted);font-size:.92rem;margin-top:.2rem}
+pre{margin:.45rem 0 0;background:var(--code);color:var(--codefg);border:1px solid var(--line);border-radius:8px;padding:.6rem .8rem;overflow-x:auto}
+code,pre{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:.86rem}
+.tips{border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:10px;background:var(--card);padding:.6rem 1rem}
+.tips li{margin:.35rem 0}
+@media print{.back{display:none}}</style></head><body><div class="wrap">
+<a class="back" href="../revision.html">← Back to revision index</a>
+<h1>Rate limitting, DDoS and Captcha — Cheat Sheet</h1>
+<p class="sub">Cohort 2.0 · 10 lessons · quick reference</p>
+<h2>Why &amp; Where to Rate Limit</h2><div class="item"><div class="l">Why</div><div class="n">Stop brute-force/credential-stuffing, OTP guessing, scraping, spam signups, cost blow-ups (SMS/email/LLM), and app-layer DoS.</div></div><div class="item"><div class="l">High-value endpoints to protect</div><div class="n">/login, /signup, /forgot-password, /reset, /verify-otp, /payment, public search &amp; any unauthenticated write. Auth + reset are #1 targets.</div></div><div class="item"><div class="l">Defense layers (outer→inner)</div><div class="n">Edge CDN/WAF (Cloudflare) → LB/API gateway → app middleware (express-rate-limit) → DB constraints. Never rely on a single layer.</div></div><div class="item"><div class="l">Trust the proxy first</div><pre><code>app.set('trust proxy', 1); // behind CF/nginx/ELB
+// else req.ip = LB IP and every client shares one bucket</code></pre><div class="n">Without this, X-Forwarded-For is ignored and all users look like one IP.</div></div><h2>express-rate-limit (app layer)</h2><div class="item"><div class="l">Basic global limiter</div><pre><code>import rateLimit from 'express-rate-limit';
+const limiter = rateLimit({
+  windowMs: 60_000, limit: 100,
+  standardHeaders: 'draft-7', legacyHeaders: false,
+});
+app.use('/api/', limiter);</code></pre><div class="n">Sends RateLimit-* headers; 429 on exceed.</div></div><div class="item"><div class="l">Strict limiter on sensitive routes</div><pre><code>const authLimiter = rateLimit({ windowMs: 15*60_000, limit: 5,
+  message: 'Too many attempts, try later' });
+app.post('/reset', authLimiter, resetHandler);</code></pre><div class="n">Tighter budget for OTP/reset/login than for read APIs.</div></div><div class="item"><div class="l">Key by IP + identity (not IP alone)</div><pre><code>keyGenerator: (req) =&gt; `${req.ip}:${req.body?.email ?? ''}`</code></pre><div class="n">Per-account budget so one shared NAT/office IP can't lock everyone out, and attacker can't spread guesses across accounts.</div></div><div class="item"><div class="l">Distributed store (multi-instance)</div><pre><code>import RedisStore from 'rate-limit-redis';
+rateLimit({ windowMs: 60_000, limit: 100,
+  store: new RedisStore({ sendCommand: (...a)=&gt;redis.call(...a) }) });</code></pre><div class="n">In-memory limiter resets on restart and is per-process — useless behind &gt;1 pod. Use Redis.</div></div><div class="item"><div class="l">Slow-down instead of hard block</div><pre><code>import slowDown from 'express-slow-down';
+app.use(slowDown({ windowMs: 60_000, delayAfter: 20, delayMs: (h)=&gt;h*200 }));</code></pre><div class="n">Adds latency progressively — friendlier for legit bursty users.</div></div><h2>The Vulnerable Reset Endpoint (anti-pattern)</h2><div class="item"><div class="l">Naive forgot: 6-digit OTP in memory</div><pre><code>const otpStore = {}; // email -&gt; otp
+app.post('/forgot', (req,res) =&gt; {
+  const otp = Math.floor(100000 + Math.random()*900000);
+  otpStore[req.body.email] = otp;      // no expiry
+  sendEmail(req.body.email, otp);
+  res.json({ ok: true });
+});</code></pre><div class="n">Math.random() is not cryptographic; 6 digits = 10^6 space; never expires.</div></div><div class="item"><div class="l">Naive reset: no attempt cap</div><pre><code>app.post('/reset', (req,res) =&gt; {
+  const { email, otp, newPassword } = req.body;
+  if (otpStore[email] == otp) {        // == coercion, unlimited tries
+    updatePassword(email, newPassword);
+    return res.json({ ok: true });
+  }
+  res.status(400).json({ ok: false });
+});</code></pre><div class="n">No rate limit + no lockout + loose == = brute-forceable.</div></div><div class="item"><div class="l">Exploit: brute force all 6-digit OTPs</div><pre><code>for (let otp = 100000; otp &lt;= 999999; otp++) {
+  const r = await fetch('/reset', { method:'POST',
+    headers:{'content-type':'application/json'},
+    body: JSON.stringify({ email:'victim@x.com', otp, newPassword:'pwned' }) });
+  if (r.ok) { console.log('CRACKED', otp); break; }
+}</code></pre><div class="n">At even 1k req/s, 10^6 codes fall in ~minutes. Production = same script + concurrency.</div></div><h2>Saving the Endpoint (hardening)</h2><div class="item"><div class="l">Use a crypto token, not a 6-digit code</div><pre><code>import crypto from 'crypto';
+const token = crypto.randomBytes(32).toString('hex'); // 256-bit
+const hash  = crypto.createHash('sha256').update(token).digest('hex');
+// email link contains raw token; DB stores only hash + expiry</code></pre><div class="n">Unbrute-forceable search space; store the HASH so a DB leak can't reset accounts.</div></div><div class="item"><div class="l">Persist with expiry + attempt counter</div><pre><code>// resetTokens: { hash, email, expiresAt, attempts }
+await db.resetTokens.create({ hash, email, attempts: 0,
+  expiresAt: Date.now() + 15*60_000 });</code></pre><div class="n">Short TTL (10-15 min), single-use, invalidate on success/logout.</div></div><div class="item"><div class="l">Timing-safe compare (if you keep short codes)</div><pre><code>const ok = crypto.timingSafeEqual(Buffer.from(a), Buffer.from(b));</code></pre><div class="n">Prevents timing side-channel; buffers must be equal length. Prefer full tokens over OTPs.</div></div><div class="item"><div class="l">Lockout after N attempts</div><pre><code>if (row.attempts &gt;= 5 || row.expiresAt &lt; Date.now())
+  return res.status(429).json({ error: 'Invalid or expired' });
+await db.resetTokens.increment(row.id, 'attempts');</code></pre><div class="n">Combine with the rate limiter — layered, not either/or.</div></div><div class="item"><div class="l">Prevent user enumeration</div><pre><code>// /forgot: same 200 + generic message whether or not email exists
+res.json({ message: 'If an account exists, a link was sent' });</code></pre><div class="n">Also keep response timing constant; don't leak 'user not found'.</div></div><h2>The Problem: IP Limits Aren't Enough → CAPTCHA</h2><div class="item"><div class="l">Why IP rate limiting still fails</div><div class="n">Attackers rotate IPs via botnets/residential proxies (thousands of IPs), so per-IP budgets never trip. Need a proof-of-humanity + edge protection.</div></div><div class="item"><div class="l">Cloudflare Turnstile — client widget</div><pre><code>&lt;script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async&gt;&lt;/script&gt;
+&lt;div class="cf-turnstile" data-sitekey="0x4AA..."&gt;&lt;/div&gt;
+&lt;!-- posts cf-turnstile-response with the form --&gt;</code></pre><div class="n">Privacy-friendly, no image puzzles. reCAPTCHA is the Google equivalent.</div></div><div class="item"><div class="l">Turnstile — server-side verify (required!)</div><pre><code>const v = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
+  method:'POST', headers:{'content-type':'application/x-www-form-urlencoded'},
+  body: new URLSearchParams({ secret: process.env.TS_SECRET,
+    response: req.body['cf-turnstile-response'], remoteip: req.ip }) });
+if (!(await v.json()).success) return res.status(403).end();</code></pre><div class="n">Token is single-use and expires (~300s). Never trust the client widget alone.</div></div><div class="item"><div class="l">reCAPTCHA v3 — score-based</div><pre><code>const r = await (await fetch('https://www.google.com/recaptcha/api/siteverify', {
+  method:'POST', body: new URLSearchParams({ secret, response: token }) })).json();
+if (!r.success || r.score &lt; 0.5) return res.status(403).end();</code></pre><div class="n">v3 returns 0.0-1.0; tune threshold. v2 is the checkbox/image challenge.</div></div><h2>Cloudflare &amp; DDoS Protection in Prod</h2><div class="item"><div class="l">Proxy DNS through Cloudflare</div><div class="n">Set the record to Proxied (orange cloud). Traffic hits CF edge first — that's what enables WAF, rate limiting, and L3/4 DDoS scrubbing.</div></div><div class="item"><div class="l">Hide / lock down the origin</div><div class="n">If the real server IP leaks, attackers bypass CF entirely. Firewall origin to only accept CF IP ranges (or use cloudflared Tunnel — no public inbound port).</div></div><div class="item"><div class="l">WAF rate limiting rule (edge)</div><pre><code># Security &gt; WAF &gt; Rate limiting rules
+Expression: (http.request.uri.path eq "/reset")
+Rate: 5 requests / 1 min  per  IP
+Action: Block  (or Managed Challenge)</code></pre><div class="n">Blocks at the edge before load ever reaches origin — cheaper and faster than app-layer.</div></div><div class="item"><div class="l">Under Attack Mode / Bot Fight Mode</div><pre><code># Overview &gt; Under Attack Mode: ON  (JS challenge for all)
+# Security &gt; Bots &gt; Bot Fight Mode: ON</code></pre><div class="n">Flip Under Attack on during an active L7 flood; it interstitials every visitor. Turn off after.</div></div><div class="item"><div class="l">Managed Challenge vs hard Block</div><div class="n">Managed Challenge lets humans through (Turnstile-style) while stopping bots — fewer false positives than outright Block on shared IPs.</div></div><div class="item"><div class="l">L3/L4 volumetric DDoS</div><div class="n">Handled automatically by CF's anycast network (and AWS Shield on AWS). Your job is L7: rate limits, WAF rules, CAPTCHA, caching static responses.</div></div>
+<h2>Quick tips &amp; gotchas</h2><ul class="tips"><li>Rate limit by identity (email/user/API key), not IP alone — botnets rotate thousands of IPs and NAT makes many users share one IP.</li><li>Set app.set('trust proxy', ...) behind any proxy/LB, or req.ip is the proxy and everyone shares a single bucket. Don't set it to true blindly — spoofable X-Forwarded-For.</li><li>In-memory rate limiters reset on restart and are per-process; anything running &gt;1 instance needs a Redis/shared store.</li><li>6-digit OTPs with no attempt cap fall in minutes. Prefer 256-bit crypto.randomBytes tokens; if you must use OTPs, cap attempts, expire fast, and single-use them.</li><li>Store a HASH of reset tokens/OTPs, never the raw value — a DB leak otherwise = account takeover.</li><li>Always verify CAPTCHA tokens server-side; the client widget passing means nothing. Turnstile/reCAPTCHA tokens are single-use and expire (~5 min).</li><li>Keep /forgot responses generic and constant-time ('if an account exists...') to block user enumeration.</li><li>CAPTCHA + edge WAF are defense-in-depth on top of app rate limiting, not replacements. And lock your origin to Cloudflare IPs or the whole edge is bypassable.</li></ul>
+</div></body></html>

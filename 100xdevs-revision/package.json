@@ -1,0 +1,17 @@
+{
+  "name": "100x-revision-resource",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Level-wise revision resource for the 100xDevs course — index, interview prep, and cheat sheets",
+  "scripts": {
+    "start": "node build.mjs && node open.mjs",
+    "open": "node open.mjs",
+    "build": "node build.mjs",
+    "scrape": "node scrape.mjs",
+    "parse": "node parse.mjs && node parse2.mjs"
+  },
+  "dependencies": {
+    "playwright": "^1.48.0"
+  }
+}
