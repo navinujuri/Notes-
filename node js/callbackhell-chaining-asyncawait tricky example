@@ -1,0 +1,226 @@
+/**
+ * ASYNC PATTERNS DEMO
+ * Same task solved 3 ways: Callback Hell -> Promise Chaining -> Async/Await
+ *
+ * Scenario: fetch user -> fetch their orders -> fetch details of first order.
+ * Order 101 is deliberately "corrupted" to demonstrate error handling in each style.
+ *
+ * Run each section independently (comment/uncomment the calls at the bottom)
+ * since they all log similar messages and would interleave if run together.
+ */
+
+// ============================================================
+// 1. CALLBACK HELL
+// ============================================================
+function getUserCB(id, callback) {
+  setTimeout(() => {
+    console.log("Fetched user");
+    callback(null, { id, name: "Alice" });
+  }, 1000);
+}
+
+function getOrdersCB(user, callback) {
+  setTimeout(() => {
+    console.log("Fetched orders for " + user.name);
+    callback(null, [{ orderId: 101 }, { orderId: 102 }]);
+  }, 1000);
+}
+
+function getOrderDetailsCB(order, callback) {
+  setTimeout(() => {
+    if (order.orderId === 101) {
+      callback(new Error("Order 101 is corrupted!"));
+    } else {
+      callback(null, { orderId: order.orderId, item: "Laptop" });
+    }
+  }, 1000);
+}
+
+function runCallbackHell() {
+  console.log("\n--- CALLBACK HELL ---");
+  getUserCB(1, (err, user) => {
+    if (err) return console.error("Error:", err.message);
+    getOrdersCB(user, (err, orders) => {
+      if (err) return console.error("Error:", err.message);
+      getOrderDetailsCB(orders[0], (err, details) => {
+        if (err) return console.error("Error:", err.message); // <-- fires here
+        console.log("Order details:", details);
+      });
+    });
+  });
+}
+/* Expected output (1s apart each):
+--- CALLBACK HELL ---
+Fetched user
+Fetched orders for Alice
+Error: Order 101 is corrupted!
+*/
+/* TRICKY PART:
+   - The error is buried 3 levels deep inside nested callbacks ("pyramid of doom").
+   - Error handling is NOT centralized — every single level needs its own
+     `if (err) return console.error(...)`. Forget it at one level and the
+     error either gets silently swallowed or crashes later code that assumes
+     a valid result.
+   - Because getOrderDetailsCB fails on orderId 101, "Order details:" is
+     never logged — but nothing above the failing callback "knows" that;
+     each level only checks its own immediate error, not the whole chain.
+*/
+
+
+// ============================================================
+// 2. PROMISE CHAINING
+// ============================================================
+function getUserP(id) {
+  return new Promise((resolve) => {
+    setTimeout(() => {
+      console.log("Fetched user");
+      resolve({ id, name: "Alice" });
+    }, 1000);
+  });
+}
+
+function getOrdersP(user) {
+  return new Promise((resolve) => {
+    setTimeout(() => {
+      console.log("Fetched orders for " + user.name);
+      resolve([{ orderId: 101 }, { orderId: 102 }]);
+    }, 1000);
+  });
+}
+
+function getOrderDetailsP(order) {
+  return new Promise((resolve, reject) => {
+    setTimeout(() => {
+      if (order.orderId === 101) {
+        reject(new Error("Order 101 is corrupted!"));
+      } else {
+        resolve({ orderId: order.orderId, item: "Laptop" });
+      }
+    }, 1000);
+  });
+}
+
+function runPromiseChain() {
+  console.log("\n--- PROMISE CHAINING ---");
+  getUserP(1)
+    .then(user => getOrdersP(user))
+    .then(orders => getOrderDetailsP(orders[0]))
+    .then(details => console.log("Order details:", details))
+    .catch(err => console.error("Error:", err.message)) // catches ANY failure above
+    .finally(() => console.log("Done attempting order flow"));
+}
+/* Expected output:
+--- PROMISE CHAINING ---
+Fetched user
+Fetched orders for Alice
+Error: Order 101 is corrupted!
+Done attempting order flow
+*/
+/* TRICKY PART:
+   - `.catch()` catches an error from ANY step above it in the chain, not
+     just the immediately preceding one. A failure in getOrderDetailsP()
+     skips ALL remaining `.then()` handlers and jumps straight to `.catch()`
+     — people often assume each `.then()` needs its own error handling
+     (it doesn't, and adding it is usually redundant).
+   - `.finally()` always runs — success or failure — which is easy to forget
+     when reasoning about cleanup logic ("Done attempting order flow" prints
+     even though the flow technically failed).
+   - Order matters: if you put `.catch()` in the middle of the chain instead
+     of at the end, it "swallows" the error and the chain continues as if
+     nothing failed — a very common accidental bug.
+*/
+
+
+// ============================================================
+// 3. ASYNC / AWAIT
+// ============================================================
+// Reuses getUserP / getOrdersP / getOrderDetailsP from above (same Promise-returning functions)
+async function processOrder() {
+  console.log("\n--- ASYNC/AWAIT ---");
+  try {
+    const user = await getUserP(1);
+    const orders = await getOrdersP(user);
+    const details = await getOrderDetailsP(orders[0]); // throws here
+    console.log("Order details:", details); // never reached
+  } catch (err) {
+    console.error("Error:", err.message);
+  } finally {
+    console.log("Done attempting order flow");
+  }
+}
+/* Expected output:
+--- ASYNC/AWAIT ---
+Fetched user
+Fetched orders for Alice
+Error: Order 101 is corrupted!
+Done attempting order flow
+*/
+/* TRICKY PART:
+   - A single try/catch wraps ALL three awaits — whichever one throws first
+     jumps straight to catch, and the remaining awaits below it never run
+     (here, "Order details:" is never reached, same as the Promise version).
+   - It LOOKS like synchronous, line-by-line code, which makes people forget
+     it's still asynchronous underneath — each `await` still yields control
+     back to the event loop while waiting.
+   - If you forget the `try/catch` entirely, a rejected await inside an
+     `async function` becomes an unhandled promise rejection, not a normal
+     thrown exception — it won't be caught by a surrounding synchronous
+     try/catch outside the async function.
+*/
+
+
+// ============================================================
+// BONUS TRICKY GOTCHA: Sequential await vs Promise.all (parallel)
+// ============================================================
+async function slowSequential() {
+  console.log("\n--- SEQUENTIAL AWAIT (slow) ---");
+  console.time("sequential");
+  const a = await getUserP(1);       // waits 1s
+  const b = await getOrdersP(a);     // starts AFTER a finishes, waits another 1s
+  console.timeEnd("sequential");     // total: ~2s
+}
+
+async function fastParallel() {
+  console.log("\n--- PARALLEL AWAIT (fast) ---");
+  console.time("parallel");
+  const userPromise = getUserP(1);          // starts immediately
+  const ordersPromise = getOrdersP({ name: "Alice" }); // starts immediately too (independent work)
+  const [a, b] = await Promise.all([userPromise, ordersPromise]); // run concurrently
+  console.timeEnd("parallel");              // total: ~1s, not 2s
+}
+/* Expected output:
+--- SEQUENTIAL AWAIT (slow) ---
+Fetched user
+Fetched orders for Alice
+sequential: ~2000ms
+
+--- PARALLEL AWAIT (fast) ---
+Fetched user
+Fetched orders for Alice
+parallel: ~1000ms
+*/
+/* TRICKY PART:
+   - In `slowSequential`, `getOrdersP(a)` doesn't start until `getUserP(1)`
+     fully resolves — even though the two calls don't actually depend on
+     each other in this example. Awaiting one at a time DOUBLES total wait
+     time for no real reason. This is one of the most common real-world
+     async performance bugs.
+   - In `fastParallel`, both promises are created (fired off) BEFORE either
+     is awaited — that's what makes them run concurrently. The `await` only
+     happens once, on `Promise.all([...])`, after both are already in flight.
+   - The gotcha: writing `await getUserP(1)` then `await getOrdersP(...)`
+     one after another looks identical in style to the parallel version but
+     behaves completely differently — the bug is invisible just by reading
+     the code casually, you have to know WHEN each promise was created
+     relative to when it's awaited.
+*/
+
+
+// ============================================================
+// RUN (uncomment whichever section you want to test)
+// ============================================================
+runCallbackHell();
+// runPromiseChain();
+// processOrder();
+// slowSequential();
+// fastParallel();
